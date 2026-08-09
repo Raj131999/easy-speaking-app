@@ -578,38 +578,85 @@ fun GrammarScreen(
                     }
 
                     // Native Audio Example Card
+                    val exampleLines = item.exampleText.split("\n").filter { it.isNotBlank() }
                     Card(
                         shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .padding(16.dp)
-                                .fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            IconButton(
-                                onClick = { viewModel.speak(item.exampleText) },
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .background(TealPrimary.copy(alpha = 0.2f), CircleShape)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.VolumeUp,
-                                    contentDescription = "Hear Example",
-                                    tint = TealPrimary
+                                    contentDescription = "Examples",
+                                    tint = TealPrimary,
+                                    modifier = Modifier.size(20.dp)
                                 )
-                            }
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column(modifier = Modifier.weight(1f)) {
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = item.exampleText,
-                                    style = MaterialTheme.typography.titleMedium.copy(
+                                    text = if (exampleLines.size > 1) "EXAMPLES & USAGE" else "EXAMPLE SENTENCE",
+                                    style = MaterialTheme.typography.labelMedium.copy(
                                         fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
+                                        color = TealPrimary,
+                                        letterSpacing = 1.sp
+                                    ),
+                                    modifier = Modifier.weight(1f)
                                 )
+                                if (exampleLines.size > 1) {
+                                    IconButton(
+                                        onClick = { viewModel.speak(item.exampleText.replace("^•\\s*".toRegex(), "")) },
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .background(TealPrimary.copy(alpha = 0.15f), CircleShape)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.PlayArrow,
+                                            contentDescription = "Play All",
+                                            tint = TealPrimary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+                            exampleLines.forEach { line ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    val speechText = line.replace("^•\\s*".toRegex(), "").trim()
+                                    IconButton(
+                                        onClick = { viewModel.speak(speechText) },
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .background(TealPrimary.copy(alpha = 0.15f), CircleShape)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.VolumeUp,
+                                            contentDescription = "Hear Line",
+                                            tint = TealPrimary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = line,
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            lineHeight = 20.sp
+                                        ),
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
                             }
                         }
                     }
