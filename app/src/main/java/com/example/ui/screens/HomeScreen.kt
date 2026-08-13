@@ -1,6 +1,8 @@
 package com.example.ui.screens
 
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Locale
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
@@ -37,18 +39,33 @@ fun HomeScreen(
     modifier: Modifier = Modifier
 ) {
     val progress by viewModel.userProgress.collectAsState()
+    val appOpenDates by viewModel.appOpenDates.collectAsState()
     val grammar by viewModel.grammarLessons.collectAsState()
     val convs by viewModel.conversations.collectAsState()
     val sentences by viewModel.dailySentences.collectAsState()
     val paragraphs by viewModel.paragraphs.collectAsState()
     val twisters by viewModel.tongueTwisters.collectAsState()
 
-    // Calculate module completions
-    val grammarComp = grammar.count { it.isCompleted }.toFloat() / (grammar.size.takeIf { it > 0 } ?: 1)
-    val convComp = convs.count { it.isCompleted }.toFloat() / (convs.size.takeIf { it > 0 } ?: 1)
-    val sentenceComp = sentences.count { it.timesPracticed > 0 }.toFloat() / (sentences.size.takeIf { it > 0 } ?: 1)
-    val paraComp = paragraphs.count { it.isCompleted }.toFloat() / (paragraphs.size.takeIf { it > 0 } ?: 1)
-    val twisterComp = twisters.count { it.isCompleted }.toFloat() / (twisters.size.takeIf { it > 0 } ?: 1)
+    // Calculate module completions and counts
+    val grammarDone = grammar.count { it.isCompleted }
+    val grammarTotal = grammar.size.takeIf { it > 0 } ?: 1
+    val grammarComp = grammarDone.toFloat() / grammarTotal
+
+    val convDone = convs.count { it.isCompleted }
+    val convTotal = convs.size.takeIf { it > 0 } ?: 1
+    val convComp = convDone.toFloat() / convTotal
+
+    val sentenceDone = sentences.count { it.isCompleted || it.timesPracticed > 0 }
+    val sentenceTotal = sentences.size.takeIf { it > 0 } ?: 1
+    val sentenceComp = sentenceDone.toFloat() / sentenceTotal
+
+    val paraDone = paragraphs.count { it.isCompleted }
+    val paraTotal = paragraphs.size.takeIf { it > 0 } ?: 1
+    val paraComp = paraDone.toFloat() / paraTotal
+
+    val twisterDone = twisters.count { it.isCompleted }
+    val twisterTotal = twisters.size.takeIf { it > 0 } ?: 1
+    val twisterComp = twisterDone.toFloat() / twisterTotal
 
     // Filter weak points (accuracy < 85)
     val weakSentences = sentences.filter { it.timesPracticed > 0 && it.lastAccuracy < 85 }
@@ -69,7 +86,7 @@ fun HomeScreen(
 
         // --- WEEKLY WORKOUT PRACTICE SUMMARY ---
         item {
-            WeeklyPracticeGrid(progress = progress)
+            WeeklyPracticeGrid(progress = progress, appOpenDates = appOpenDates)
         }
 
         // --- SPACED REPETITION REVIEW / MASTERY CARD ---
@@ -99,10 +116,20 @@ fun HomeScreen(
         item {
             SkillTreePath(
                 grammarComp = grammarComp,
+                grammarDone = grammarDone,
+                grammarTotal = grammar.size,
                 convComp = convComp,
+                convDone = convDone,
+                convTotal = convs.size,
                 sentenceComp = sentenceComp,
+                sentenceDone = sentenceDone,
+                sentenceTotal = sentences.size,
                 paraComp = paraComp,
+                paraDone = paraDone,
+                paraTotal = paragraphs.size,
                 twisterComp = twisterComp,
+                twisterDone = twisterDone,
+                twisterTotal = twisters.size,
                 onGrammarTap = {
                     viewModel.activeGrammarLesson.value = null
                     viewModel.navigateTo(Screen.Grammar)
@@ -275,10 +302,21 @@ fun StreakHeaderCard(progress: UserProgress?) {
 }
 
 @Composable
-fun WeeklyPracticeGrid(progress: UserProgress?) {
+fun WeeklyPracticeGrid(progress: UserProgress?, appOpenDates: List<String>) {
     val days = listOf("S", "M", "T", "W", "T", "F", "S")
-    val todayCal = Calendar.getInstance()
-    val todayDayOfWeek = todayCal.get(Calendar.DAY_OF_WEEK) // 1 = Sun, 2 = Mon ...
+    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+
+    val cal = Calendar.getInstance()
+    val todayStr = sdf.format(cal.time)
+    val currentDayOfWeek = cal.get(Calendar.DAY_OF_WEEK) // 1 = Sun ... 7 = Sat
+
+    val weekDates = (1..7).map { dayOfWeekIndex ->
+        val dayCal = Calendar.getInstance()
+        dayCal.add(Calendar.DAY_OF_YEAR, dayOfWeekIndex - currentDayOfWeek)
+        sdf.format(dayCal.time)
+    }
+
+    val activeSet = appOpenDates.toSet()
 
     Card(
         shape = RoundedCornerShape(24.dp),
@@ -303,9 +341,10 @@ fun WeeklyPracticeGrid(progress: UserProgress?) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                days.forEachIndexed { index, day ->
-                    val isToday = index + 1 == todayDayOfWeek
-                    val isPracticed = index + 1 <= todayDayOfWeek && (progress?.currentStreak ?: 0) > 0
+                days.forEachIndexed { index, dayLabel ->
+                    val dateStr = weekDates[index]
+                    val isToday = dateStr == todayStr
+                    val isPracticed = activeSet.contains(dateStr)
 
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Box(
@@ -339,7 +378,7 @@ fun WeeklyPracticeGrid(progress: UserProgress?) {
                                 )
                             } else {
                                 Text(
-                                    text = day,
+                                    text = dayLabel,
                                     style = MaterialTheme.typography.bodyMedium.copy(
                                         fontWeight = FontWeight.Bold,
                                         color = when {
@@ -419,10 +458,20 @@ fun ReviewHubCard(
 @Composable
 fun SkillTreePath(
     grammarComp: Float,
+    grammarDone: Int,
+    grammarTotal: Int,
     convComp: Float,
+    convDone: Int,
+    convTotal: Int,
     sentenceComp: Float,
+    sentenceDone: Int,
+    sentenceTotal: Int,
     paraComp: Float,
+    paraDone: Int,
+    paraTotal: Int,
     twisterComp: Float,
+    twisterDone: Int,
+    twisterTotal: Int,
     onGrammarTap: () -> Unit,
     onConversationTap: () -> Unit,
     onSentencesTap: () -> Unit,
@@ -438,6 +487,8 @@ fun SkillTreePath(
         SkillTreeNode(
             title = "Grammar Lessons",
             subtext = "Syllable stress, gonna/wanna...",
+            doneCount = grammarDone,
+            totalCount = grammarTotal,
             progress = grammarComp,
             icon = Icons.Default.MenuBook,
             color = PolishTeal,
@@ -449,6 +500,8 @@ fun SkillTreePath(
         SkillTreeNode(
             title = "Conversation Sets",
             subtext = "Ordering Food, Job Interviews...",
+            doneCount = convDone,
+            totalCount = convTotal,
             progress = convComp,
             icon = Icons.Default.RecordVoiceOver,
             color = Color(0xFF6C5CE7),
@@ -460,6 +513,8 @@ fun SkillTreePath(
         SkillTreeNode(
             title = "Daily Sentences",
             subtext = "200 daily workout phrases",
+            doneCount = sentenceDone,
+            totalCount = sentenceTotal,
             progress = sentenceComp,
             icon = Icons.Default.DirectionsRun,
             color = Orange600,
@@ -471,6 +526,8 @@ fun SkillTreePath(
         SkillTreeNode(
             title = "Paragraph Reading",
             subtext = "Fluency & Intonation practice",
+            doneCount = paraDone,
+            totalCount = paraTotal,
             progress = paraComp,
             icon = Icons.Default.TextFields,
             color = Color(0xFFFD79A8),
@@ -482,6 +539,8 @@ fun SkillTreePath(
         SkillTreeNode(
             title = "Tongue Twisters",
             subtext = "Sound drills ('th', 'r/l')",
+            doneCount = twisterDone,
+            totalCount = twisterTotal,
             progress = twisterComp,
             icon = Icons.Default.MusicNote,
             color = Color(0xFF00CEC9),
@@ -494,6 +553,8 @@ fun SkillTreePath(
 fun SkillTreeNode(
     title: String,
     subtext: String,
+    doneCount: Int,
+    totalCount: Int,
     progress: Float,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     color: Color,
@@ -561,6 +622,14 @@ fun SkillTreeNode(
                     style = MaterialTheme.typography.bodySmall.copy(
                         color = Slate500,
                         fontWeight = FontWeight.Medium
+                    )
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "$doneCount / $totalCount completed",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = nodeTextColor,
+                        fontWeight = FontWeight.Bold
                     )
                 )
             }

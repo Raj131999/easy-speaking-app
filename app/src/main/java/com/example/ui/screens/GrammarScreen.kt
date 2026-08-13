@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -40,6 +41,7 @@ fun GrammarScreen(
     val lessons by viewModel.grammarLessons.collectAsState()
     val isRecording by viewModel.isRecording.collectAsState()
     val isPlayingBack by viewModel.isPlayingBack.collectAsState()
+    val isTtsSpeaking by viewModel.isTtsSpeaking.collectAsState()
     val lastScore by viewModel.lastScore.collectAsState()
     val scoredWords by viewModel.scoredWords.collectAsState()
 
@@ -61,6 +63,11 @@ fun GrammarScreen(
     }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
 
+    // Intercept back button when in category view to return to categories list
+    BackHandler(enabled = (lesson == null && selectedCategory != null)) {
+        selectedCategory = null
+    }
+
     // Reset local quiz state when the active lesson changes
     LaunchedEffect(lesson) {
         selectedAnswer = null
@@ -78,7 +85,7 @@ fun GrammarScreen(
                 TopAppBar(
                     title = { Text("Spoken Grammar") },
                     navigationIcon = {
-                        IconButton(onClick = { viewModel.navigateTo(Screen.Home) }) {
+                        IconButton(onClick = { viewModel.goBack() }) {
                             Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
                         }
                     },
@@ -287,7 +294,12 @@ fun GrammarScreen(
                                     val totalLessons = categoryLessons.size
                                     val completedLessons = categoryLessons.count { it.isCompleted }
                                     val isCompleted = totalLessons > 0 && completedLessons == totalLessons
-                                    val isActive = !isCompleted
+                                    val isActive = !isCompleted && completedLessons > 0
+                                    val statusText = when {
+                                        isCompleted -> "Completed"
+                                        completedLessons > 0 -> "In Progress ($completedLessons/$totalLessons)"
+                                        else -> "Not Completed"
+                                    }
 
                                     // Alternate left & right detail cards around the center line
                                     val isLeft = index % 2 == 0
@@ -309,7 +321,8 @@ fun GrammarScreen(
                                                     score = if (totalLessons > 0) (completedLessons * 100 / totalLessons) else null,
                                                     isCompleted = isCompleted,
                                                     isActive = isActive,
-                                                    accentColor = TealPrimary
+                                                    accentColor = TealPrimary,
+                                                    customStatusText = statusText
                                                 )
                                             }
                                             Spacer(modifier = Modifier.width(16.dp))
@@ -338,7 +351,8 @@ fun GrammarScreen(
                                                     score = if (totalLessons > 0) (completedLessons * 100 / totalLessons) else null,
                                                     isCompleted = isCompleted,
                                                     isActive = isActive,
-                                                    accentColor = TealPrimary
+                                                    accentColor = TealPrimary,
+                                                    customStatusText = statusText
                                                 )
                                             }
                                         }
@@ -885,19 +899,13 @@ fun GrammarScreen(
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
                                             Button(
-                                                onClick = {
-                                                    if (isPlayingBack) {
-                                                        viewModel.stopRecordedVoicePlayback()
-                                                    } else {
-                                                        viewModel.playRecordedVoice()
-                                                    }
-                                                },
+                                                onClick = { viewModel.playRecordedVoice() },
                                                 colors = ButtonDefaults.buttonColors(
                                                     containerColor = if (isPlayingBack) Color(0xFFFF5252) else TealPrimary
                                                 )
                                             ) {
                                                 Icon(
-                                                    imageVector = if (isPlayingBack) Icons.Default.VolumeMute else Icons.Default.PlayArrow,
+                                                    imageVector = if (isPlayingBack) Icons.Default.Stop else Icons.Default.PlayArrow,
                                                     contentDescription = "Play"
                                                 )
                                                 Spacer(modifier = Modifier.width(6.dp))

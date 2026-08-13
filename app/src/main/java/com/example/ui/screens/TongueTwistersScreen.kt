@@ -46,6 +46,7 @@ fun TongueTwistersScreen(
 
     val isRecording by viewModel.isRecording.collectAsState()
     val isPlayingBack by viewModel.isPlayingBack.collectAsState()
+    val isTtsSpeaking by viewModel.isTtsSpeaking.collectAsState()
     val lastScore by viewModel.lastScore.collectAsState()
     val scoredWords by viewModel.scoredWords.collectAsState()
 
@@ -82,7 +83,7 @@ fun TongueTwistersScreen(
                 TopAppBar(
                     title = { Text("Tongue Twister Map") },
                     navigationIcon = {
-                        IconButton(onClick = { viewModel.navigateTo(Screen.Home) }) {
+                        IconButton(onClick = { viewModel.goBack() }) {
                             Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
                         }
                     },
@@ -378,13 +379,7 @@ fun TongueTwistersScreen(
                         ) {
                             // Play voice
                             IconButton(
-                                onClick = {
-                                    if (isPlayingBack) {
-                                        viewModel.stopRecordedVoicePlayback()
-                                    } else {
-                                        viewModel.playRecordedVoice()
-                                    }
-                                },
+                                onClick = { viewModel.playRecordedVoice() },
                                 enabled = lastScore != null,
                                 modifier = Modifier
                                     .size(44.dp)
@@ -394,7 +389,7 @@ fun TongueTwistersScreen(
                                     )
                             ) {
                                 Icon(
-                                    imageVector = if (isPlayingBack) Icons.Default.VolumeMute else Icons.Default.PlayArrow,
+                                    imageVector = if (isPlayingBack) Icons.Default.Stop else Icons.Default.PlayArrow,
                                     contentDescription = "UserVoice",
                                     tint = if (lastScore != null) Color.White else Color.Gray
                                 )

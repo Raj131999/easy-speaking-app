@@ -3,6 +3,11 @@ package com.example.data
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
+@Entity(tableName = "app_open_logs")
+data class AppOpenLog(
+    @PrimaryKey val dateStr: String // "yyyy-MM-dd"
+)
+
 @Entity(tableName = "user_progress")
 data class UserProgress(
     @PrimaryKey val id: Int = 1,
@@ -57,7 +62,8 @@ data class DailySentence(
     val consecutiveCorrect: Int = 0, // Track correct streak for spaced-repetition levels
     val timesPracticed: Int = 0,
     val lastAccuracy: Int = 0,
-    val soundFocus: String = "" // e.g. "th", "v vs w"
+    val soundFocus: String = "", // e.g. "th", "v vs w"
+    val isCompleted: Boolean = false
 )
 
 @Entity(tableName = "paragraphs")

@@ -41,6 +41,7 @@ fun DailySentencesScreen(
 
     val isRecording by viewModel.isRecording.collectAsState()
     val isPlayingBack by viewModel.isPlayingBack.collectAsState()
+    val isTtsSpeaking by viewModel.isTtsSpeaking.collectAsState()
     val lastScore by viewModel.lastScore.collectAsState()
     val scoredWords by viewModel.scoredWords.collectAsState()
 
@@ -56,7 +57,7 @@ fun DailySentencesScreen(
                 TopAppBar(
                     title = { Text("Daily Sentences Map") },
                     navigationIcon = {
-                        IconButton(onClick = { viewModel.navigateTo(Screen.Home) }) {
+                        IconButton(onClick = { viewModel.goBack() }) {
                             Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
                         }
                     },
@@ -294,21 +295,21 @@ fun DailySentencesScreen(
                                 onClick = { viewModel.speak(sentence.text) },
                                 modifier = Modifier
                                     .size(56.dp)
-                                    .background(TealPrimary.copy(alpha = 0.15f), CircleShape)
+                                    .background(if (isTtsSpeaking) Color(0xFFFF5252) else TealPrimary.copy(alpha = 0.15f), CircleShape)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.VolumeUp,
-                                    contentDescription = "Listen",
-                                    tint = TealPrimary,
+                                    imageVector = if (isTtsSpeaking) Icons.Default.Stop else Icons.Default.VolumeUp,
+                                    contentDescription = if (isTtsSpeaking) "Stop" else "Listen",
+                                    tint = if (isTtsSpeaking) Color.White else TealPrimary,
                                     modifier = Modifier.size(28.dp)
                                 )
                             }
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "HEAR NATIVE SPEAKER",
+                                text = if (isTtsSpeaking) "STOP AUDIO" else "HEAR NATIVE SPEAKER",
                                 style = MaterialTheme.typography.labelMedium.copy(
                                     fontWeight = FontWeight.SemiBold,
-                                    color = TealPrimary
+                                    color = if (isTtsSpeaking) Color(0xFFFF5252) else TealPrimary
                                 )
                             )
                         }
@@ -332,13 +333,7 @@ fun DailySentencesScreen(
                             ) {
                                 // User speech recorded voice playback
                                 IconButton(
-                                    onClick = {
-                                        if (isPlayingBack) {
-                                            viewModel.stopRecordedVoicePlayback()
-                                        } else {
-                                            viewModel.playRecordedVoice()
-                                        }
-                                    },
+                                    onClick = { viewModel.playRecordedVoice() },
                                     enabled = lastScore != null,
                                     modifier = Modifier
                                         .size(48.dp)
@@ -348,7 +343,7 @@ fun DailySentencesScreen(
                                         )
                                 ) {
                                     Icon(
-                                        imageVector = if (isPlayingBack) Icons.Default.VolumeMute else Icons.Default.PlayArrow,
+                                        imageVector = if (isPlayingBack) Icons.Default.Stop else Icons.Default.PlayArrow,
                                         contentDescription = "UserPlayback",
                                         tint = if (lastScore != null) Color.White else Color.Gray
                                     )
@@ -524,7 +519,7 @@ fun MapPinCircle(
                 }
             )
             .border(
-                width = if (isActive) 3.dp else 1.5.dp,
+                width = if (isActive || isCompleted) 3.dp else 1.5.dp,
                 color = when {
                     isCompleted -> Color(0xFF2ECC71)
                     isActive -> Color.White
@@ -538,14 +533,14 @@ fun MapPinCircle(
                 imageVector = Icons.Default.Check,
                 contentDescription = "Completed",
                 tint = Color.White,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(26.dp)
             )
         } else if (isActive) {
             Icon(
                 imageVector = Icons.Default.PlayArrow,
                 contentDescription = "Active",
                 tint = Color.Black,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(26.dp)
             )
         } else {
             Text(
@@ -563,35 +558,91 @@ fun MapPinCircle(
 fun MapLocationCard(
     title: String,
     subtitle: String,
-    score: Int?,
+    score: Int? = null,
     isCompleted: Boolean,
     isActive: Boolean,
-    accentColor: Color
+    accentColor: Color,
+    customStatusText: String? = null
 ) {
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isActive) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
+            containerColor = when {
+                isCompleted -> Color(0xFF2ECC71).copy(alpha = 0.08f)
+                isActive -> accentColor.copy(alpha = 0.06f)
+                else -> MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
+            }
         ),
         border = BorderStroke(
-            width = if (isActive) 1.5.dp else 1.dp,
-            color = if (isActive) accentColor else MaterialTheme.colorScheme.outlineVariant
+            width = if (isCompleted || isActive) 1.5.dp else 1.dp,
+            color = when {
+                isCompleted -> Color(0xFF2ECC71)
+                isActive -> accentColor
+                else -> MaterialTheme.colorScheme.outlineVariant
+            }
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isActive) 2.dp else 0.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isActive || isCompleted) 2.dp else 0.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
+            // Status Badge
+            val badgeColor = when {
+                isCompleted -> Color(0xFF2ECC71)
+                isActive -> accentColor
+                else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            }
+            val badgeText = customStatusText ?: when {
+                isCompleted -> "Completed"
+                isActive -> "Current Topic"
+                else -> "Not Completed"
+            }
+            val badgeIcon = when {
+                isCompleted -> Icons.Default.CheckCircle
+                isActive -> Icons.Default.PlayCircle
+                else -> Icons.Default.RadioButtonUnchecked
+            }
+
+            Surface(
+                color = badgeColor.copy(alpha = 0.15f),
+                shape = RoundedCornerShape(6.dp),
+                border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.3f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = badgeIcon,
+                        contentDescription = null,
+                        tint = badgeColor,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Text(
+                        text = badgeText,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = badgeColor,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp
+                        )
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(2.dp))
+
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleSmall.copy(
                     fontWeight = FontWeight.Bold,
-                    color = if (isActive) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                    color = if (isCompleted || isActive) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                 ),
                 maxLines = 1
             )
+
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall.copy(
@@ -600,6 +651,7 @@ fun MapLocationCard(
                 ),
                 maxLines = 2
             )
+
             if (score != null && score > 0) {
                 Spacer(modifier = Modifier.height(2.dp))
                 Row(

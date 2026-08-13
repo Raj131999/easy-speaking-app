@@ -52,6 +52,7 @@ fun ParagraphScreen(
     val paragraphsList by viewModel.paragraphs.collectAsState()
     val isRecording by viewModel.isRecording.collectAsState()
     val isPlayingBack by viewModel.isPlayingBack.collectAsState()
+    val isTtsSpeaking by viewModel.isTtsSpeaking.collectAsState()
     val lastScore by viewModel.lastScore.collectAsState()
     val scoredWords by viewModel.scoredWords.collectAsState()
 
@@ -79,7 +80,7 @@ fun ParagraphScreen(
                 TopAppBar(
                     title = { Text("Paragraph Map (${paragraphsList.size})") },
                     navigationIcon = {
-                        IconButton(onClick = { viewModel.navigateTo(Screen.Home) }) {
+                        IconButton(onClick = { viewModel.goBack() }) {
                             Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
                         }
                     },
@@ -295,13 +296,7 @@ fun ParagraphScreen(
                             ) {
                                 // User playback
                                 IconButton(
-                                    onClick = {
-                                        if (isPlayingBack) {
-                                            viewModel.stopRecordedVoicePlayback()
-                                        } else {
-                                            viewModel.playRecordedVoice()
-                                        }
-                                    },
+                                    onClick = { viewModel.playRecordedVoice() },
                                     enabled = lastScore != null,
                                     modifier = Modifier
                                         .size(44.dp)
@@ -311,7 +306,7 @@ fun ParagraphScreen(
                                         )
                                 ) {
                                     Icon(
-                                        imageVector = if (isPlayingBack) Icons.Default.VolumeMute else Icons.Default.PlayArrow,
+                                        imageVector = if (isPlayingBack) Icons.Default.Stop else Icons.Default.PlayArrow,
                                         contentDescription = "Compare",
                                         tint = if (lastScore != null) Color.White else Color.Gray
                                     )
@@ -500,12 +495,12 @@ fun ParagraphScreen(
                             // Model control
                             Button(
                                 onClick = { viewModel.speak(item.text) },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                                colors = ButtonDefaults.buttonColors(containerColor = if (isTtsSpeaking) Color(0xFFFF5252) else MaterialTheme.colorScheme.secondary),
                                 modifier = Modifier.align(Alignment.CenterHorizontally)
                             ) {
-                                Icon(imageVector = Icons.Default.VolumeUp, contentDescription = "Listen")
+                                Icon(imageVector = if (isTtsSpeaking) Icons.Default.Stop else Icons.Default.VolumeUp, contentDescription = "Listen")
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Play Paragraph Model Guide")
+                                Text(if (isTtsSpeaking) "Stop Model Guide" else "Play Paragraph Model Guide")
                             }
                         }
                     }

@@ -7,6 +7,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -40,13 +41,24 @@ class EnglishViewModel(
 ) : AndroidViewModel(application), TextToSpeech.OnInitListener {
 
     // Navigation state
-    val currentScreen = MutableStateFlow(Screen.Home)
+    val screenStack = MutableStateFlow<List<Screen>>(listOf(Screen.Home))
+    val currentScreen = screenStack.map { it.lastOrNull() ?: Screen.Home }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = Screen.Home
+    )
 
     // Curriculum and User metrics from Room
     val userProgress = repository.userProgress.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = null
+    )
+
+    val appOpenDates = repository.appOpenDates.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
     )
 
     val grammarLessons = repository.grammarLessons.stateIn(
@@ -82,6 +94,8 @@ class EnglishViewModel(
     // TTS Engine States
     private var tts: TextToSpeech? = null
     val ttsReady = MutableStateFlow(false)
+    val isTtsSpeaking = MutableStateFlow(false)
+    val currentTtsText = MutableStateFlow<String?>(null)
     val selectedAccent = MutableStateFlow("US") // "US", "UK", "IN", "AU"
     val selectedSpeed = MutableStateFlow(1.0f)   // 0.5f, 0.75f, 1.0f, 1.25f, 1.5f
 
@@ -92,8 +106,8 @@ class EnglishViewModel(
     val lastScore = MutableStateFlow<Int?>(null)
     val scoredWords = MutableStateFlow<List<Pair<String, WordScoreType>>>(emptyList())
     val currentTargetText = MutableStateFlow("")
-    val useSimulatedMic = MutableStateFlow(false) // Default to physical mic so users hear their real voice
     val maxRecordedAmplitude = MutableStateFlow(0)
+    private val amplitudeSamples = mutableListOf<Int>()
     private var amplitudeJob: Job? = null
 
     // Offline Speech Recognition State
@@ -134,6 +148,20 @@ class EnglishViewModel(
         if (status == TextToSpeech.SUCCESS) {
             updateTtsSettings()
             ttsReady.value = true
+            tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) {
+                    isTtsSpeaking.value = true
+                }
+                override fun onDone(utteranceId: String?) {
+                    isTtsSpeaking.value = false
+                    currentTtsText.value = null
+                }
+                @Deprecated("Deprecated in Java")
+                override fun onError(utteranceId: String?) {
+                    isTtsSpeaking.value = false
+                    currentTtsText.value = null
+                }
+            })
         } else {
             Log.e("EnglishViewModel", "TTS Initialization failed!")
         }
@@ -328,17 +356,53 @@ class EnglishViewModel(
         updateTtsSettings()
     }
 
-    fun speak(text: String) {
-        if (ttsReady.value) {
-            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "easy_speaking_tts")
-        } else {
+    fun speak(text: String, forceStart: Boolean = false) {
+        if (!ttsReady.value) {
             Log.e("EnglishViewModel", "TTS is not ready yet.")
+            return
+        }
+
+        val currentlySpeaking = isTtsSpeaking.value || (tts?.isSpeaking == true)
+        if (currentlySpeaking && !forceStart) {
+            stopTts()
+        } else {
+            stopTts()
+            stopRecordedVoicePlayback()
+            currentTtsText.value = text
+            isTtsSpeaking.value = true
+            val params = Bundle()
+            val utteranceId = "easy_speaking_tts_${System.currentTimeMillis()}"
+            params.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId)
+            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
         }
     }
 
+    fun stopTts() {
+        try {
+            tts?.stop()
+        } catch (e: Exception) {
+            Log.e("EnglishViewModel", "Error stopping TTS", e)
+        }
+        isTtsSpeaking.value = false
+        currentTtsText.value = null
+    }
+
     fun navigateTo(screen: Screen) {
-        currentScreen.value = screen
+        if (screen == Screen.Home) {
+            screenStack.value = listOf(Screen.Home)
+        } else {
+            val currentList = screenStack.value.toMutableList()
+            val existingIndex = currentList.indexOf(screen)
+            if (existingIndex >= 0) {
+                screenStack.value = currentList.subList(0, existingIndex + 1)
+            } else {
+                currentList.add(screen)
+                screenStack.value = currentList
+            }
+        }
         // Reset states
+        stopTts()
+        stopRecordedVoicePlayback()
         lastScore.value = null
         scoredWords.value = emptyList()
         isRecording.value = false
@@ -347,13 +411,51 @@ class EnglishViewModel(
         voiceRecorder.stopPlayback()
     }
 
+    fun goBack(): Boolean {
+        // 1. Check if an active practice item is open
+        if (activeGrammarLesson.value != null) {
+            activeGrammarLesson.value = null
+            return true
+        }
+        if (activeConversation.value != null) {
+            activeConversation.value = null
+            return true
+        }
+        if (activeDailySentence.value != null) {
+            activeDailySentence.value = null
+            return true
+        }
+        if (activeParagraph.value != null) {
+            activeParagraph.value = null
+            return true
+        }
+        if (activeTongueTwister.value != null) {
+            activeTongueTwister.value = null
+            return true
+        }
+
+        // 2. Pop screen stack if deeper than root
+        val currentList = screenStack.value
+        if (currentList.size > 1) {
+            screenStack.value = currentList.dropLast(1)
+            return true
+        }
+
+        return false
+    }
+
     // --- SPEAKING PRACTICE LOOP ---
     fun startRecording(targetText: String) {
+        stopTts()
+        stopRecordedVoicePlayback()
         viewModelScope.launch {
             lastScore.value = null
             scoredWords.value = emptyList()
             currentTargetText.value = targetText
             maxRecordedAmplitude.value = 0
+            synchronized(amplitudeSamples) {
+                amplitudeSamples.clear()
+            }
             recordStartTime = System.currentTimeMillis()
             val started = voiceRecorder.startRecording()
             isRecording.value = started
@@ -365,6 +467,9 @@ class EnglishViewModel(
                     while (isRecording.value) {
                         delay(100)
                         val amp = voiceRecorder.getMaxAmplitude()
+                        synchronized(amplitudeSamples) {
+                            amplitudeSamples.add(amp)
+                        }
                         if (amp > maxRecordedAmplitude.value) {
                             maxRecordedAmplitude.value = amp
                         }
@@ -381,32 +486,39 @@ class EnglishViewModel(
             stopListeningOffline()
             voiceRecorder.stopRecording()
 
-            // Processing delay for speech recognition results to finalize
-            delay(1200)
+            val recordDurationMs = System.currentTimeMillis() - recordStartTime
+
+            // Brief processing delay for speech recognition or audio flush
+            delay(500)
 
             val cleanTarget = targetText.replace(Regex("[^a-zA-Z\\s]"), "")
             val words = cleanTarget.split(" ").filter { it.isNotEmpty() }
 
-            var score = 0
-            val analysis = mutableListOf<Pair<String, WordScoreType>>()
-
-            // Evaluate using actual recognized text from offline SpeechRecognizer
-            val cleanRecognized = recognizedText.value.replace(Regex("[^a-zA-Z\\s]"), "")
+            val cleanRecognized = recognizedText.value.replace(Regex("[^a-zA-Z\\s]"), "").trim()
             val recognizedWords = cleanRecognized.split(" ").filter { it.isNotEmpty() }
-            
-            val (computedScore, wordAnalysis) = alignAndScore(words, recognizedWords)
-            score = computedScore
-            analysis.addAll(wordAnalysis)
 
-            score = score.coerceIn(0, 100)
-            lastScore.value = score
+            val recordedFile = voiceRecorder.getRecordedFile()
+            val fileSize = recordedFile?.length() ?: 0L
+            val currentSamples = synchronized(amplitudeSamples) { amplitudeSamples.toList() }
+
+            val (score, analysis) = evaluateVoiceInput(
+                targetWords = words,
+                recognizedWords = recognizedWords,
+                recordedFileSize = fileSize,
+                recordDurationMs = recordDurationMs,
+                amplitudeSamples = currentSamples,
+                maxAmplitude = maxRecordedAmplitude.value
+            )
+
+            val finalScore = score.coerceIn(0, 100)
+            lastScore.value = finalScore
             scoredWords.value = analysis
 
             // Track user XP progression
-            val xpAwarded = if (score > 0) {
+            val xpAwarded = if (finalScore > 0) {
                 when {
-                    score >= 90 -> 15
-                    score >= 80 -> 10
+                    finalScore >= 90 -> 15
+                    finalScore >= 80 -> 10
                     else -> 5
                 }
             } else {
@@ -421,7 +533,7 @@ class EnglishViewModel(
             }
 
             // Persistent progress update based on module type
-            if (score > 0) {
+            if (finalScore > 0) {
                 when (itemType) {
                     "grammar" -> {
                         activeGrammarLesson.value?.let { lesson ->
@@ -430,19 +542,20 @@ class EnglishViewModel(
                     }
                     "daily_sentence" -> {
                         activeDailySentence.value?.let { sentence ->
-                            val isCorrect = score >= 85
-                            repository.scheduleSpacedRepetition(sentence.id, isCorrect, score)
+                            val isCorrect = finalScore >= 85
+                            repository.updateDailySentence(sentence.copy(isCompleted = true))
+                            repository.scheduleSpacedRepetition(sentence.id, isCorrect, finalScore)
                         }
                     }
                     "paragraph" -> {
                         activeParagraph.value?.let { para ->
-                            val currentMax = if (score > para.maxAccuracy) score else para.maxAccuracy
+                            val currentMax = if (finalScore > para.maxAccuracy) finalScore else para.maxAccuracy
                             repository.updateParagraph(para.copy(isCompleted = true, maxAccuracy = currentMax))
                         }
                     }
                     "tongue_twister" -> {
                         activeTongueTwister.value?.let { twister ->
-                            val currentMax = if (score > twister.maxAccuracy) score else twister.maxAccuracy
+                            val currentMax = if (finalScore > twister.maxAccuracy) finalScore else twister.maxAccuracy
                             repository.updateTongueTwister(twister.copy(
                                 isCompleted = true,
                                 maxAccuracy = currentMax,
@@ -450,55 +563,135 @@ class EnglishViewModel(
                             ))
                         }
                     }
+                    "conversation" -> {
+                        // Advance conversation roleplay line upon scoring
+                    }
                 }
             }
         }
     }
 
+    private fun evaluateVoiceInput(
+        targetWords: List<String>,
+        recognizedWords: List<String>,
+        recordedFileSize: Long,
+        recordDurationMs: Long,
+        amplitudeSamples: List<Int>,
+        maxAmplitude: Int
+    ): Pair<Int, List<Pair<String, WordScoreType>>> {
+        if (targetWords.isEmpty()) {
+            return Pair(0, emptyList())
+        }
 
+        // 1. If SpeechRecognizer returned recognized text, combine text alignment + audio metrics
+        if (recognizedWords.isNotEmpty()) {
+            val (textScore, wordAnalysis) = alignAndScore(targetWords, recognizedWords)
+            val activeSpeechCount = amplitudeSamples.count { it > 300 }
+            val finalScore = if (activeSpeechCount > 0 && maxAmplitude >= 300) {
+                (textScore * 0.85f + 15f).toInt().coerceAtMost(100)
+            } else {
+                textScore
+            }
+            return Pair(finalScore, wordAnalysis)
+        }
+
+        // 2. SpeechRecognizer text is empty (e.g. error / offline / mic channel held by recorder).
+        // Check if user actually spoke into the microphone!
+        val activeSpeechSamples = amplitudeSamples.filter { it >= 350 }
+        val maxAmp = if (amplitudeSamples.isNotEmpty()) amplitudeSamples.maxOrNull() ?: maxAmplitude else maxAmplitude
+
+        // If file is empty, duration too short, or mic signal is silent (< 350 amp), NO speech was captured
+        if (recordedFileSize < 1200 || recordDurationMs < 350 || maxAmp < 350 || activeSpeechSamples.isEmpty()) {
+            Log.d("EnglishViewModel", "No voice sound detected. Silence score = 0.")
+            val silentAnalysis = targetWords.map { Pair(it, WordScoreType.Incorrect) }
+            return Pair(0, silentAnalysis)
+        }
+
+        // 3. REAL VOICE INPUT DETECTED: Compute pronunciation score strictly based on recorded audio input
+        val totalWords = targetWords.size
+        val expectedDurationMs = totalWords * 350L + 600L
+
+        // Volume & Clarity Score (35%)
+        val avgSpeechAmp = activeSpeechSamples.average().toFloat()
+        val volumeScore = when {
+            avgSpeechAmp >= 3500f -> 95f
+            avgSpeechAmp >= 2000f -> 88f
+            avgSpeechAmp >= 1000f -> 80f
+            avgSpeechAmp >= 500f -> 70f
+            else -> 60f
+        }
+
+        // Pace & Duration Match Score (35%)
+        val actualSpeechDurationMs = (activeSpeechSamples.size * 100L).coerceAtLeast(recordDurationMs)
+        val paceRatio = actualSpeechDurationMs.toFloat() / expectedDurationMs.toFloat()
+        val paceScore = when {
+            paceRatio in 0.65f..1.4f -> 95f
+            paceRatio in 0.5f..1.8f -> 85f
+            paceRatio in 0.35f..2.2f -> 72f
+            else -> 55f
+        }
+
+        // Articulation & Vocal Energy Dynamics Score (30%)
+        val mean = avgSpeechAmp
+        val variance = activeSpeechSamples.map { (it - mean) * (it - mean) }.average()
+        val stdDev = Math.sqrt(variance).toFloat()
+        val articulationScore = when {
+            stdDev >= 1200f -> 95f
+            stdDev >= 600f -> 85f
+            stdDev >= 250f -> 75f
+            else -> 60f
+        }
+
+        val computedAcousticScore = (volumeScore * 0.35f + paceScore * 0.35f + articulationScore * 0.30f).toInt().coerceIn(50, 98)
+
+        // Per-word timeline segmentation and scoring based on recorded voice energy
+        val wordAnalysis = mutableListOf<Pair<String, WordScoreType>>()
+        val samplesPerWord = (amplitudeSamples.size.toFloat() / totalWords.toFloat()).coerceAtLeast(1f)
+
+        for (i in 0 until totalWords) {
+            val word = targetWords[i]
+            val startSample = (i * samplesPerWord).toInt().coerceIn(0, amplitudeSamples.size)
+            val endSample = ((i + 1) * samplesPerWord).toInt().coerceIn(startSample, amplitudeSamples.size)
+
+            val wordSlice = if (startSample < endSample && startSample < amplitudeSamples.size) {
+                amplitudeSamples.subList(startSample, endSample)
+            } else {
+                emptyList()
+            }
+
+            val sliceMax = if (wordSlice.isNotEmpty()) wordSlice.maxOrNull() ?: 0 else maxAmp
+            val sliceAvg = if (wordSlice.isNotEmpty()) wordSlice.average() else 0.0
+
+            val wordStatus = when {
+                sliceMax >= 800 || sliceAvg >= 400 -> WordScoreType.Correct
+                sliceMax >= 350 || sliceAvg >= 200 -> WordScoreType.Hesitant
+                else -> WordScoreType.Incorrect
+            }
+            wordAnalysis.add(Pair(word, wordStatus))
+        }
+
+        Log.d("EnglishViewModel", "Voice input acoustic evaluation score: $computedAcousticScore for $totalWords words")
+        return Pair(computedAcousticScore, wordAnalysis)
+    }
 
     fun playRecordedVoice() {
-        if (useSimulatedMic.value) {
-            val textToSpeak = currentTargetText.value
-            if (textToSpeak.isNotEmpty()) {
-                isPlayingBack.value = true
-                // Slightly altered pitch and rate to sound like a student/learner practicing
-                tts?.setPitch(0.95f)
-                tts?.setSpeechRate(0.85f)
-                
-                val params = HashMap<String, String>()
-                params[TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID] = "user_simulated_speech"
-                tts?.speak(textToSpeak, TextToSpeech.QUEUE_FLUSH, null, "user_simulated_speech")
-                
-                // Keep state active for simulated speech duration
-                viewModelScope.launch {
-                    val wordsCount = textToSpeak.split(" ").filter { it.isNotEmpty() }.size
-                    val delayMs = (wordsCount * 450L).coerceAtLeast(1200L)
-                    delay(delayMs)
-                    isPlayingBack.value = false
-                    // Reset to normal values
-                    tts?.setPitch(1.0f)
-                    updateTtsSettings()
-                }
-            }
-        } else {
-            if (voiceRecorder.getRecordedFile() != null) {
-                isPlayingBack.value = true
-                voiceRecorder.startPlayback {
-                    isPlayingBack.value = false
-                }
+        if (isPlayingBack.value || voiceRecorder.isPlaying) {
+            stopRecordedVoicePlayback()
+            return
+        }
+
+        stopTts()
+
+        if (voiceRecorder.getRecordedFile() != null) {
+            isPlayingBack.value = true
+            voiceRecorder.startPlayback {
+                isPlayingBack.value = false
             }
         }
     }
 
     fun stopRecordedVoicePlayback() {
-        if (useSimulatedMic.value) {
-            tts?.stop()
-            tts?.setPitch(1.0f)
-            updateTtsSettings()
-        } else {
-            voiceRecorder.stopPlayback()
-        }
+        voiceRecorder.stopPlayback()
         isPlayingBack.value = false
     }
 
@@ -518,14 +711,14 @@ class EnglishViewModel(
         triggerTtsForCurrentDialogue()
     }
 
-    fun advanceDialogue() {
+    fun advanceDialogue(activeJson: String? = null) {
         val conv = activeConversation.value ?: return
-        val lines = conv.dialogueJson
-        // Deserialize lines simply or parsing tags
-        val totalLines = 6 // Standard dialogues have 6-7 lines
+        val jsonToUse = activeJson ?: conv.dialogueJson
+        val lines = parseDialogueJson(jsonToUse)
+        val totalLines = lines.size.coerceAtLeast(1)
         if (activeConversationIndex.value < totalLines - 1) {
             activeConversationIndex.value++
-            triggerTtsForCurrentDialogue()
+            triggerTtsForCurrentDialogue(jsonToUse)
         } else {
             // Dialogue complete!
             viewModelScope.launch {
@@ -537,17 +730,17 @@ class EnglishViewModel(
         }
     }
 
-    fun triggerTtsForCurrentDialogue() {
+    fun triggerTtsForCurrentDialogue(activeJson: String? = null) {
         val conv = activeConversation.value ?: return
-        // Simplistic parser of lines from Dialogue JSON
-        val lines = parseDialogueJson(conv.dialogueJson)
+        val jsonToUse = activeJson ?: conv.dialogueJson
+        val lines = parseDialogueJson(jsonToUse)
         val currentIndex = activeConversationIndex.value
         if (currentIndex < lines.size) {
             val currentLine = lines[currentIndex]
             val speakerRole = currentLine.role // "A" or "B"
             if (speakerRole != userConversationRole.value) {
                 // Speak this line!
-                speak(currentLine.text)
+                speak(currentLine.text, forceStart = true)
             }
         }
     }
@@ -568,7 +761,9 @@ class EnglishViewModel(
 
     fun resetProgress() {
         viewModelScope.launch {
+            repository.clearAppOpenLogs()
             repository.updateProgress(UserProgress(id = 1, currentStreak = 0, longestStreak = 0, lastActiveDate = "", totalXP = 0))
+            repository.recordAppOpen()
             // Mark all items as uncompleted
             grammarLessons.value.forEach {
                 repository.updateGrammarLesson(it.copy(isCompleted = false))
@@ -577,7 +772,7 @@ class EnglishViewModel(
                 repository.updateConversation(it.copy(isCompleted = false))
             }
             dailySentences.value.forEach {
-                repository.updateDailySentence(it.copy(timesPracticed = 0, lastAccuracy = 0, consecutiveCorrect = 0, reviewScheduledTime = 0))
+                repository.updateDailySentence(it.copy(isCompleted = false, timesPracticed = 0, lastAccuracy = 0, consecutiveCorrect = 0, reviewScheduledTime = 0))
             }
             paragraphs.value.forEach {
                 repository.updateParagraph(it.copy(isCompleted = false, maxAccuracy = 0))

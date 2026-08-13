@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -82,9 +83,27 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainShell(viewModel: EnglishViewModel) {
+    val screenStack by viewModel.screenStack.collectAsState()
     val currentScreen by viewModel.currentScreen.collectAsState()
     val rewardAmount by viewModel.showRewardOverlay.collectAsState()
     val progress by viewModel.userProgress.collectAsState()
+
+    val activeGrammar by viewModel.activeGrammarLesson.collectAsState()
+    val activeConversation by viewModel.activeConversation.collectAsState()
+    val activeDailySentence by viewModel.activeDailySentence.collectAsState()
+    val activeParagraph by viewModel.activeParagraph.collectAsState()
+    val activeTongueTwister by viewModel.activeTongueTwister.collectAsState()
+
+    val canGoBack = screenStack.size > 1 ||
+            activeGrammar != null ||
+            activeConversation != null ||
+            activeDailySentence != null ||
+            activeParagraph != null ||
+            activeTongueTwister != null
+
+    BackHandler(enabled = canGoBack) {
+        viewModel.goBack()
+    }
 
     // Temporary local context
     val context = LocalContext.current
@@ -92,7 +111,7 @@ fun MainShell(viewModel: EnglishViewModel) {
     Scaffold(
         topBar = {
             if (currentScreen == Screen.Home) {
-                HeaderBar(progress = progress, onProfileClick = { viewModel.navigateTo(Screen.Settings) })
+                HeaderBar(progress = progress)
             }
         },
         bottomBar = {
@@ -252,7 +271,7 @@ fun MainShell(viewModel: EnglishViewModel) {
 }
 
 @Composable
-fun HeaderBar(progress: com.example.data.UserProgress?, onProfileClick: () -> Unit) {
+fun HeaderBar(progress: com.example.data.UserProgress?) {
     val streak = progress?.currentStreak ?: 0
     Row(
         modifier = Modifier
@@ -317,24 +336,6 @@ fun HeaderBar(progress: com.example.data.UserProgress?, onProfileClick: () -> Un
                             .background(Color.White)
                     )
                 }
-            }
-
-            // User profile button / avatar
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(androidx.compose.foundation.shape.CircleShape)
-                    .background(Slate200)
-                    .border(2.dp, Color.White, androidx.compose.foundation.shape.CircleShape)
-                    .clickable { onProfileClick() },
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .clip(androidx.compose.foundation.shape.CircleShape)
-                        .background(Slate400)
-                )
             }
         }
     }

@@ -8,13 +8,14 @@ import androidx.room.RoomDatabase
 @Database(
     entities = [
         UserProgress::class,
+        AppOpenLog::class,
         GrammarLesson::class,
         ConversationSet::class,
         DailySentence::class,
         ParagraphSet::class,
         TongueTwister::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

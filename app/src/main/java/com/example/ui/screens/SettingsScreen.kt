@@ -38,7 +38,7 @@ fun SettingsScreen(
             TopAppBar(
                 title = { Text("Settings") },
                 navigationIcon = {
-                    IconButton(onClick = { viewModel.navigateTo(Screen.Home) }) {
+                    IconButton(onClick = { viewModel.goBack() }) {
                         Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
                     }
                 },
@@ -196,68 +196,6 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodySmall.copy(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             lineHeight = 16.sp
-                        )
-                    )
-                }
-            }
-
-            // --- SECTION 2.5: MICROPHONE & FEEDBACK ---
-            Text(
-                text = "Microphone & Feedback",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = TealPrimary)
-            )
-
-            val useSimulatedMic by viewModel.useSimulatedMic.collectAsState()
-
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = "RECORDING SOURCE MODE",
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "High-Fidelity AI Simulation",
-                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold)
-                            )
-                            Text(
-                                text = "Models native speaker pronunciation for perfect audio feedback when physical microphones are unavailable.",
-                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            )
-                        }
-                        Switch(
-                            checked = useSimulatedMic,
-                            onCheckedChange = { viewModel.useSimulatedMic.value = it }
-                        )
-                    }
-
-                    HorizontalDivider()
-
-                    Text(
-                        text = if (useSimulatedMic) {
-                            "✨ Active: Recording evaluates speaking pace, and playback simulates target sentence pronunciation dynamically."
-                        } else {
-                            "🎤 Active: Captures physical device audio inputs directly. Note: browser emulators may record silence/static."
-                        },
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            color = if (useSimulatedMic) TealPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = FontWeight.SemiBold
                         )
                     )
                 }

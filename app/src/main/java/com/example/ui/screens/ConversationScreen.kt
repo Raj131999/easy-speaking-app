@@ -53,6 +53,7 @@ fun ConversationScreen(
 
     val isRecording by viewModel.isRecording.collectAsState()
     val isPlayingBack by viewModel.isPlayingBack.collectAsState()
+    val isTtsSpeaking by viewModel.isTtsSpeaking.collectAsState()
     val lastScore by viewModel.lastScore.collectAsState()
     val scoredWords by viewModel.scoredWords.collectAsState()
 
@@ -98,7 +99,7 @@ fun ConversationScreen(
                 TopAppBar(
                     title = { Text("Conversation Map") },
                     navigationIcon = {
-                        IconButton(onClick = { viewModel.navigateTo(Screen.Home) }) {
+                        IconButton(onClick = { viewModel.goBack() }) {
                             Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
                         }
                     },
@@ -472,9 +473,13 @@ fun ConversationScreen(
                                             onClick = { viewModel.speak(activeLine.text) },
                                             modifier = Modifier
                                                 .size(44.dp)
-                                                .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.4f), CircleShape)
+                                                .background(if (isTtsSpeaking) Color(0xFFFF5252) else MaterialTheme.colorScheme.secondary.copy(alpha = 0.4f), CircleShape)
                                         ) {
-                                            Icon(imageVector = Icons.Default.VolumeUp, contentDescription = "Hear Example", tint = Color.White)
+                                            Icon(
+                                                imageVector = if (isTtsSpeaking) Icons.Default.Stop else Icons.Default.VolumeUp,
+                                                contentDescription = if (isTtsSpeaking) "Stop" else "Hear Example",
+                                                tint = Color.White
+                                            )
                                         }
 
                                         Spacer(modifier = Modifier.width(20.dp))
@@ -505,13 +510,7 @@ fun ConversationScreen(
 
                                         // Hear user voice
                                         IconButton(
-                                            onClick = {
-                                                if (isPlayingBack) {
-                                                    viewModel.stopRecordedVoicePlayback()
-                                                } else {
-                                                    viewModel.playRecordedVoice()
-                                                }
-                                            },
+                                            onClick = { viewModel.playRecordedVoice() },
                                             enabled = lastScore != null,
                                             modifier = Modifier
                                                 .size(44.dp)
@@ -521,7 +520,7 @@ fun ConversationScreen(
                                                 )
                                         ) {
                                             Icon(
-                                                imageVector = if (isPlayingBack) Icons.Default.VolumeMute else Icons.Default.PlayArrow,
+                                                imageVector = if (isPlayingBack) Icons.Default.Stop else Icons.Default.PlayArrow,
                                                 contentDescription = "Playback",
                                                 tint = if (lastScore != null) Color.White else Color.Gray
                                             )
@@ -556,7 +555,7 @@ fun ConversationScreen(
                                         Spacer(modifier = Modifier.height(12.dp))
                                         Button(
                                             onClick = {
-                                                viewModel.advanceDialogue()
+                                                viewModel.advanceDialogue(activeDialogueJson)
                                                 viewModel.lastScore.value = null // clear score for next line
                                             },
                                             colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
@@ -589,17 +588,17 @@ fun ConversationScreen(
                                     Row {
                                         Button(
                                             onClick = { viewModel.speak(activeLine.text) },
-                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                                            colors = ButtonDefaults.buttonColors(containerColor = if (isTtsSpeaking) Color(0xFFFF5252) else MaterialTheme.colorScheme.secondary)
                                         ) {
-                                            Icon(imageVector = Icons.Default.VolumeUp, contentDescription = "Hear")
+                                            Icon(imageVector = if (isTtsSpeaking) Icons.Default.Stop else Icons.Default.VolumeUp, contentDescription = "Hear")
                                             Spacer(modifier = Modifier.width(6.dp))
-                                            Text("Play Voice Again")
+                                            Text(if (isTtsSpeaking) "Stop Voice" else "Play Voice Again")
                                         }
                                         Spacer(modifier = Modifier.width(12.dp))
                                         Button(
                                             onClick = {
                                                 if (currentIndex < dialogueLines.size - 1) {
-                                                    viewModel.advanceDialogue()
+                                                    viewModel.advanceDialogue(activeDialogueJson)
                                                 } else {
                                                     // Go to comprehension check
                                                     showQuiz = true
@@ -741,7 +740,7 @@ fun ConversationScreen(
                                 Button(
                                     onClick = {
                                         // Finalize Conversation
-                                        viewModel.advanceDialogue()
+                                        viewModel.advanceDialogue(activeDialogueJson)
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
                                     modifier = Modifier

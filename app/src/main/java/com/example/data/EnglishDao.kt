@@ -19,6 +19,19 @@ interface EnglishDao {
     @Update
     suspend fun updateUserProgress(progress: UserProgress)
 
+    // --- App Open Tracking Queries ---
+    @Query("SELECT dateStr FROM app_open_logs ORDER BY dateStr ASC")
+    fun getAllAppOpenDatesFlow(): Flow<List<String>>
+
+    @Query("SELECT dateStr FROM app_open_logs ORDER BY dateStr ASC")
+    suspend fun getAllAppOpenDates(): List<String>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun recordAppOpen(log: AppOpenLog)
+
+    @Query("DELETE FROM app_open_logs")
+    suspend fun deleteAllAppOpenLogs()
+
 
     // --- Grammar Lesson Queries ---
     @Query("SELECT * FROM grammar_lessons ORDER BY orderIndex ASC")

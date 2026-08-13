@@ -14,6 +14,13 @@ class VoiceRecorder(private val context: Context) {
     private var mediaPlayer: MediaPlayer? = null
     private var recordFile: File? = null
 
+    val isPlaying: Boolean
+        get() = try {
+            mediaPlayer?.isPlaying == true
+        } catch (e: Exception) {
+            false
+        }
+
     init {
         recordFile = File(context.cacheDir, "user_voice_attempt.m4a")
     }
@@ -77,6 +84,7 @@ class VoiceRecorder(private val context: Context) {
 
         if (recordFile == null || !recordFile!!.exists()) {
             Log.e("VoiceRecorder", "No recorded voice file found to play.")
+            onComplete()
             return
         }
 
@@ -91,8 +99,9 @@ class VoiceRecorder(private val context: Context) {
             }
             mediaPlayer = player
             Log.d("VoiceRecorder", "Started playback of: ${recordFile!!.absolutePath}")
-        } catch (e: IOException) {
+        } catch (e: Exception) {
             Log.e("VoiceRecorder", "Failed to start playback", e)
+            onComplete()
         }
     }
 

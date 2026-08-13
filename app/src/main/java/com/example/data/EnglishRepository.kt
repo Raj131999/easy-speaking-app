@@ -10,11 +10,47 @@ import java.util.*
 class EnglishRepository(private val englishDao: EnglishDao) {
 
     val userProgress: Flow<UserProgress?> = englishDao.getUserProgressFlow()
+    val appOpenDates: Flow<List<String>> = englishDao.getAllAppOpenDatesFlow()
     val grammarLessons: Flow<List<GrammarLesson>> = englishDao.getAllGrammarLessons()
     val conversations: Flow<List<ConversationSet>> = englishDao.getAllConversations()
     val dailySentences: Flow<List<DailySentence>> = englishDao.getAllDailySentences()
     val paragraphs: Flow<List<ParagraphSet>> = englishDao.getAllParagraphs()
     val tongueTwisters: Flow<List<TongueTwister>> = englishDao.getAllTongueTwisters()
+
+    suspend fun recordAppOpen() {
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val todayStr = sdf.format(Date())
+
+        // Record app opening date
+        englishDao.recordAppOpen(AppOpenLog(dateStr = todayStr))
+
+        // Calculate consecutive active streak backwards from today
+        val allDates = englishDao.getAllAppOpenDates().toSet()
+        val cal = Calendar.getInstance()
+        var streak = 0
+        while (true) {
+            val dateStr = sdf.format(cal.time)
+            if (allDates.contains(dateStr)) {
+                streak++
+                cal.add(Calendar.DAY_OF_YEAR, -1)
+            } else {
+                break
+            }
+        }
+
+        val currentProgress = englishDao.getUserProgress() ?: UserProgress(id = 1)
+        val longest = if (streak > currentProgress.longestStreak) streak else currentProgress.longestStreak
+        val isSameDay = currentProgress.lastActiveDate == todayStr
+        val updatedTodayXp = if (isSameDay) currentProgress.todayXP else 0
+
+        val updatedProgress = currentProgress.copy(
+            currentStreak = streak,
+            longestStreak = longest,
+            lastActiveDate = todayStr,
+            todayXP = updatedTodayXp
+        )
+        englishDao.insertUserProgress(updatedProgress)
+    }
 
     suspend fun checkAndPrepopulate(context: Context) {
         Log.d("EnglishRepository", "Syncing database with InitialData...")
@@ -23,6 +59,7 @@ class EnglishRepository(private val englishDao: EnglishDao) {
         if (existingProgress == null) {
             englishDao.insertUserProgress(UserProgress(id = 1, currentStreak = 0, longestStreak = 0, lastActiveDate = ""))
         }
+        recordAppOpen()
 
         // Sync Grammar Lessons
         val lessons = englishDao.getAllGrammarLessons().firstOrNull() ?: emptyList()
@@ -185,6 +222,10 @@ class EnglishRepository(private val englishDao: EnglishDao) {
 
     suspend fun updateProgress(progress: UserProgress) {
         englishDao.insertUserProgress(progress)
+    }
+
+    suspend fun clearAppOpenLogs() {
+        englishDao.deleteAllAppOpenLogs()
     }
 
     // Dynamic Spaced-Repetition Review Scheduler
