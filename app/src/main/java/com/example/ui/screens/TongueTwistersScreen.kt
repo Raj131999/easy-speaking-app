@@ -83,7 +83,7 @@ fun TongueTwistersScreen(
                 TopAppBar(
                     title = { Text("Tongue Twister Map") },
                     navigationIcon = {
-                        IconButton(onClick = { viewModel.goBack() }) {
+ase                        IconButton(onClick = { viewModel.goBack() }) {
                             Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },
