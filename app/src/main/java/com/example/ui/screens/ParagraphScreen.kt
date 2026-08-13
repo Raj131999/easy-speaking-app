@@ -1,6 +1,5 @@
 package com.example.ui.screens
 
-import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -14,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -100,7 +100,7 @@ fun ParagraphScreen(
                     title = { Text("Paragraph Map (${paragraphsList.size})") },
                     navigationIcon = {
                         IconButton(onClick = { viewModel.goBack() }) {
-                            Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
+                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -277,7 +277,7 @@ fun ParagraphScreen(
                     title = { Text("Paragraph Fluency") },
                     navigationIcon = {
                         IconButton(onClick = { viewModel.activeParagraph.value = null }) {
-                            Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
+                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -562,7 +562,7 @@ fun ParagraphScreen(
                                 colors = ButtonDefaults.buttonColors(containerColor = if (isTtsSpeaking) Color(0xFFFF5252) else MaterialTheme.colorScheme.secondary),
                                 modifier = Modifier.align(Alignment.CenterHorizontally)
                             ) {
-                                Icon(imageVector = if (isTtsSpeaking) Icons.Default.Stop else Icons.Default.VolumeUp, contentDescription = "Listen")
+                                Icon(imageVector = if (isTtsSpeaking) Icons.Default.Stop else Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "Listen")
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(if (isTtsSpeaking) "Stop Model Guide" else "Play Paragraph Model Guide")
                             }
@@ -579,7 +579,7 @@ fun ParagraphScreen(
                             modifier = Modifier.padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(imageVector = Icons.Default.TrendingUp, contentDescription = "Fluency Tip", tint = StreakGold)
+                            Icon(imageVector = Icons.AutoMirrored.Filled.TrendingUp, contentDescription = "Fluency Tip", tint = StreakGold)
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text(

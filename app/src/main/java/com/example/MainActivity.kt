@@ -13,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -127,14 +128,14 @@ fun MainShell(viewModel: EnglishViewModel) {
                     NavigationBarItem(
                         selected = currentScreen == Screen.Home,
                         onClick = { viewModel.navigateTo(Screen.Home) },
-                        icon = { Icon(imageVector = Icons.Default.DirectionsRun, contentDescription = "Gym") },
+                        icon = { Icon(imageVector = Icons.AutoMirrored.Filled.DirectionsRun, contentDescription = "Gym") },
                         label = { Text("Daily Gym") },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = PolishTeal,
                             selectedTextColor = PolishTeal,
                             indicatorColor = PolishTealLight,
                             unselectedIconColor = Slate400,
-                            unselectedTextColor = Slate400
+                            unselectedTextColor = Slate400,
                         ),
                         modifier = Modifier.testTag("nav_item_gym")
                     )
@@ -149,7 +150,7 @@ fun MainShell(viewModel: EnglishViewModel) {
                             selectedTextColor = PolishTeal,
                             indicatorColor = PolishTealLight,
                             unselectedIconColor = Slate400,
-                            unselectedTextColor = Slate400
+                            unselectedTextColor = Slate400,
                         ),
                         modifier = Modifier.testTag("nav_item_settings")
                     )

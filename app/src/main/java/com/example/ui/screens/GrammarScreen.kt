@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -139,7 +140,7 @@ fun GrammarScreen(
                     title = { Text("Spoken Grammar") },
                     navigationIcon = {
                         IconButton(onClick = { viewModel.goBack() }) {
-                            Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
+                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -439,7 +440,7 @@ fun GrammarScreen(
                                         .background(TealPrimary.copy(alpha = 0.1f), CircleShape)
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.ArrowBack,
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                         contentDescription = "Back to Categories",
                                         tint = TealPrimary,
                                         modifier = Modifier.size(18.dp)
@@ -571,7 +572,7 @@ fun GrammarScreen(
                     title = { Text("Spoken Grammar") },
                     navigationIcon = {
                         IconButton(onClick = { viewModel.activeGrammarLesson.value = null }) {
-                            Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
+                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -663,7 +664,7 @@ fun GrammarScreen(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.VolumeUp,
+                                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
                                     contentDescription = "Examples",
                                     tint = TealPrimary,
                                     modifier = Modifier.size(20.dp)
@@ -741,7 +742,7 @@ fun GrammarScreen(
                                             .background(TealPrimary.copy(alpha = 0.15f), CircleShape)
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.VolumeUp,
+                                            imageVector = Icons.AutoMirrored.Filled.VolumeUp,
                                             contentDescription = "Hear Line",
                                             tint = TealPrimary,
                                             modifier = Modifier.size(18.dp)
@@ -919,12 +920,21 @@ fun GrammarScreen(
                                     // Playback reference model
                                     Button(
                                         onClick = { viewModel.speak(item.speechPrompt) },
-                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (isTtsSpeaking) Color(0xFFFF5252) else MaterialTheme.colorScheme.secondary
+                                        ),
                                         modifier = Modifier.height(40.dp)
                                     ) {
-                                        Icon(imageVector = Icons.Default.VolumeUp, contentDescription = "Hear", modifier = Modifier.size(18.dp))
+                                        Icon(
+                                            imageVector = if (isTtsSpeaking) Icons.Default.Stop else Icons.AutoMirrored.Filled.VolumeUp,
+                                            contentDescription = if (isTtsSpeaking) "Stop" else "Hear",
+                                            modifier = Modifier.size(18.dp)
+                                        )
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Hear Model Audio", style = MaterialTheme.typography.bodyMedium)
+                                        Text(
+                                            text = if (isTtsSpeaking) "Stop Audio" else "Hear Model Audio",
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
                                     }
 
                                     Spacer(modifier = Modifier.height(24.dp))

@@ -85,7 +85,7 @@ class EnglishRepository(private val englishDao: EnglishDao) {
                         speechPrompt = jsonObject.getString("speechPrompt"),
                         isCompleted = jsonObject.optBoolean("isCompleted", false),
                         orderIndex = jsonObject.optInt("orderIndex", i),
-                        category = jsonObject.optString("category", "Useful Lessons")
+                        category = jsonObject.optString("category", "Useful Lessons"),
                     )
                 )
             }
@@ -162,9 +162,7 @@ class EnglishRepository(private val englishDao: EnglishDao) {
             Log.e("EnglishRepository", "Error loading ted_paragraphs.json from assets", e)
         }
 
-        val allInitialParas = if (tedParagraphs.isNotEmpty()) {
-            tedParagraphs
-        } else {
+        val allInitialParas = tedParagraphs.ifEmpty {
             InitialData.paragraphs
         }
 

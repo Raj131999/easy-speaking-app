@@ -1,6 +1,5 @@
 package com.example.ui.screens
 
-import androidx.compose.animation.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -13,6 +12,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -41,7 +41,7 @@ import com.example.ui.theme.TealPrimary
 @Composable
 fun TongueTwistersScreen(
     viewModel: EnglishViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val twisters by viewModel.tongueTwisters.collectAsState()
     val activeTwister by viewModel.activeTongueTwister.collectAsState()
@@ -85,7 +85,7 @@ fun TongueTwistersScreen(
                     title = { Text("Tongue Twister Map") },
                     navigationIcon = {
                         IconButton(onClick = { viewModel.goBack() }) {
-                            Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
+                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -222,7 +222,7 @@ fun TongueTwistersScreen(
                     title = { Text("Tongue Twister Soundroom") },
                     navigationIcon = {
                         IconButton(onClick = { viewModel.activeTongueTwister.value = null }) {
-                            Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
+                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -322,8 +322,8 @@ fun TongueTwistersScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             val speeds = listOf(
-                                Triple("Slow", 0.6f, Icons.Default.DirectionsWalk),
-                                Triple("Normal", 1.0f, Icons.Default.DirectionsRun),
+                                Triple("Slow", 0.6f, Icons.AutoMirrored.Filled.DirectionsWalk),
+                                Triple("Normal", 1.0f, Icons.AutoMirrored.Filled.DirectionsRun),
                                 Triple("Fast", 1.4f, Icons.Default.FlashOn)
                             )
                             speeds.forEach { (label, rate, icon) ->
@@ -529,7 +529,7 @@ fun TongueTwistersScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Icon(imageVector = Icons.Default.ArrowForward, contentDescription = "Next", tint = Color.Black)
+                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Next", tint = Color.Black)
                         }
                     }
                 }

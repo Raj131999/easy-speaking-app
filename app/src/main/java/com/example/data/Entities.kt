@@ -16,7 +16,7 @@ data class UserProgress(
     val lastActiveDate: String = "", // e.g. "2026-07-07"
     val totalXP: Int = 0,
     val dailyGoalXP: Int = 50, // default daily goal is 50 XP
-    val todayXP: Int = 0
+    val todayXP: Int = 0,
 )
 
 @Entity(tableName = "grammar_lessons")

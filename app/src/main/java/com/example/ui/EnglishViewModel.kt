@@ -26,13 +26,13 @@ enum class Screen {
     DailySentences,
     Paragraph,
     TongueTwister,
-    Settings
+    Settings,
 }
 
 enum class WordScoreType {
     Correct,
     Hesitant,
-    Incorrect
+    Incorrect,
 }
 
 class EnglishViewModel(
@@ -861,5 +861,5 @@ class EnglishViewModel(
 data class DialogueLine(
     val speaker: String,
     val text: String,
-    val role: String
+    val role: String,
 )

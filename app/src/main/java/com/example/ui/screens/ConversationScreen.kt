@@ -1,6 +1,6 @@
 package com.example.ui.screens
 
-import androidx.compose.animation.*
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -113,7 +114,7 @@ fun ConversationScreen(
                     title = { Text("Conversation Map") },
                     navigationIcon = {
                         IconButton(onClick = { viewModel.goBack() }) {
-                            Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
+                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -248,7 +249,7 @@ fun ConversationScreen(
                     title = { Text("Roleplay Dialogue") },
                     navigationIcon = {
                         IconButton(onClick = { viewModel.activeConversation.value = null }) {
-                            Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
+                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },
                     actions = {
@@ -404,7 +405,7 @@ fun ConversationScreen(
                                             )
                                             if (!isUserTurn) {
                                                 Icon(
-                                                    imageVector = Icons.Default.VolumeUp,
+                                                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
                                                     contentDescription = "Read",
                                                     tint = TealPrimary,
                                                     modifier = Modifier.size(16.dp)
@@ -490,7 +491,7 @@ fun ConversationScreen(
                                                 .background(if (isTtsSpeaking) Color(0xFFFF5252) else MaterialTheme.colorScheme.secondary.copy(alpha = 0.4f), CircleShape)
                                         ) {
                                             Icon(
-                                                imageVector = if (isTtsSpeaking) Icons.Default.Stop else Icons.Default.VolumeUp,
+                                                imageVector = if (isTtsSpeaking) Icons.Default.Stop else Icons.AutoMirrored.Filled.VolumeUp,
                                                 contentDescription = if (isTtsSpeaking) "Stop" else "Hear Example",
                                                 tint = Color.White
                                             )
@@ -534,7 +535,7 @@ fun ConversationScreen(
                                                 )
                                         ) {
                                             Icon(
-                                                imageVector = if (isPlayingBack) Icons.Default.Stop else Icons.Default.PlayArrow,
+                                                imageVector = if (isPlayingBack) Icons.Default.Stop else Icons.AutoMirrored.Filled.VolumeMute,
                                                 contentDescription = "Playback",
                                                 tint = if (lastScore != null) Color.White else Color.Gray
                                             )
@@ -585,7 +586,7 @@ fun ConversationScreen(
                                         ) {
                                             Text("Perfect! Continue Conversation", color = Color.Black, fontWeight = FontWeight.Bold)
                                             Spacer(modifier = Modifier.width(6.dp))
-                                            Icon(imageVector = Icons.Default.ArrowForward, contentDescription = "Next", tint = Color.Black)
+                                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Next", tint = Color.Black)
                                         }
                                     }
                                 } else {
@@ -612,7 +613,7 @@ fun ConversationScreen(
                                             onClick = { viewModel.speak(activeLine.text) },
                                             colors = ButtonDefaults.buttonColors(containerColor = if (isTtsSpeaking) Color(0xFFFF5252) else MaterialTheme.colorScheme.secondary)
                                         ) {
-                                            Icon(imageVector = if (isTtsSpeaking) Icons.Default.Stop else Icons.Default.VolumeUp, contentDescription = "Hear")
+                                            Icon(imageVector = if (isTtsSpeaking) Icons.Default.Stop else Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "Hear")
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Text(if (isTtsSpeaking) "Stop Voice" else "Play Voice Again")
                                         }
@@ -630,7 +631,7 @@ fun ConversationScreen(
                                         ) {
                                             Text("Next Line", color = Color.Black)
                                             Spacer(modifier = Modifier.width(6.dp))
-                                            Icon(imageVector = Icons.Default.ArrowForward, contentDescription = "Next", tint = Color.Black)
+                                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Next", tint = Color.Black)
                                         }
                                     }
                                 }

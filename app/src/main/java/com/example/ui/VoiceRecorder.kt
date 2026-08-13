@@ -52,8 +52,8 @@ class VoiceRecorder(private val context: Context) {
             mediaRecorder = recorder
             Log.d("VoiceRecorder", "Started recording into: ${recordFile?.absolutePath}")
             return true
-        } catch (e: Exception) {
-            Log.e("VoiceRecorder", "Failed to start recording", e)
+        } catch (_: Exception) {
+            Log.e("VoiceRecorder", "Failed to start recording")
             return false
         }
     }
@@ -82,7 +82,7 @@ class VoiceRecorder(private val context: Context) {
     fun startPlayback(onComplete: () -> Unit = {}) {
         stopPlayback()
 
-        if (recordFile == null || !recordFile!!.exists()) {
+        if (recordFile == null || !(recordFile!!.exists())) {
             Log.e("VoiceRecorder", "No recorded voice file found to play.")
             onComplete()
             return
