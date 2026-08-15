@@ -384,7 +384,7 @@ fun DailySentencesScreen(
                                     ) {
                                         Icon(
                                             imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                                            contentDescription = "Record",
+                                            contentDescription = if (isRecording) "Stop" else "Record",
                                             tint = Color.Black,
                                             modifier = Modifier.size(32.dp)
                                         )

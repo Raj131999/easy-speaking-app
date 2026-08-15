@@ -39,6 +39,7 @@ class VoiceRecorder(private val context: Context) {
 
             recorder.apply {
                 // VOICE_RECOGNITION applies high-pass filter, noise suppression and AGC (Automatic Gain Control)
+                // This is the standard for speech-related tasks and is more compatible with system recognizers.
                 setAudioSource(MediaRecorder.AudioSource.VOICE_RECOGNITION)
                 setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
                 setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
@@ -52,8 +53,8 @@ class VoiceRecorder(private val context: Context) {
             mediaRecorder = recorder
             Log.d("VoiceRecorder", "Started recording into: ${recordFile?.absolutePath}")
             return true
-        } catch (_: Exception) {
-            Log.e("VoiceRecorder", "Failed to start recording")
+        } catch (e: Exception) {
+            Log.e("VoiceRecorder", "Failed to start recording: ${e.message}", e)
             return false
         }
     }

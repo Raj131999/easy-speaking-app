@@ -133,8 +133,10 @@ fun SpokenVoiceToTextCard(
                     Text(
                         text = if (isRecording) {
                             "Listening to your voice..."
-                        } else {
+                        } else if (hasEvaluated) {
                             "Nothing is spoken"
+                        } else {
+                            "Processing your speech..."
                         },
                         style = MaterialTheme.typography.bodyMedium.copy(
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),

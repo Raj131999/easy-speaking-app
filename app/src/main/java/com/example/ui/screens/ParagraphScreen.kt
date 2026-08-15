@@ -353,7 +353,7 @@ fun ParagraphScreen(
                                     ) {
                                         Icon(
                                             imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                                            contentDescription = "Mic",
+                                            contentDescription = if (isRecording) "Stop" else "Record",
                                             tint = Color.Black,
                                             modifier = Modifier.size(30.dp)
                                         )

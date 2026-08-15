@@ -185,47 +185,58 @@ class EnglishViewModel(
     }
 
     private fun initSpeechRecognizer() {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
-            try {
-                if (SpeechRecognizer.isRecognitionAvailable(getApplication())) {
-                    speechRecognizer = SpeechRecognizer.createSpeechRecognizer(getApplication())
-                    speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-                        override fun onReadyForSpeech(params: Bundle?) {
-                            Log.d("EnglishViewModel", "onReadyForSpeech")
+        try {
+            if (SpeechRecognizer.isRecognitionAvailable(getApplication())) {
+                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(getApplication())
+                speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+                    override fun onReadyForSpeech(params: Bundle?) {
+                        Log.d("EnglishViewModel", "onReadyForSpeech")
+                    }
+                    override fun onBeginningOfSpeech() {
+                        Log.d("EnglishViewModel", "onBeginningOfSpeech")
+                    }
+                    override fun onRmsChanged(rmsdB: Float) {}
+                    override fun onBufferReceived(buffer: ByteArray?) {}
+                    override fun onEndOfSpeech() {
+                        Log.d("EnglishViewModel", "onEndOfSpeech")
+                    }
+                    override fun onError(error: Int) {
+                        val message = when (error) {
+                            SpeechRecognizer.ERROR_AUDIO -> "Audio recording error"
+                            SpeechRecognizer.ERROR_CLIENT -> "Client side error"
+                            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Insufficient permissions"
+                            SpeechRecognizer.ERROR_NETWORK -> "Network error"
+                            SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Network timeout"
+                            SpeechRecognizer.ERROR_NO_MATCH -> "No recognition result matched"
+                            SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "RecognitionService busy"
+                            SpeechRecognizer.ERROR_SERVER -> "Server error"
+                            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech input"
+                            else -> "Unknown error: $error"
                         }
-                        override fun onBeginningOfSpeech() {
-                            Log.d("EnglishViewModel", "onBeginningOfSpeech")
+                        Log.e("EnglishViewModel", "SpeechRecognizer error: $message")
+                        // Don't clear recognizedText here as it might have partial results
+                    }
+                    override fun onResults(results: Bundle?) {
+                        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        if (!matches.isNullOrEmpty()) {
+                            recognizedText.value = matches[0]
+                            Log.d("EnglishViewModel", "SpeechRecognizer final result: ${matches[0]}")
                         }
-                        override fun onRmsChanged(rmsdB: Float) {}
-                        override fun onBufferReceived(buffer: ByteArray?) {}
-                        override fun onEndOfSpeech() {
-                            Log.d("EnglishViewModel", "onEndOfSpeech")
+                    }
+                    override fun onPartialResults(partialResults: Bundle?) {
+                        val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        if (!matches.isNullOrEmpty()) {
+                            recognizedText.value = matches[0]
+                            Log.d("EnglishViewModel", "SpeechRecognizer partial result: ${matches[0]}")
                         }
-                        override fun onError(error: Int) {
-                            Log.e("EnglishViewModel", "SpeechRecognizer error: $error")
-                        }
-                        override fun onResults(results: Bundle?) {
-                            val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                            if (!matches.isNullOrEmpty()) {
-                                recognizedText.value = matches[0]
-                                Log.d("EnglishViewModel", "SpeechRecognizer final result: ${matches[0]}")
-                            }
-                        }
-                        override fun onPartialResults(partialResults: Bundle?) {
-                            val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                            if (!matches.isNullOrEmpty()) {
-                                recognizedText.value = matches[0]
-                                Log.d("EnglishViewModel", "SpeechRecognizer partial result: ${matches[0]}")
-                            }
-                        }
-                        override fun onEvent(eventType: Int, params: Bundle?) {}
-                    })
-                } else {
-                    Log.w("EnglishViewModel", "SpeechRecognizer not available on this device")
-                }
-            } catch (e: Exception) {
-                Log.e("EnglishViewModel", "Failed to initialize SpeechRecognizer", e)
+                    }
+                    override fun onEvent(eventType: Int, params: Bundle?) {}
+                })
+            } else {
+                Log.w("EnglishViewModel", "SpeechRecognizer not available on this device")
             }
+        } catch (e: Exception) {
+            Log.e("EnglishViewModel", "Failed to initialize SpeechRecognizer", e)
         }
     }
 
@@ -235,7 +246,6 @@ class EnglishViewModel(
                 recognizedText.value = ""
                 if (speechRecognizer == null) {
                     initSpeechRecognizer()
-                    delay(200)
                 }
                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -243,6 +253,9 @@ class EnglishViewModel(
                     putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                     putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
                 }
+                // Don't explicitly prefer offline as it can fail silently on some OS versions; 
+                // the system will prioritize offline models if they are installed anyway.
+                speechRecognizer?.cancel()
                 speechRecognizer?.startListening(intent)
                 Log.d("EnglishViewModel", "SpeechRecognizer started listening")
             } catch (e: Exception) {
@@ -254,8 +267,9 @@ class EnglishViewModel(
     private fun stopListeningOffline() {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
             try {
+                // stopListening() allows the service to finish processing currently buffered audio
                 speechRecognizer?.stopListening()
-                Log.d("EnglishViewModel", "SpeechRecognizer stopped listening")
+                Log.d("EnglishViewModel", "SpeechRecognizer stopListening() called")
             } catch (e: Exception) {
                 Log.e("EnglishViewModel", "Error stopping SpeechRecognizer", e)
             }
@@ -275,49 +289,61 @@ class EnglishViewModel(
         
         for (targetWord in targetWords) {
             val cleanTarget = targetWord.lowercase(Locale.getDefault()).trim()
+            if (cleanTarget.isEmpty()) continue
+            
+            // Search window: look ahead up to 6 words from the last match
             val startIndex = (lastFoundIndex + 1).coerceAtLeast(0)
-            val endIndex = (startIndex + 3).coerceAtMost(recognizedWords.size - 1)
+            val endIndex = (startIndex + 6).coerceAtMost(recognizedWords.size - 1)
             
             var foundIndex = -1
+            var bestDistance = 999
+            
+            // 1. Priority: Exact match in search window
             for (i in startIndex..endIndex) {
                 val cleanRec = recognizedWords[i].lowercase(Locale.getDefault()).trim()
                 if (cleanTarget == cleanRec) {
                     foundIndex = i
+                    bestDistance = 0
                     break
                 }
             }
             
+            // 2. Secondary: Fuzzy match (Levenshtein distance 1) in window
             if (foundIndex == -1) {
-                for (i in (lastFoundIndex + 1).coerceAtLeast(0) until recognizedWords.size) {
+                for (i in startIndex..endIndex) {
+                    val cleanRec = recognizedWords[i].lowercase(Locale.getDefault()).trim()
+                    val distance = getLevenshteinDistance(cleanTarget, cleanRec)
+                    if (distance <= 1) {
+                        foundIndex = i
+                        bestDistance = distance
+                        break
+                    }
+                }
+            }
+            
+            // 3. Fallback: Search remaining list for exact match if word is long (length > 3)
+            if (foundIndex == -1 && cleanTarget.length > 3) {
+                for (i in (endIndex + 1) until recognizedWords.size) {
                     val cleanRec = recognizedWords[i].lowercase(Locale.getDefault()).trim()
                     if (cleanTarget == cleanRec) {
                         foundIndex = i
+                        bestDistance = 0
                         break
                     }
                 }
             }
 
             if (foundIndex != -1) {
-                correctCount++
-                analysis.add(Pair(targetWord, WordScoreType.Correct))
-                lastFoundIndex = foundIndex
-            } else {
-                var partialIndex = -1
-                for (i in (lastFoundIndex + 1).coerceAtLeast(0) until (lastFoundIndex + 4).coerceAtMost(recognizedWords.size)) {
-                    val cleanRec = recognizedWords[i].lowercase(Locale.getDefault()).trim()
-                    if (getLevenshteinDistance(cleanTarget, cleanRec) <= 2) {
-                        partialIndex = i
-                        break
-                    }
-                }
-                
-                if (partialIndex != -1) {
+                if (bestDistance == 0) {
+                    correctCount++
+                    analysis.add(Pair(targetWord, WordScoreType.Correct))
+                } else {
                     hesitantCount++
                     analysis.add(Pair(targetWord, WordScoreType.Hesitant))
-                    lastFoundIndex = partialIndex
-                } else {
-                    analysis.add(Pair(targetWord, WordScoreType.Incorrect))
                 }
+                lastFoundIndex = foundIndex
+            } else {
+                analysis.add(Pair(targetWord, WordScoreType.Incorrect))
             }
         }
 
@@ -494,22 +520,29 @@ class EnglishViewModel(
 
     // --- SPEAKING PRACTICE LOOP ---
     fun startRecording(targetText: String) {
+        if (isRecording.value) return
         stopTts()
         stopRecordedVoicePlayback()
         viewModelScope.launch {
             lastScore.value = null
             scoredWords.value = emptyList()
+            recognizedText.value = ""
             currentTargetText.value = targetText
             maxRecordedAmplitude.value = 0
             synchronized(amplitudeSamples) {
                 amplitudeSamples.clear()
             }
             recordStartTime = System.currentTimeMillis()
+            
+            // 1. Start audio capture first
             val started = voiceRecorder.startRecording()
             isRecording.value = started
 
             if (started) {
+                // 2. Delay significantly to ensure MediaRecorder has initialized hardware
+                delay(600)
                 startListeningOffline()
+                
                 amplitudeJob?.cancel()
                 amplitudeJob = viewModelScope.launch {
                     while (isRecording.value) {
@@ -523,21 +556,31 @@ class EnglishViewModel(
                         }
                     }
                 }
+            } else {
+                stopListeningOffline()
             }
         }
     }
 
     fun stopRecording(targetText: String, itemType: String, itemId: Int) {
+        if (!isRecording.value) return
         viewModelScope.launch {
             isRecording.value = false
             amplitudeJob?.cancel()
-            stopListeningOffline()
+            
+            // Stop recorder to finalize the audio file
             voiceRecorder.stopRecording()
+            
+            // 3. CRITICAL: Allow the SpeechRecognizer to continue processing buffered audio for a bit longer
+            // to ensure "You Spoke" is populated even if recognition is slow.
+            // We wait 2 seconds total from the moment user hits stop.
+            delay(2000)
+            stopListeningOffline()
 
             val recordDurationMs = System.currentTimeMillis() - recordStartTime
 
-            // Brief processing delay for speech recognition or audio flush
-            delay(500)
+            // Final processing delay to let state flows propagate
+            delay(300)
 
             val cleanTarget = targetText.replace(Regex("[^a-zA-Z\\s]"), "")
             val words = cleanTarget.split(" ").filter { it.isNotEmpty() }
@@ -639,13 +682,24 @@ class EnglishViewModel(
         // 1. If SpeechRecognizer returned recognized text, combine text alignment + audio metrics
         if (recognizedWords.isNotEmpty()) {
             val (textScore, wordAnalysis) = alignAndScore(targetWords, recognizedWords)
-            val activeSpeechCount = amplitudeSamples.count { it > 300 }
-            val finalScore = if (activeSpeechCount > 0 && maxAmplitude >= 300) {
-                (textScore * 0.85f + 15f).toInt().coerceAtMost(100)
+            
+            // Check if audio was actually heard during recognition
+            val activeSpeechCount = amplitudeSamples.count { it > 250 }
+            
+            // If text matches well, prioritize it. 
+            // We use a high multiplier for text alignment.
+            val finalScore = if (activeSpeechCount > 0) {
+                // Boost score if words matched, ensuring 90%+ is possible if alignment is perfect
+                val alignmentBonus = when {
+                    textScore >= 95 -> 10
+                    textScore >= 80 -> 5
+                    else -> 0
+                }
+                (textScore + alignmentBonus).coerceAtMost(100)
             } else {
                 textScore
             }
-            return Pair(finalScore, wordAnalysis)
+            return Pair(finalScore.coerceIn(0, 100), wordAnalysis)
         }
 
         // 2. SpeechRecognizer text is empty (e.g. error / offline / mic channel held by recorder).
@@ -660,44 +714,46 @@ class EnglishViewModel(
             return Pair(0, silentAnalysis)
         }
 
-        // 3. REAL VOICE INPUT DETECTED: Compute pronunciation score strictly based on recorded audio input
+        // 3. FALLBACK: Compute pronunciation score based on audio metrics if recognition failed but sound was detected.
+        // We reduce the maximum possible score significantly because we couldn't verify the words spoken.
         val totalWords = targetWords.size
-        val expectedDurationMs = totalWords * 350L + 600L
+        val expectedDurationMs = totalWords * 400L + 800L
 
         // Volume & Clarity Score (35%)
         val avgSpeechAmp = activeSpeechSamples.average().toFloat()
         val volumeScore = when {
-            avgSpeechAmp >= 3500f -> 95f
-            avgSpeechAmp >= 2000f -> 88f
-            avgSpeechAmp >= 1000f -> 80f
-            avgSpeechAmp >= 500f -> 70f
-            else -> 60f
+            avgSpeechAmp >= 4000f -> 95f
+            avgSpeechAmp >= 2500f -> 85f
+            avgSpeechAmp >= 1200f -> 75f
+            else -> 50f
         }
 
         // Pace & Duration Match Score (35%)
         val actualSpeechDurationMs = (activeSpeechSamples.size * 100L).coerceAtLeast(recordDurationMs)
         val paceRatio = actualSpeechDurationMs.toFloat() / expectedDurationMs.toFloat()
         val paceScore = when {
-            paceRatio in 0.65f..1.4f -> 95f
-            paceRatio in 0.5f..1.8f -> 85f
-            paceRatio in 0.35f..2.2f -> 72f
-            else -> 55f
+            paceRatio in 0.75f..1.25f -> 95f
+            paceRatio in 0.5f..1.8f -> 75f
+            else -> 40f
         }
 
         // Articulation & Vocal Energy Dynamics Score (30%)
+        // This detects if the user is actually speaking (changing energy) or just making noise
         val mean = avgSpeechAmp
         val variance = activeSpeechSamples.map { (it - mean) * (it - mean) }.average()
         val stdDev = Math.sqrt(variance).toFloat()
         val articulationScore = when {
             stdDev >= 1200f -> 95f
-            stdDev >= 600f -> 85f
-            stdDev >= 250f -> 75f
-            else -> 60f
+            stdDev >= 600f -> 80f
+            stdDev >= 300f -> 60f
+            else -> 10f // Very low energy variation (likely noise/humming, not speech)
         }
 
-        val computedAcousticScore = (volumeScore * 0.35f + paceScore * 0.35f + articulationScore * 0.30f).toInt().coerceIn(50, 98)
+        // Cap fallback score to 75% as we cannot confirm the user actually said the correct words,
+        // but high energy and good pace suggest a valid attempt.
+        val computedAcousticScore = (volumeScore * 0.35f + paceScore * 0.35f + articulationScore * 0.30f).toInt().coerceIn(10, 75)
 
-        // Per-word timeline segmentation and scoring based on recorded voice energy
+        // Per-word timeline segmentation
         val wordAnalysis = mutableListOf<Pair<String, WordScoreType>>()
         val samplesPerWord = (amplitudeSamples.size.toFloat() / totalWords.toFloat()).coerceAtLeast(1f)
 
@@ -716,8 +772,8 @@ class EnglishViewModel(
             val sliceAvg = if (wordSlice.isNotEmpty()) wordSlice.average() else 0.0
 
             val wordStatus = when {
-                sliceMax >= 800 || sliceAvg >= 400 -> WordScoreType.Correct
-                sliceMax >= 350 || sliceAvg >= 200 -> WordScoreType.Hesitant
+                sliceMax >= 1200 || sliceAvg >= 600 -> WordScoreType.Correct
+                sliceMax >= 400 || sliceAvg >= 200 -> WordScoreType.Hesitant
                 else -> WordScoreType.Incorrect
             }
             wordAnalysis.add(Pair(word, wordStatus))
