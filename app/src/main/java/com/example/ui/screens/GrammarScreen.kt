@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -67,6 +68,53 @@ fun GrammarScreen(
         usefulLessons.groupBy { it.category }
     }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
+
+    // LazyListStates for maps
+    val speechMapListState = rememberLazyListState()
+    val categoryMapListState = rememberLazyListState()
+    val categoryLessonsMapListState = rememberLazyListState()
+
+    // Determine current lesson list and next lesson
+    val currentLessonList = remember(lesson, speechLessons, usefulLessons, selectedCategory, groupedUsefulLessons) {
+        if (lesson == null) emptyList()
+        else if (lesson!!.id <= 15) speechLessons
+        else groupedUsefulLessons[lesson!!.category] ?: usefulLessons
+    }
+    val currentLessonIndex = remember(lesson, currentLessonList) {
+        if (lesson == null) -1
+        else currentLessonList.indexOfFirst { it.id == lesson!!.id }
+    }
+    val hasNextLesson = currentLessonIndex in 0 until (currentLessonList.size - 1)
+    val nextLesson = if (hasNextLesson) currentLessonList[currentLessonIndex + 1] else null
+
+    // Auto scroll map to next uncompleted lesson
+    LaunchedEffect(lesson == null, selectedTab) {
+        if (lesson == null && selectedTab == 0 && speechLessons.isNotEmpty()) {
+            val targetIdx = speechLessons.indexOfFirst { !it.isCompleted }.takeIf { it >= 0 } ?: 0
+            if (targetIdx > 0) {
+                speechMapListState.animateScrollToItem(targetIdx)
+            }
+        }
+    }
+
+    LaunchedEffect(lesson == null, selectedTab, selectedCategory) {
+        if (lesson == null && selectedTab == 1 && selectedCategory != null) {
+            val catLessons = groupedUsefulLessons[selectedCategory] ?: emptyList()
+            val targetIdx = catLessons.indexOfFirst { !it.isCompleted }.takeIf { it >= 0 } ?: 0
+            if (targetIdx > 0) {
+                categoryLessonsMapListState.animateScrollToItem(targetIdx)
+            }
+        } else if (lesson == null && selectedTab == 1 && selectedCategory == null) {
+            val categoryList = groupedUsefulLessons.keys.toList()
+            val targetIdx = categoryList.indexOfFirst { cat ->
+                val list = groupedUsefulLessons[cat] ?: emptyList()
+                list.isNotEmpty() && !list.all { it.isCompleted }
+            }.takeIf { it >= 0 } ?: 0
+            if (targetIdx > 0) {
+                categoryMapListState.animateScrollToItem(targetIdx)
+            }
+        }
+    }
 
     // Intercept back button when in category view to return to categories list
     BackHandler(enabled = (lesson == null && selectedCategory != null)) {
@@ -170,6 +218,7 @@ fun GrammarScreen(
 
                         // Map Path
                         LazyColumn(
+                            state = speechMapListState,
                             modifier = Modifier
                                 .fillMaxSize()
                                 .weight(1f),
@@ -289,6 +338,7 @@ fun GrammarScreen(
 
                             // Category Map Path
                             LazyColumn(
+                                state = categoryMapListState,
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .weight(1f),
@@ -434,6 +484,7 @@ fun GrammarScreen(
 
                             // Lessons Map Path
                             LazyColumn(
+                                state = categoryLessonsMapListState,
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .weight(1f),
@@ -966,31 +1017,85 @@ fun GrammarScreen(
                                             }
                                         }
 
-                                        // Voice Playback compare controls
+                                        // Voice Playback and Next / Finish controls
                                         Spacer(modifier = Modifier.height(20.dp))
-                                        Row(
-                                            horizontalArrangement = Arrangement.SpaceEvenly,
-                                            modifier = Modifier.fillMaxWidth()
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally
                                         ) {
-                                            Button(
-                                                onClick = { viewModel.playRecordedVoice() },
-                                                colors = ButtonDefaults.buttonColors(
-                                                    containerColor = if (isPlayingBack) Color(0xFFFF5252) else TealPrimary
-                                                )
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                                modifier = Modifier.fillMaxWidth()
                                             ) {
-                                                Icon(
-                                                    imageVector = if (isPlayingBack) Icons.Default.Stop else Icons.Default.PlayArrow,
-                                                    contentDescription = "Play"
-                                                )
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text(if (isPlayingBack) "Stop Playback" else "Hear Your Voice", color = Color.Black)
+                                                OutlinedButton(
+                                                    onClick = { viewModel.playRecordedVoice() },
+                                                    modifier = Modifier.weight(1f),
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    colors = ButtonDefaults.outlinedButtonColors(
+                                                        contentColor = if (isPlayingBack) Color(0xFFFF5252) else TealPrimary
+                                                    )
+                                                ) {
+                                                    Icon(
+                                                        imageVector = if (isPlayingBack) Icons.Default.Stop else Icons.Default.PlayArrow,
+                                                        contentDescription = "Play"
+                                                    )
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Text(if (isPlayingBack) "Stop Voice" else "Hear Your Voice")
+                                                }
+
+                                                if (hasNextLesson && nextLesson != null) {
+                                                    Button(
+                                                        onClick = {
+                                                            viewModel.activeGrammarLesson.value = nextLesson
+                                                            viewModel.lastScore.value = null
+                                                            viewModel.scoredWords.value = emptyList()
+                                                            viewModel.recognizedText.value = ""
+                                                        },
+                                                        modifier = Modifier.weight(1f),
+                                                        shape = RoundedCornerShape(12.dp),
+                                                        colors = ButtonDefaults.buttonColors(containerColor = TealPrimary)
+                                                    ) {
+                                                        Text("Next Lesson", color = Color.Black, fontWeight = FontWeight.Bold)
+                                                        Spacer(modifier = Modifier.width(4.dp))
+                                                        Icon(imageVector = Icons.Default.ArrowForward, contentDescription = "Next", tint = Color.Black)
+                                                    }
+                                                }
                                             }
 
                                             Button(
-                                                onClick = { viewModel.activeGrammarLesson.value = null },
-                                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                                                onClick = {
+                                                    val activeItem = lesson
+                                                    if (activeItem != null) {
+                                                        if (activeItem.id <= 15) {
+                                                            selectedTab = 0
+                                                        } else {
+                                                            selectedTab = 1
+                                                            selectedCategory = activeItem.category
+                                                        }
+                                                    }
+                                                    viewModel.activeGrammarLesson.value = null
+                                                    viewModel.lastScore.value = null
+                                                    viewModel.scoredWords.value = emptyList()
+                                                    viewModel.recognizedText.value = ""
+                                                },
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = if (hasNextLesson) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.secondary
+                                                ),
+                                                modifier = Modifier.fillMaxWidth(),
+                                                shape = RoundedCornerShape(12.dp)
                                             ) {
-                                                Text("Finish Lesson", color = Color.White)
+                                                Icon(
+                                                    imageVector = Icons.Default.Map,
+                                                    contentDescription = "Map View",
+                                                    tint = if (hasNextLesson) MaterialTheme.colorScheme.onSurfaceVariant else Color.White
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = if (hasNextLesson) "Finish Lesson (View Next on Map)" else "Complete Lesson Trail",
+                                                    color = if (hasNextLesson) MaterialTheme.colorScheme.onSurfaceVariant else Color.White,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
                                             }
                                         }
                                     }

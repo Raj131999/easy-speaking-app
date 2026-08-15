@@ -3,9 +3,12 @@ package com.example.ui.screens
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -50,6 +53,17 @@ fun DailySentencesScreen(
     val currentIndex = remember(activeSentence, sentences) {
         val index = sentences.indexOfFirst { it.id == activeSentence?.id }
         if (index == -1) 0 else index
+    }
+
+    val mapListState = rememberLazyListState()
+
+    LaunchedEffect(activeSentence == null) {
+        if (activeSentence == null && sentences.isNotEmpty()) {
+            val targetIdx = sentences.indexOfFirst { it.timesPracticed == 0 }.takeIf { it >= 0 } ?: 0
+            if (targetIdx > 0) {
+                mapListState.animateScrollToItem(targetIdx)
+            }
+        }
     }
 
     if (activeSentence == null) {
@@ -115,6 +129,7 @@ fun DailySentencesScreen(
 
                 // Map Path
                 LazyColumn(
+                    state = mapListState,
                     modifier = Modifier
                         .fillMaxSize()
                         .weight(1f),
@@ -212,14 +227,17 @@ fun DailySentencesScreen(
             if (sentences.isNotEmpty()) {
                 val sentence = sentences.getOrNull(currentIndex) ?: sentences.first()
 
+                val scrollState = rememberScrollState()
+
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(MaterialTheme.colorScheme.background)
                         .padding(innerPadding)
+                        .verticalScroll(scrollState)
                         .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     // Workout Progression indicator
                     Row(
@@ -255,22 +273,17 @@ fun DailySentencesScreen(
                         trackColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f)
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
                     // Primary Sentence Card
                     Card(
                         shape = RoundedCornerShape(24.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(
                             modifier = Modifier
-                                .padding(24.dp)
-                                .fillMaxSize(),
-                            verticalArrangement = Arrangement.Center,
+                                .fillMaxWidth()
+                                .padding(24.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
@@ -280,40 +293,39 @@ fun DailySentencesScreen(
                                     letterSpacing = 1.sp
                                 )
                             )
-                            Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
                             Text(
                                 text = sentence.text,
                                 style = MaterialTheme.typography.headlineMedium.copy(
                                     fontWeight = FontWeight.Bold,
                                     textAlign = TextAlign.Center,
-                                    lineHeight = 36.sp
-                                )
+                                    lineHeight = 34.sp
+                                ),
+                                modifier = Modifier.fillMaxWidth()
                             )
 
-                            Spacer(modifier = Modifier.height(32.dp))
+                            Spacer(modifier = Modifier.height(20.dp))
 
                             // Play Speaker button
-                            IconButton(
+                            FilledTonalButton(
                                 onClick = { viewModel.speak(sentence.text) },
-                                modifier = Modifier
-                                    .size(56.dp)
-                                    .background(if (isTtsSpeaking) Color(0xFFFF5252) else TealPrimary.copy(alpha = 0.15f), CircleShape)
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = if (isTtsSpeaking) Color(0xFFFF5252) else TealPrimary.copy(alpha = 0.15f),
+                                    contentColor = if (isTtsSpeaking) Color.White else TealPrimary
+                                ),
+                                shape = RoundedCornerShape(12.dp)
                             ) {
                                 Icon(
                                     imageVector = if (isTtsSpeaking) Icons.Default.Stop else Icons.Default.VolumeUp,
                                     contentDescription = if (isTtsSpeaking) "Stop" else "Listen",
-                                    tint = if (isTtsSpeaking) Color.White else TealPrimary,
-                                    modifier = Modifier.size(28.dp)
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (isTtsSpeaking) "Stop Audio" else "Hear Native Speaker",
+                                    fontWeight = FontWeight.SemiBold
                                 )
                             }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = if (isTtsSpeaking) "STOP AUDIO" else "HEAR NATIVE SPEAKER",
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = if (isTtsSpeaking) Color(0xFFFF5252) else TealPrimary
-                                )
-                            )
                         }
                     }
 

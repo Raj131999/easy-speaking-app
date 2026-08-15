@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -53,10 +54,21 @@ fun TongueTwistersScreen(
     val recognizedText by viewModel.recognizedText.collectAsState()
 
     val scrollState = rememberScrollState()
+    val mapListState = rememberLazyListState()
 
     val currentIndex = remember(activeTwister, twisters) {
         val index = twisters.indexOfFirst { it.id == activeTwister?.id }
         if (index == -1) 0 else index
+    }
+
+    // Auto-scroll map to next uncompleted tongue twister
+    LaunchedEffect(activeTwister == null) {
+        if (activeTwister == null && twisters.isNotEmpty()) {
+            val targetIdx = twisters.indexOfFirst { !it.isCompleted }.takeIf { it >= 0 } ?: 0
+            if (targetIdx > 0) {
+                mapListState.animateScrollToItem(targetIdx)
+            }
+        }
     }
 
     // Clear score when twister changes
@@ -128,6 +140,7 @@ fun TongueTwistersScreen(
 
                 // Map Path
                 LazyColumn(
+                    state = mapListState,
                     modifier = Modifier
                         .fillMaxSize()
                         .weight(1f),

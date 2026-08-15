@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.rememberScrollState
@@ -59,6 +60,22 @@ fun ParagraphScreen(
     val recognizedText by viewModel.recognizedText.collectAsState()
 
     val scrollState = rememberScrollState()
+    val mapListState = rememberLazyListState()
+
+    val currentParaIndex = remember(paragraph, paragraphsList) {
+        if (paragraph == null) -1 else paragraphsList.indexOfFirst { it.id == paragraph?.id }
+    }
+    val hasNextPara = currentParaIndex in 0 until (paragraphsList.size - 1)
+    val nextPara = if (hasNextPara) paragraphsList[currentParaIndex + 1] else null
+
+    LaunchedEffect(paragraph == null) {
+        if (paragraph == null && paragraphsList.isNotEmpty()) {
+            val targetIdx = paragraphsList.indexOfFirst { !it.isCompleted }.takeIf { it >= 0 } ?: 0
+            if (targetIdx > 0) {
+                mapListState.animateScrollToItem(targetIdx)
+            }
+        }
+    }
 
     if (paragraph == null) {
         var searchQuery by remember { mutableStateOf("") }
@@ -178,6 +195,7 @@ fun ParagraphScreen(
 
                 // Map Path
                 LazyColumn(
+                    state = mapListState,
                     modifier = Modifier
                         .fillMaxSize()
                         .weight(1f),
@@ -433,14 +451,51 @@ fun ParagraphScreen(
                                     }
                                 }
 
-                                Button(
-                                    onClick = { viewModel.activeParagraph.value = null },
-                                    colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text("Complete Lesson", color = Color.Black, fontWeight = FontWeight.Bold)
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Icon(imageVector = Icons.Default.Check, contentDescription = "Complete", tint = Color.Black)
+                                if (hasNextPara && nextPara != null) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Button(
+                                            onClick = {
+                                                viewModel.activeParagraph.value = nextPara
+                                                viewModel.lastScore.value = null
+                                                viewModel.scoredWords.value = emptyList()
+                                                viewModel.recognizedText.value = ""
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
+                                            Text("Next Paragraph", color = Color.Black, fontWeight = FontWeight.Bold)
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Icon(imageVector = Icons.Default.ArrowForward, contentDescription = "Next", tint = Color.Black)
+                                        }
+                                        Button(
+                                            onClick = {
+                                                viewModel.activeParagraph.value = null
+                                                viewModel.lastScore.value = null
+                                                viewModel.scoredWords.value = emptyList()
+                                                viewModel.recognizedText.value = ""
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
+                                            Text("Finish (Map)", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
+                                        }
+                                    }
+                                } else {
+                                    Button(
+                                        onClick = { viewModel.activeParagraph.value = null },
+                                        colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Text("Complete Reading Trail", color = Color.Black, fontWeight = FontWeight.Bold)
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Icon(imageVector = Icons.Default.Check, contentDescription = "Complete", tint = Color.Black)
+                                    }
                                 }
                             }
                         }

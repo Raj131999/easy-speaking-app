@@ -60,6 +60,7 @@ fun ConversationScreen(
     val recognizedText by viewModel.recognizedText.collectAsState()
 
     val listState = rememberLazyListState()
+    val mapListState = rememberLazyListState()
 
     var showQuiz by remember { mutableStateOf(false) }
     var selectedQuizAnswer by remember { mutableStateOf<String?>(null) }
@@ -78,6 +79,16 @@ fun ConversationScreen(
 
     val dialogueLines = remember(activeDialogueJson) {
         if (activeDialogueJson.isNotEmpty()) viewModel.parseDialogueJson(activeDialogueJson) else emptyList()
+    }
+
+    // Auto-scroll map to next uncompleted conversation
+    LaunchedEffect(conv == null) {
+        if (conv == null && conversationsList.isNotEmpty()) {
+            val targetIdx = conversationsList.indexOfFirst { !it.isCompleted }.takeIf { it >= 0 } ?: 0
+            if (targetIdx > 0) {
+                mapListState.animateScrollToItem(targetIdx)
+            }
+        }
     }
 
     // Auto-scroll list when the active index changes
@@ -157,6 +168,7 @@ fun ConversationScreen(
 
                 // Map Path
                 LazyColumn(
+                    state = mapListState,
                     modifier = Modifier
                         .fillMaxSize()
                         .weight(1f),
