@@ -20,14 +20,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.GrammarLesson
 import com.example.ui.EnglishViewModel
 import com.example.ui.Screen
 import com.example.ui.WordScoreType
+import com.example.ui.components.SpokenVoiceToTextCard
 import com.example.ui.theme.StreakGold
 import com.example.ui.theme.TealPrimary
 
@@ -44,6 +48,7 @@ fun GrammarScreen(
     val isTtsSpeaking by viewModel.isTtsSpeaking.collectAsState()
     val lastScore by viewModel.lastScore.collectAsState()
     val scoredWords by viewModel.scoredWords.collectAsState()
+    val recognizedText by viewModel.recognizedText.collectAsState()
 
     val scrollState = rememberScrollState()
 
@@ -624,14 +629,14 @@ fun GrammarScreen(
                                 )
                                 if (exampleLines.size > 1) {
                                     IconButton(
-                                        onClick = { viewModel.speak(item.exampleText.replace("^•\\s*".toRegex(), "")) },
+                                        onClick = { viewModel.speak(viewModel.extractSpokenExample(item.exampleText)) },
                                         modifier = Modifier
                                             .size(32.dp)
                                             .background(TealPrimary.copy(alpha = 0.15f), CircleShape)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.PlayArrow,
-                                            contentDescription = "Play All",
+                                            contentDescription = "Play All Examples",
                                             tint = TealPrimary,
                                             modifier = Modifier.size(18.dp)
                                         )
@@ -642,11 +647,42 @@ fun GrammarScreen(
                             Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
 
                             exampleLines.forEach { line ->
+                                val speechText = viewModel.extractSpokenExample(line)
+                                val annotatedLine = remember(line) {
+                                    buildAnnotatedString {
+                                        if (line.contains(":")) {
+                                            val colonIdx = line.indexOf(':')
+                                            val topicPart = line.substring(0, colonIdx + 1)
+                                            val examplePart = line.substring(colonIdx + 1)
+                                            withStyle(
+                                                SpanStyle(
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = TealPrimary
+                                                )
+                                            ) {
+                                                append(topicPart)
+                                            }
+                                            withStyle(
+                                                SpanStyle(
+                                                    fontWeight = FontWeight.Normal,
+                                                    color = Color.Unspecified
+                                                )
+                                            ) {
+                                                append(examplePart)
+                                            }
+                                        } else {
+                                            append(line)
+                                        }
+                                    }
+                                }
                                 Row(
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable { viewModel.speak(speechText) }
+                                        .padding(vertical = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    val speechText = line.replace("^•\\s*".toRegex(), "").trim()
                                     IconButton(
                                         onClick = { viewModel.speak(speechText) },
                                         modifier = Modifier
@@ -662,9 +698,8 @@ fun GrammarScreen(
                                     }
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Text(
-                                        text = line,
+                                        text = annotatedLine,
                                         style = MaterialTheme.typography.bodyMedium.copy(
-                                            fontWeight = FontWeight.Medium,
                                             color = MaterialTheme.colorScheme.onSurface,
                                             lineHeight = 20.sp
                                         ),
@@ -682,6 +717,37 @@ fun GrammarScreen(
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             modifier = Modifier.padding(top = 8.dp)
                         )
+
+                        if (item.quizQuestion.isNotBlank()) {
+                            Card(
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.HelpOutline,
+                                        contentDescription = "Question",
+                                        tint = TealPrimary,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = item.quizQuestion,
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            lineHeight = 20.sp
+                                        )
+                                    )
+                                }
+                            }
+                        }
 
                         item.optionsString.split(",").forEach { option ->
                             val isSelected = selectedAnswer == option
@@ -846,6 +912,14 @@ fun GrammarScreen(
                                             color = if (isRecording) Color(0xFFFF5252) else MaterialTheme.colorScheme.onSurfaceVariant,
                                             fontWeight = if (isRecording) FontWeight.Bold else FontWeight.Normal
                                         )
+                                    )
+
+                                    // Real-time Voice to Text Display
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    SpokenVoiceToTextCard(
+                                        isRecording = isRecording,
+                                        recognizedText = recognizedText,
+                                        hasEvaluated = lastScore != null
                                     )
 
                                     // Scoring & feedback visualization

@@ -29,6 +29,7 @@ import com.example.ui.DialogueLine
 import com.example.ui.EnglishViewModel
 import com.example.ui.Screen
 import com.example.ui.WordScoreType
+import com.example.ui.components.SpokenVoiceToTextCard
 import com.example.ui.theme.CardSurfaceDark
 import com.example.ui.theme.StreakGold
 import com.example.ui.theme.TealPrimary
@@ -56,6 +57,7 @@ fun ConversationScreen(
     val isTtsSpeaking by viewModel.isTtsSpeaking.collectAsState()
     val lastScore by viewModel.lastScore.collectAsState()
     val scoredWords by viewModel.scoredWords.collectAsState()
+    val recognizedText by viewModel.recognizedText.collectAsState()
 
     val listState = rememberLazyListState()
 
@@ -533,6 +535,14 @@ fun ConversationScreen(
                                         style = MaterialTheme.typography.bodySmall.copy(
                                             color = if (isRecording) Color(0xFFFF5252) else MaterialTheme.colorScheme.onSurfaceVariant
                                         )
+                                    )
+
+                                    // Real-time Voice to Text Display
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    SpokenVoiceToTextCard(
+                                        isRecording = isRecording,
+                                        recognizedText = recognizedText,
+                                        hasEvaluated = lastScore != null
                                     )
 
                                     // Display score feedback

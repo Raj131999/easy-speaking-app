@@ -5,7 +5,10 @@
     "title": "Lesson 1 — HAVE TO VS MUST | ENGLISH GRAMMAR LESSON",
     "explanation": "Both have to and must express obligation, duty, or necessity. The key difference is: 'have to' represents an external obligation (e.g., your boss, company, or law), while 'must' represents an internal or personal obligation (e.g., a self-imposed duty or conscious decision). For laws and instructions, we mostly use 'have to'.",
     "exampleText": "• Boss / Workplace Instruction (have to): My manager told me I have to finish this presentation before tomorrow's meeting.\n• Company Policy (have to): All employees have to submit their weekly timesheets by Friday evening.\n• Law / Official Regulation (have to): Drivers have to stop when the traffic light turns red.\n• Self-Imposed Duty (must): I must call my mother tonight because I miss her.\n• Conscious / Internal Duty (must): I feel I must buy fresh vegetables and cook a healthy meal tonight.\n• Boss / Job: I have to complete this presentation before tomorrow's meeting — my boss needs it.\n• Company: I have to follow the company's dress code during work hours.\n• Law: You have to stop at a red light. (Self-aware: You must obey traffic signals — it's the right thing to do.)\n• Self-Imposed Obligation: I must buy vegetables and cook a healthy dinner tonight (no one is forcing me).\n• Conscious / Personal Duty: I must wake up early every day to stay disciplined.\n• Form across tenses (have to): I have to work. → I had to work. → I will have to work.\n• Form across tenses (must — stays the same): I must work. She must have paid the taxes. We must win the match.",
-    "speechPrompt": "I must buy fresh vegetables and cook a healthy meal tonight."
+    "speechPrompt": "I must buy fresh vegetables and cook a healthy meal tonight.",
+    "quizQuestion": "Which modal verb best expresses an external obligation imposed by company policy or the law?",
+    "optionsString": "must,have to,might,could",
+    "correctOption": "have to"
   },
   {
     "id": 102,
@@ -13,7 +16,10 @@
     "title": "Lesson 2 — USE OF 'HAVE TO' AND 'MUST' IN ENGLISH GRAMMAR",
     "explanation": "Must and have to express an obligation or responsibility. In negative sentences, 'must not' (mustn't) means it is prohibited, while 'don't have to' means it is not necessary. Note that 'must' has no past or future form; we use 'had to' for the past and 'will have to' for the future.",
     "exampleText": "• Affirmative Obligation (have to): You have to wear a seat belt when driving on the highway.\n• Negative Prohibition (must not / mustn't): You must not leave your homework incomplete.\n• Lack of Necessity (don't have to): You don't have to wear a tie to work on Casual Friday.\n• Past Obligation (had to): Yesterday, I had to work late to complete the quarterly audit.\n• Future Obligation (will have to): Next week, we will have to submit our project proposals.\n• Self-decided / Internal: I must write this email — I feel it's necessary, no one told me to.\n• External instruction (boss/other person): I have to write this email — my manager asked me to send it.\n• Company obligation: I have to submit my timesheet by Friday; it's company policy.\n• Law: I have to renew my driving license before it expires.\n• Self-imposed: I must start exercising — I've decided this is important for my health.",
-    "speechPrompt": "You must not leave your homework incomplete."
+    "speechPrompt": "You must not leave your homework incomplete.",
+    "quizQuestion": "Which phrase indicates a lack of necessity (optional action) rather than a strict prohibition?",
+    "optionsString": "must not,don't have to,cannot,should not",
+    "correctOption": "don't have to"
   },
   {
     "id": 103,
@@ -21,7 +27,10 @@
     "title": "Lesson 3 — ENGLISH GRAMMAR LESSON - DIFFERENCE BETWEEN HAVE TO, OUGHT TO & SUPPOSED TO",
     "explanation": "'Have to' or 'must' means you have no choice. 'Supposed to' indicates an obligation or a rule that you are expected to follow, but you still have a choice. 'Ought to' is used for advice or suggestions and is not as strong as 'have to' or 'supposed to'.",
     "exampleText": "• No Choice (have to / must): I have to submit the financial reports tomorrow morning.\n• Expected Rule with Choice (supposed to): We are supposed to submit the reports by tomorrow, but we can request an extension.\n• Advice / Suggestion (ought to): You ought to get some sleep before your early flight.\n• Have to (law): You have to wear a seatbelt while driving.\n• Have to (boss): I have to attend the client meeting; my manager scheduled it.\n• Ought to (moral duty): You ought to apologize to her — it's the right thing to do.\n• Supposed to (arrangement/expectation): I was supposed to call him at 5 PM, but I forgot.\n• Supposed to (rule): Students are supposed to submit assignments online.",
-    "speechPrompt": "We are supposed to submit the reports by tomorrow."
+    "speechPrompt": "We are supposed to submit the reports by tomorrow.",
+    "quizQuestion": "Which expression describes an expected rule or arrangement where you still have a choice?",
+    "optionsString": "have to,supposed to,must,had to",
+    "correctOption": "supposed to"
   },
   {
     "id": 104,
@@ -29,7 +38,10 @@
     "title": "Lesson 4 — DIFFERENCE BETWEEN ‘HAVE TO’, SUPPOSE TO & OUGHT TO",
     "explanation": "Both 'have to' and 'must' express obligation, whereas 'supposed to' means an expected behavior or rule. 'Ought to' is used for suggestions and moral duties where you have a choice. In negative sentences and questions, 'ought to' is rarely used.",
     "exampleText": "• Obligation (have to): I have to pay my property taxes by the end of the month.\n• Expected Behavior (supposed to): You are supposed to keep your phone on silent during the presentation.\n• Moral Duty / Suggestion (ought to): We ought to help our elderly neighbors carry their heavy groceries.\n• Negative Expected Rule (not supposed to): You are not supposed to talk loudly inside a hospital.\n• Have to (company): All employees have to complete the security training by month-end.\n• Have to (law): You have to pay import duty on that item.\n• Supposed to (plan/expectation): The train is supposed to arrive at 6 PM.\n• Supposed to (rule not followed): He was supposed to lock the office, but he left it open.\n• Ought to (sensible advice): You ought to save some money every month.",
-    "speechPrompt": "You are not supposed to talk loudly in a hospital."
+    "speechPrompt": "You are not supposed to talk loudly in a hospital.",
+    "quizQuestion": "Which modal verb is best suited for gentle moral duty or sensible advice?",
+    "optionsString": "have to,ought to,must,will",
+    "correctOption": "ought to"
   },
   {
     "id": 105,
@@ -37,7 +49,10 @@
     "title": "Lesson 5 — ENGLISH GRAMMAR LESSON - USING ‘MUST’ CORRECTLY IN SENTENCES AND QUESTIONS.",
     "explanation": "Must is a modal auxiliary verb and always takes the base form of the verb. It can express personal obligation ('I must study'), logical certainty ('This must be the right address'), or a strong recommendation ('You must visit that new place'). In questions, we often prefer 'Do you have to?' instead of 'Must you?'.",
     "exampleText": "• Personal Obligation: I must finish reading this textbook before my exam on Monday.\n• Logical Certainty: He has been working in the garden all afternoon, so he must be tired.\n• Strong Recommendation: You must visit that new Italian restaurant downtown—the food is incredible.\n• Question Form (Do you have to?): Do you have to leave so early, or can you stay for coffee?\n• Conscious / self-imposed duty: I must finish reading this book before the exam.\n• Boss-driven necessity expressed as internal resolve: I must impress the client during tomorrow's presentation.\n• Law-related necessity (formal must): Citizens must carry valid identification at all times.\n• Certainty / deduction: She must be at home — her car is in the driveway.\n• Question (preferring have to over must): Do I have to attend the meeting? (rather than \"Must I attend the meeting?\")",
-    "speechPrompt": "Being confident in an interview is a must."
+    "speechPrompt": "Being confident in an interview is a must.",
+    "quizQuestion": "In spoken questions, which phrasing is most natural and common for asking about necessity?",
+    "optionsString": "Must you leave?,Do you have to leave?,Are you must leaving?,Do you must leave?",
+    "correctOption": "Do you have to leave?"
   },
   {
     "id": 106,
@@ -45,7 +60,10 @@
     "title": "Lesson 6 — USING ‘MUSTN'T’ AND ‘NEEDN'T’ CORRECTLY",
     "explanation": "'Mustn't' means you are not allowed to do something (prohibition/restriction), whereas 'needn't' means it is not necessary to do something (you have a choice, it's optional).",
     "exampleText": "• Prohibition / Restriction (mustn't): You mustn't tell anyone our secret company plans.\n• Lack of Necessity / Optional (needn't): You needn't carry physical documents with you since everything is saved online.\n• Prohibition (law/rule): You mustn't park here — it's a no-parking zone.\n• Prohibition (self-imposed discipline): I mustn't skip my workout this week.\n• No obligation (optional task): You needn't carry the documents; they're not required today.\n• No obligation (boss/workplace): You needn't come to the office on Sunday.\n• Contrast pair: You mustn't lose these papers (they're important) vs. You needn't lose sleep over it (it's not a big deal either way).",
-    "speechPrompt": "You needn't carry the documents with you today."
+    "speechPrompt": "You needn't carry the documents with you today.",
+    "quizQuestion": "Which word means something is strictly forbidden or prohibited by rule?",
+    "optionsString": "needn't,mustn't,don't have to,might not",
+    "correctOption": "mustn't"
   },
   {
     "id": 107,
@@ -53,7 +71,10 @@
     "title": "Lesson 7 — USING 'NEED' CORRECTLY",
     "explanation": "'Need' can act as a main verb (meaning 'require' or 'necessity') and takes the regular verb forms ('needs to', 'needed to'). It can also act as an auxiliary verb in negative sentences ('need not') and questions ('Need we wait?').",
     "exampleText": "• Main Verb (need to): I need to buy some groceries for dinner tonight.\n• Modal Verb (needn't): You needn't worry about dinner reservations; I already booked a table.\n• Noun Form (in need of): The local shelter is in urgent need of warm blankets.\n• Main verb: I need some new winter clothes.\n• Main verb, third person: She needs to talk to him now.\n• Auxiliary verb, negative: You need not ask my permission.\n• Auxiliary verb, question: Need we wait any longer?\n• Past (\"needn't have\"): We needn't have waited for them — they never showed up.\n• Noun (necessity): Food, clothing, and shelter are basic human needs.\n• Need vs. desire: A need is a necessity (I need food); a desire is just a want (I desire a Ferrari).",
-    "speechPrompt": "You needn't have lost your temper."
+    "speechPrompt": "You needn't have lost your temper.",
+    "quizQuestion": "Choose the correct sentence using 'need' as an auxiliary verb in a negative statement:",
+    "optionsString": "You need not ask permission.,You don't need asking.,You needn't to worry.,You needs not go.",
+    "correctOption": "You need not ask permission."
   },
   {
     "id": 108,
@@ -61,7 +82,10 @@
     "title": "Lesson 8 — ALL USES OF SHOULD IN ENGLISH | MASTER MODAL VERBS",
     "explanation": "'Should' is used to give advice/recommendations ('You should see a doctor'), express moral duty/obligation ('You should keep promises'), or express expectations ('The package should arrive tomorrow'). 'Should have' is used for past regrets or criticism.",
     "exampleText": "• Giving Advice: You should see a doctor if your fever doesn't go down.\n• Expecting Probability: The train should arrive in about ten minutes.\n• Negative Advice (shouldn't): You shouldn't drink coffee right before going to bed.\n• Past Regret (should have): I should have studied harder for the final exam.",
-    "speechPrompt": "I should have studied harder for the exam."
+    "speechPrompt": "I should have studied harder for the exam.",
+    "quizQuestion": "Which modal verb is used to give recommendations, sensible advice, or suggest the best course of action?",
+    "optionsString": "should,must,might,will",
+    "correctOption": "should"
   },
   {
     "id": 109,
@@ -69,7 +93,10 @@
     "title": "Lesson 9 — ALL USES OF 'SHOULD' IN ENGLISH | FUNCTIONAL ENGLISH GRAMMAR",
     "explanation": "'Should' is a modal verb that does not change with subject ('I should', 'He should'). It is used to suggest actions or predict likely outcomes based on facts or patterns.",
     "exampleText": "• Recommendation: You should try the roasted salmon at this café.\n• Logical Expectation: They left an hour ago, so they should be here soon.\n• Criticism / Past Regret (should have): You should have warned me about the heavy traffic.",
-    "speechPrompt": "I don't think you should spend your salary online."
+    "speechPrompt": "I don't think you should spend your salary online.",
+    "quizQuestion": "Which sentence expresses a mild expectation or logical probability in the future?",
+    "optionsString": "The flight should land at 5 PM.,The flight must not land.,The flight could have landed.,The flight would land.",
+    "correctOption": "The flight should land at 5 PM."
   },
   {
     "id": 110,
@@ -77,7 +104,10 @@
     "title": "Lesson 10 — USING ' SHOULD ' IN DIFFERENT WAYS - ENGLISH GRAMMAR LESSON",
     "explanation": "Use 'should' for advising, recommendations, or predicting probabilities. In negative sentences, 'shouldn't' is used to advise against something. Use 'should have' with past participle to express regret.",
     "exampleText": "• Future Expectation (should): He should reach the office any minute now.\n• Negative Suggestion (shouldn't): You shouldn't stay up late watching television.\n• Past Regret (should have): I shouldn't have shouted at you during the meeting yesterday.",
-    "speechPrompt": "I shouldn't have shouted at you yesterday."
+    "speechPrompt": "I shouldn't have shouted at you yesterday.",
+    "quizQuestion": "Choose the correct form to express past regret about something that was not done:",
+    "optionsString": "should do,should have done,should did,should done",
+    "correctOption": "should have done"
   },
   {
     "id": 111,
@@ -85,7 +115,10 @@
     "title": "Lesson 11 — MASTER ALL USES OF THE MODAL VERB 'COULD' | ENGLISH GRAMMAR LESSON",
     "explanation": "'Could' is the past form of 'can' but can also express present possibility or polite requests. We use 'could have' for past possibilities or missed opportunities.",
     "exampleText": "• Past Ability (could): When I was younger, I could run ten miles without stopping.\n• Present Possibility (could): It could rain later this afternoon, so take an umbrella.\n• Polite Request (Could you...): Could you please pass me the water pitcher?\n• Past Possibility / Missed Opportunity (could have): I could have won the race, but I tripped near the finish line.",
-    "speechPrompt": "I could have won the race, but I gave up."
+    "speechPrompt": "I could have won the race, but I gave up.",
+    "quizQuestion": "Which sentence correctly uses 'could' for a polite request in spoken English?",
+    "optionsString": "Could you pass the salt?,Could you to pass the salt?,Did you could pass the salt?,Are you could pass the salt?",
+    "correctOption": "Could you pass the salt?"
   },
   {
     "id": 112,
@@ -93,7 +126,10 @@
     "title": "Lesson 12 — ALL USES OF ‘COULD’ IN PRESENT, PAST & FUTURE TENSES",
     "explanation": "'Could' is used for past abilities ('I could swim'), future possibilities ('It could rain'), and polite requests. Do not use 'could' for specific one-time past achievements; use 'was able to' instead.",
     "exampleText": "• Present Possibility: We could eat dinner outdoors if the weather stays warm.\n• Past General Ability: In high school, she could play the piano effortlessly.\n• Future Suggestion: We could go on a road trip this upcoming weekend.\n• Conditional Sentence: We could travel the world if we won the lottery.",
-    "speechPrompt": "Yesterday I couldn't lift the sofa by myself."
+    "speechPrompt": "Yesterday I couldn't lift the sofa by myself.",
+    "quizQuestion": "Which sentence uses 'could' to express past general ability?",
+    "optionsString": "I could swim when I was five years old.,I could to swim yesterday.,I could swimming now.,I can swam before.",
+    "correctOption": "I could swim when I was five years old."
   },
   {
     "id": 113,
@@ -101,7 +137,10 @@
     "title": "Lesson 13 — MODAL VERBS - CAN AND COULD - ENGLISH GRAMMAR LESSON",
     "explanation": "'Can' is used for present ability or informal requests and permission. 'Could' is used for past ability or formal/polite requests. Always follow both with the base form of the verb.",
     "exampleText": "• Present Ability (can): He can speak three languages fluently.\n• Past Ability (could): She could swim across the lake when she was ten.\n• Informal Permission (can): Can I use your phone for a quick call?\n• Polite Request (could): Could I borrow your book for a day, please?",
-    "speechPrompt": "Could I borrow your book for a day, please?"
+    "speechPrompt": "Could I borrow your book for a day, please?",
+    "quizQuestion": "What is the difference between 'can' and 'could' when asking for permission?",
+    "optionsString": "'Could' is more polite and formal than 'can','Can' is only used in past tense,'Could' cannot be used in questions,Both mean prohibition",
+    "correctOption": "'Could' is more polite and formal than 'can'"
   },
   {
     "id": 114,
@@ -109,7 +148,10 @@
     "title": "Lesson 14 — DIFFERENCE BETWEEN WILL VS WOULD | ENGLISH GRAMMAR LESSON",
     "explanation": "Use 'will' for real, definite, or promised future situations with high certainty. Use 'would' for imaginary, hypothetical, polite, or past habits/refusals.",
     "exampleText": "• Certain Future / Promise (will): I will pick you up at six o'clock sharp.\n• Hypothetical Situation (would): I would pick you up if I had a car available.\n• Past Habitual Action (would): Every summer, we would visit our grandparents in the countryside.\n• Polite Offer / Request (would): Would you like a cup of hot tea?",
-    "speechPrompt": "I would pick you up if I had a car."
+    "speechPrompt": "I would pick you up if I had a car.",
+    "quizQuestion": "Which modal verb is used for polite offers or hypothetical second-conditional situations?",
+    "optionsString": "will,would,shall,can",
+    "correctOption": "would"
   },
   {
     "id": 115,
@@ -117,7 +159,10 @@
     "title": "Lesson 15 — ALL USES OF THE MODAL VERB 'WOULD' - FUNCTIONAL ENGLISH GRAMMAR",
     "explanation": "'Would' is a versatile modal verb used for conditionals ('If I won, I would buy a car'), future-in-the-past ('They said they would come'), past habits ('Every morning she would run'), and polite requests ('Would you mind?').",
     "exampleText": "• Conditional Statement: If I had more free time, I would study photography.\n• Polite Request (Would you mind...): Would you mind closing the window, please?\n• Preferences (would rather): I would rather stay home than go to a crowded party.\n• Past Habit: Grandfather would tell us stories by the fireplace every evening.",
-    "speechPrompt": "Would you mind passing me the salt, please?"
+    "speechPrompt": "Would you mind passing me the salt, please?",
+    "quizQuestion": "Which sentence expresses a habitual past action using 'would'?",
+    "optionsString": "In summer we would swim in the lake every day.,We will swim in the lake.,We would have swim.,We were would swimming.",
+    "correctOption": "In summer we would swim in the lake every day."
   },
   {
     "id": 116,
@@ -125,7 +170,10 @@
     "title": "Lesson 16 — ALL USES OF MODAL VERB 'WOULD' | ENGLISH GRAMMAR PRACTICE",
     "explanation": "'Would' adds politeness and diplomacy in questions and statements. It contracts to 'I'd' for subjects and can express preferences like 'would rather'.",
     "exampleText": "• Offering Help (Shall I...): Shall I carry those heavy bags to your car?\n• Initiating Action (Shall we...): Shall we begin the presentation now?\n• Future Prediction / Outcome (Will we...): Will we arrive at the airport on time?",
-    "speechPrompt": "I'd rather take a cab than walk to the office."
+    "speechPrompt": "I'd rather take a cab than walk to the office.",
+    "quizQuestion": "Choose the polite phrase to order coffee at a restaurant:",
+    "optionsString": "I want coffee.,I would like a cup of coffee.,I will coffee.,Give me a coffee.",
+    "correctOption": "I would like a cup of coffee."
   },
   {
     "id": 117,
@@ -133,7 +181,10 @@
     "title": "Lesson 17 — 'WILL I/WE' OR 'SHALL I/WE' IN QUESTIONS (FUTURE) - WHICH ONE IS CORRECT?",
     "explanation": "Use 'shall I/we' when offering to do something or initiating an action. Use 'will I/we' when asking about future outcomes where you are not offering or controlling the action.",
     "exampleText": "• Offer / Suggestion (Shall I / Shall we): Shall I turn on the air conditioner?\n• Future Event Inquiry (Will I / Will we): Will we get a certificate after completing the course?",
-    "speechPrompt": "Will I recover soon from this cold, doctor?"
+    "speechPrompt": "Will I recover soon from this cold, doctor?",
+    "quizQuestion": "Which word is traditionally used with 'I' or 'We' in questions to make polite offers or suggestions?",
+    "optionsString": "Shall,Will,Would,Must",
+    "correctOption": "Shall"
   },
   {
     "id": 118,
@@ -141,7 +192,10 @@
     "title": "Lesson 18 — USING THE AUXILIARY VERB - WOULD - FREE ENGLISH GRAMMAR LESSON",
     "explanation": "Use 'would' for past habits, indirect speech 'will' conversion, conditional sentences, or expressing preferences with 'would rather'.",
     "exampleText": "• Past Habitual Action: I would read a lot during my college days.\n• Indirect Speech Conversion: He promised that he would send the email.\n• Preference (would rather): I would rather drink tea than coffee.",
-    "speechPrompt": "Would you mind helping me with my project?"
+    "speechPrompt": "Would you mind helping me with my project?",
+    "quizQuestion": "Complete the sentence: 'If I had enough free time, I ___ learn Spanish.'",
+    "optionsString": "will,would,shall,can",
+    "correctOption": "would"
   },
   {
     "id": 119,
@@ -149,7 +203,10 @@
     "title": "Lesson 19 — USING 'WILL' - GRAMMAR ESL LESSON",
     "explanation": "Use 'will' to talk about certain future events, beliefs with words like 'probably/maybe', decisions made at the moment of speaking, or promises.",
     "exampleText": "• Spontaneous Decision: It's cold; I will close the window.\n• Future Prediction with Belief: The sun will rise over there tomorrow morning.\n• Promise / Commitment: I will always support your dreams.",
-    "speechPrompt": "Perhaps we will meet again someday."
+    "speechPrompt": "Perhaps we will meet again someday.",
+    "quizQuestion": "Which modal verb expresses a spontaneous decision made at the moment of speaking?",
+    "optionsString": "will,going to,would have,had",
+    "correctOption": "will"
   },
   {
     "id": 120,
@@ -157,7 +214,10 @@
     "title": "Lesson 20 — USING MAY AND MIGHT - BASIC ENGLISH GRAMMAR LESSON",
     "explanation": "Use 'may' for formal permissions ('May I leave?') and higher possibilities. Use 'might' for smaller or less likely possibilities.",
     "exampleText": "• Formal Permission (may): May I leave the conference room early today?\n• High Possibility (may): The store may close early because of the storm.\n• Lower / Slight Possibility (might): I might visit my aunt this weekend if I finish my work.",
-    "speechPrompt": "I might have forgotten my keys at the cafe."
+    "speechPrompt": "I might have forgotten my keys at the cafe.",
+    "quizQuestion": "Which modal verb expresses a 50% possibility in the present or future?",
+    "optionsString": "must,might,will,have to",
+    "correctOption": "might"
   },
   {
     "id": 121,
@@ -165,7 +225,10 @@
     "title": "Lesson 21 — MAY HAVE VS MIGHT HAVE VS MUST HAVE | PAST MODAL VERBS",
     "explanation": "'May have' and 'might have' show around 50% or less certainty about a past event. 'Must have' shows high logical certainty based on strong evidence or facts.",
     "exampleText": "• Around 50% Certainty (may have): She may have gone to the central library.\n• Slight Possibility (might have): I might have left my keys in the office, but I am not sure.\n• High Logical Certainty (must have): He must have left his phone at home because he isn't answering.",
-    "speechPrompt": "He must have left his phone at home."
+    "speechPrompt": "He must have left his phone at home.",
+    "quizQuestion": "Which phrase expresses high certainty / strong logical deduction about a past event?",
+    "optionsString": "must have,might have,may have,could have",
+    "correctOption": "must have"
   },
   {
     "id": 122,
@@ -173,7 +236,10 @@
     "title": "Lesson 22 — MODAL VERBS OF THE PAST – MAY HAVE, MIGHT HAVE, MUST HAVE — WHAT’S THE DIFFERENCE?",
     "explanation": "'May have' is more formal; 'might have' is more common in spoken English. 'Must have' expresses an educated guess based on logic or results.",
     "exampleText": "• Formal Possibility (may have): The company may have experienced financial delays.\n• Spoken Possibility (might have): We might have taken the wrong turn at the intersection.\n• Deduction / Strong Evidence (must have): The ground is soaked; it must have rained heavily last night.",
-    "speechPrompt": "She must have been crying; her eyes are red."
+    "speechPrompt": "She must have been crying; her eyes are red.",
+    "quizQuestion": "Complete the deduction: 'The streets are wet; it ___ rained during the night.'",
+    "optionsString": "must have,should have,might not,would have",
+    "correctOption": "must have"
   },
   {
     "id": 123,
@@ -181,7 +247,10 @@
     "title": "Lesson 23 — PAST MODAL VERBS – COULD HAVE, SHOULD HAVE, WOULD HAVE, MIGHT HAVE, MUST HAVE",
     "explanation": "Past modal verbs use 'modal + have + past participle'. 'Could have' is missed possibility; 'should have' is past regret; 'would have' is imaginary past outcome.",
     "exampleText": "• Missed Possibility (could have): We could have won the match if we had practiced more.\n• Past Regret / Obligation (should have): I should have double-checked the flight times before leaving.\n• Imaginary Past Outcome (would have): I would have attended the wedding, but I fell ill.\n• Slight Past Guess (might have): They might have forgotten about our dinner meeting.\n• Strong Logical Conclusion (must have): She must have passed the test easily because she studied for weeks.",
-    "speechPrompt": "I should have studied harder for the exam."
+    "speechPrompt": "I should have studied harder for the exam.",
+    "quizQuestion": "Which past modal indicates an unfulfilled opportunity or ability in the past?",
+    "optionsString": "could have,must have,should have,will have",
+    "correctOption": "could have"
   },
   {
     "id": 124,
@@ -189,7 +258,10 @@
     "title": "Lesson 24 — USING SHOULD, COULD AND WOULD HAVE DONE CORRECTLY",
     "explanation": "'Should have done' implies a missed obligation or regret. 'Could have done' means a choice or possibility you decided not to take. 'Would have done' means you wanted to but were stopped by circumstances.",
     "exampleText": "• Missed Obligation / Regret (should have done): You should have done your homework before playing games.\n• Untaken Opportunity / Choice (could have done): We could have done the tour by bike, but we chose to walk.\n• Blocked Intention (would have done): I would have done the cooking, but we ran out of gas.",
-    "speechPrompt": "I would have completed my project, but there was no electricity."
+    "speechPrompt": "I would have completed my project, but there was no electricity.",
+    "quizQuestion": "Complete the advice for a past mistake: 'You ___ driven so fast in the thunderstorm.'",
+    "optionsString": "shouldn't have,couldn't have,mustn't have,wouldn't have",
+    "correctOption": "shouldn't have"
   },
   {
     "id": 125,
@@ -197,7 +269,10 @@
     "title": "Lesson 25 — ALL USES OF BEEN AND BEING | FUNCTIONAL ENGLISH GRAMMAR LESSON",
     "explanation": "'Been' is the past participle of be, used with has/have/had. 'Being' is the present participle, used with am/is/are/was/were for temporary behaviors or passive continuous tenses.",
     "exampleText": "• Past Participle Experience (been): I have been to London twice in the past three years.\n• Temporary Behavior (being): You are being overly dramatic about a minor issue.\n• Passive Continuous Action (being): The broken car is being repaired at the mechanic shop.",
-    "speechPrompt": "You are being rude to her right now."
+    "speechPrompt": "You are being rude to her right now.",
+    "quizQuestion": "Which sentence uses 'being' correctly as a passive continuous participle?",
+    "optionsString": "The car is being repaired by the mechanic.,The car has being repaired.,The car is been repaired.,The car was been repaired.",
+    "correctOption": "The car is being repaired by the mechanic."
   },
   {
     "id": 126,
@@ -205,7 +280,10 @@
     "title": "Lesson 26 — MASTER ALL USES OF BEING",
     "explanation": "'Being' can express temporary behavior, passive voice ('The car is being washed'), temporary emotional state, or act as a gerund/noun ('I love being a teacher').",
     "exampleText": "• Temporary Behavior: Why are you being so quiet this morning?\n• Passive Voice Action: The road is currently being resurfaced.\n• Gerund / Noun Role: I truly enjoy being a mentor to young students.",
-    "speechPrompt": "Thank you for being so patient with us."
+    "speechPrompt": "Thank you for being so patient with us.",
+    "quizQuestion": "Complete the sentence: 'Why are you ___ so stubborn today?'",
+    "optionsString": "been,being,be,to be",
+    "correctOption": "being"
   },
   {
     "id": 127,
@@ -213,7 +291,10 @@
     "title": "Lesson 27 — MASTER ALL USES OF BEEN",
     "explanation": "'Been' has eight main uses, including travel/experiences ('I've been to Japan'), states/conditions, ongoing actions, visits, and passive perfect voice.",
     "exampleText": "• Travel & Life Experiences: Have you ever been to Hawaii?\n• State / Condition Over Time: She has been ill for three days.\n• Ongoing Duration in Present Perfect: We have been waiting for the bus since eight o'clock.",
-    "speechPrompt": "I've been busy with work all week."
+    "speechPrompt": "I've been busy with work all week.",
+    "quizQuestion": "Complete the sentence: 'She has ___ living in London for five years.'",
+    "optionsString": "been,being,be,is",
+    "correctOption": "been"
   },
   {
     "id": 128,
@@ -221,7 +302,10 @@
     "title": "Lesson 28 — HOW TO USE BEING IN ENGLISH? – ENGLISH GRAMMAR LESSON",
     "explanation": "Use 'being' for temporary action or behavior followed by an adjective, in passive voice, or as a replacement for 'since', 'as', or 'because'. Do not use 'being' to show simple emotions like 'I was being upset'.",
     "exampleText": "• Temporary Behavior + Adjective: He is being foolish by ignoring the doctor's advice.\n• Passive Action in Progress: The new building is being constructed downtown.\n• Cause / Reason Replacement: Being tired after the long drive, she went straight to bed.",
-    "speechPrompt": "Being a friend of the actor, I am invited to parties."
+    "speechPrompt": "Being a friend of the actor, I am invited to parties.",
+    "quizQuestion": "Which sentence uses 'being' as a gerund / reason clause?",
+    "optionsString": "Being tired after work, I decided to go to bed early.,Been tired after work, I slept.,I am been tired.,Having being tired, I slept.",
+    "correctOption": "Being tired after work, I decided to go to bed early."
   },
   {
     "id": 129,
@@ -229,7 +313,10 @@
     "title": "Lesson 29 — WHEN TO USE HAVE & HAVING? GRAMMAR DOUBT SOLVED!",
     "explanation": "Use 'have' for permanent possession, relationships, or state. Use 'having' for ongoing temporary actions like meals, events, or short experiences.",
     "exampleText": "• Permanent Possession / State (have): They have a lovely summer home near the ocean.\n• Ongoing Temporary Experience (having): We are having lunch at a sidewalk terrace.\n• Events & Meetings (having): Our company is having an annual meeting next Tuesday.",
-    "speechPrompt": "We are having a meeting at the office."
+    "speechPrompt": "We are having a meeting at the office.",
+    "quizQuestion": "Which sentence correctly uses 'having' for an active dynamic experience?",
+    "optionsString": "I am having dinner with my family.,I am having a car.,She is having two brothers.,He is having a big house.",
+    "correctOption": "I am having dinner with my family."
   },
   {
     "id": 130,
@@ -237,7 +324,10 @@
     "title": "Lesson 30 — WHEN TO USE HAD HAD IN ONE SENTENCE? ​​ PAST PERFECT TENSE MADE SIMPLE",
     "explanation": "'Had had' is correct in the past perfect tense. The first 'had' is the auxiliary verb; the second 'had' is the past participle meaning experienced, possessed, or eaten.",
     "exampleText": "• Had Had (Auxiliary Had + Past Participle Had): By the time the guests arrived, we had already had our dinner.\n• Past Perfect Experience: She felt confident because she had had extensive training prior to the test.",
-    "speechPrompt": "She had had a headache before she took medicine."
+    "speechPrompt": "She had had a headache before she took medicine.",
+    "quizQuestion": "Complete the sentence: 'By the time I left the office, I ___ three cups of coffee.'",
+    "optionsString": "had had,have had,was had,had have",
+    "correctOption": "had had"
   },
   {
     "id": 131,
@@ -245,7 +335,10 @@
     "title": "Lesson 31 — HOW TO USE ‘HAVE HAD’ CORRECTLY IN ONE SENTENCE?",
     "explanation": "'Have had' is the present perfect tense of 'have'. Use it to show continuous possession from past to present, or completed actions within a current time frame.",
     "exampleText": "• Present Perfect Continuous Possession (have had): I have had this car for over ten years.\n• Recent Completed Experience: We have had a wonderful afternoon spending time together.",
-    "speechPrompt": "She has had a headache since yesterday."
+    "speechPrompt": "She has had a headache since yesterday.",
+    "quizQuestion": "Complete the sentence: 'I ___ a severe headache since this morning.'",
+    "optionsString": "have had,had had,am having,have been having",
+    "correctOption": "have had"
   },
   {
     "id": 132,
@@ -256,7 +349,8 @@
     "exampleText": "• Question with I / You / We / They (do): Do you enjoy listening to classical music?\n• Question with He / She / It (does): Does she live near the city center?\n• Negative Statement (don't / doesn't): He doesn't eat spicy food.",
     "speechPrompt": "Do you prefer tea or coffee in the morning?",
     "optionsString": "Do,Does,Is,Has",
-    "correctOption": "Does"
+    "correctOption": "Does",
+    "quizQuestion": "Complete the sentence with the correct option:\n\"____ she live near the city center?\""
   },
   {
     "id": 133,
@@ -267,7 +361,8 @@
     "exampleText": "• Past Simple Question (did): Did you visit your grandparents over the weekend?\n• Past Simple Negative (didn't + base verb): They didn't finish the project on time.",
     "speechPrompt": "I didn't hear the phone ring during the meeting.",
     "optionsString": "Did,Do,Done,Were",
-    "correctOption": "Did"
+    "correctOption": "Did",
+    "quizQuestion": "Complete the sentence with the correct option:\n\"____ you visit your grandparents over the weekend?\""
   },
   {
     "id": 134,
@@ -278,7 +373,8 @@
     "exampleText": "• Present Perfect with I/You/We/They (have + V3): We have already submitted the revised proposal.\n• Present Perfect with He/She/It (has + V3): She has completed her master's thesis.",
     "speechPrompt": "We have finished all our assignments for this week.",
     "optionsString": "have,has,had,having",
-    "correctOption": "has"
+    "correctOption": "has",
+    "quizQuestion": "Complete the sentence with the correct option:\n\"She ____ completed her master's thesis.\""
   },
   {
     "id": 135,
@@ -289,7 +385,8 @@
     "exampleText": "• Present Continuous (am/is/are + -ing): They are discussing the new strategy in the room.\n• Past Continuous (was/were + -ing): I was reading a book when the electricity went out.",
     "speechPrompt": "I am currently preparing for my English fluency test.",
     "optionsString": "is,are,were,be",
-    "correctOption": "were"
+    "correctOption": "were",
+    "quizQuestion": "Which option correctly applies the rule for Auxiliary 'Be' (Am/Is/Are/Was/Were) in Continuous Tenses?"
   },
   {
     "id": 136,
@@ -300,7 +397,8 @@
     "exampleText": "• Emphatic Assertion (do): I do care deeply about your future success!\n• Emphatic Assertion (does): She does work hard, even if she stays quiet.\n• Emphatic Assertion in Past (did): We did lock the door before leaving the house.",
     "speechPrompt": "She does know how to solve this difficult problem.",
     "optionsString": "do,am,have,really",
-    "correctOption": "do"
+    "correctOption": "do",
+    "quizQuestion": "Complete the sentence with the correct option:\n\"I ____ care deeply about your future success!\""
   },
   {
     "id": 137,
@@ -311,7 +409,8 @@
     "exampleText": "• Life Experience: I have visited France three times in my life.\n• Recent Accomplishment / Action: He has just finished painting the dining room.",
     "speechPrompt": "Have you ever traveled abroad on your own?",
     "optionsString": "saw,have seen,did see,had seen",
-    "correctOption": "have seen"
+    "correctOption": "have seen",
+    "quizQuestion": "Which option correctly applies the rule for Present Perfect Simple: Life Experiences & Recent Actions?"
   },
   {
     "id": 138,
@@ -322,7 +421,8 @@
     "exampleText": "• Ongoing Unfinished Action: She has been studying medicine for four years.\n• Recent Process with Present Effect: It has been raining all morning, so the ground is wet.",
     "speechPrompt": "It has been raining continuously since morning.",
     "optionsString": "has been studying,is studying,studied,has studied",
-    "correctOption": "has been studying"
+    "correctOption": "has been studying",
+    "quizQuestion": "Complete the sentence with the correct option:\n\"She ____ medicine for four years.\""
   },
   {
     "id": 139,
@@ -333,7 +433,8 @@
     "exampleText": "• Focus on Completion / Quantity (Simple): I have written three client reports today.\n• Focus on Duration / Process (Continuous): I have been writing client reports all morning.",
     "speechPrompt": "I have been calling him, but he hasn't answered yet.",
     "optionsString": "painted,has been painting,was painting,had painted",
-    "correctOption": "has been painting"
+    "correctOption": "has been painting",
+    "quizQuestion": "Which option correctly applies the rule for Present Perfect Simple vs Present Perfect Continuous?"
   },
   {
     "id": 140,
@@ -344,7 +445,8 @@
     "exampleText": "• Earlier Past Action (Past Perfect): When we arrived at the cinema, the movie had already started.\n• Sequence of Past Events: She had saved enough money before she bought her first apartment.",
     "speechPrompt": "She had finished her work before the manager asked for it.",
     "optionsString": "left,has left,had left,was leaving",
-    "correctOption": "had left"
+    "correctOption": "had left",
+    "quizQuestion": "Which option correctly applies the rule for Past Perfect Simple ('Had Done') for Earlier Past Actions?"
   },
   {
     "id": 141,
@@ -355,7 +457,8 @@
     "exampleText": "• Ongoing Action Before Past Moment: They had been driving for five hours before they stopped for gasoline.\n• Past Duration Emphasis: He was exhausted because he had been working out in the sun.",
     "speechPrompt": "I had been working there for five years when the company closed.",
     "optionsString": "had been waiting,were waiting,have been waiting,waited",
-    "correctOption": "had been waiting"
+    "correctOption": "had been waiting",
+    "quizQuestion": "Which option correctly applies the rule for Past Perfect Continuous ('Had Been Doing')?"
   },
   {
     "id": 142,
@@ -366,7 +469,8 @@
     "exampleText": "• Action Completed Before Future Point: By next month, I will have completed my training course.\n• Future Deadline: They will have arrived in Tokyo by tomorrow morning.",
     "speechPrompt": "They will have finished the building by December.",
     "optionsString": "will complete,will have completed,completed,have completed",
-    "correctOption": "will have completed"
+    "correctOption": "will have completed",
+    "quizQuestion": "Complete the sentence with the correct option:\n\"By next month, I ____ my training course.\""
   },
   {
     "id": 143,
@@ -377,7 +481,8 @@
     "exampleText": "• Projected Future Duration: By December, she will have been living in New York for ten years.\n• Continuous Progress Up To Future Point: By 5 PM, we will have been negotiating for eight straight hours.",
     "speechPrompt": "Next year, we will have been living here for a decade.",
     "optionsString": "will have been working,will work,is working,will be working",
-    "correctOption": "will have been working"
+    "correctOption": "will have been working",
+    "quizQuestion": "Which option correctly applies the rule for Future Perfect Continuous ('Will Have Been Doing')?"
   },
   {
     "id": 144,
@@ -388,7 +493,8 @@
     "exampleText": "• Accurate Sequence in Storytelling: I had been waiting for twenty minutes when she finally arrived.\n• Expressing Time Relationships: By the time you read this letter, I will have landed in London.",
     "speechPrompt": "How long have you been practicing English today?",
     "optionsString": "have you been,had you been,were you,are you",
-    "correctOption": "have you been"
+    "correctOption": "have you been",
+    "quizQuestion": "Which option correctly applies the rule for Master Perfect Tenses in Conversational Fluency?"
   },
   {
     "id": 145,
@@ -399,7 +505,8 @@
     "exampleText": "• Daily Habit / Routine: I drink green tea every morning after waking up.\n• Universal Truth / Fact: Water boils at 100 degrees Celsius.\n• Third-Person Singular (-s / -es): She works as a financial analyst in a regional bank.",
     "speechPrompt": "He plays tennis every Saturday morning with his friends.",
     "optionsString": "rise,rises,rising,rose",
-    "correctOption": "rises"
+    "correctOption": "rises",
+    "quizQuestion": "Which option correctly applies the rule for Simple Present Tense: Habits, Routines & Universal Truths?"
   },
   {
     "id": 146,
@@ -410,7 +517,8 @@
     "exampleText": "• Action Happening Right Now: Please be quiet; the baby is sleeping in the bedroom.\n• Temporary Current Situation: He is staying at a hotel while his house is renovated.",
     "speechPrompt": "I am reading an interesting book on psychology.",
     "optionsString": "sleeps,is sleeping,was sleeping,slept",
-    "correctOption": "is sleeping"
+    "correctOption": "is sleeping",
+    "quizQuestion": "Complete the sentence with the correct option:\n\"Please be quiet; the baby ____ in the bedroom.\""
   },
   {
     "id": 147,
@@ -421,7 +529,8 @@
     "exampleText": "• Finished Action at Specific Past Time: We graduated from university in June 2020.\n• Irregular Past Forms: She wrote a brilliant essay and sent it to the editor.",
     "speechPrompt": "I bought a new laptop yesterday afternoon.",
     "optionsString": "visit,visited,visiting,have visited",
-    "correctOption": "visited"
+    "correctOption": "visited",
+    "quizQuestion": "Which option correctly applies the rule for Simple Past Tense: Completed Past Actions & Dates?"
   },
   {
     "id": 148,
@@ -432,7 +541,8 @@
     "exampleText": "• Ongoing Background Past Action: At 8 PM yesterday, we were having dinner together.\n• Setting a Narrative Scene: The sun was setting and birds were singing in the trees.",
     "speechPrompt": "They were playing football when it started to rain.",
     "optionsString": "watched,was watching,am watching,watch",
-    "correctOption": "was watching"
+    "correctOption": "was watching",
+    "quizQuestion": "Which option correctly applies the rule for Past Continuous Tense: Ongoing Background Past Actions?"
   },
   {
     "id": 149,
@@ -443,7 +553,8 @@
     "exampleText": "• Background Action (Past Continuous): While I was studying in my room...\n• Short Interrupting Action (Simple Past): ...the phone rang loudly on the desk.",
     "speechPrompt": "While she was driving to work, she saw a magnificent rainbow.",
     "optionsString": "slept,was sleeping,sleep,had slept",
-    "correctOption": "was sleeping"
+    "correctOption": "was sleeping",
+    "quizQuestion": "Which option correctly applies the rule for Simple Past vs Past Continuous: Interrupted Actions?"
   },
   {
     "id": 150,
@@ -454,7 +565,8 @@
     "exampleText": "• State of Mind / Emotion (love, know, want): I understand the grammar lesson completely now.\n• Possession / Relationship (belong, own): This antique watch belongs to my grandfather.",
     "speechPrompt": "She knows the answer to that tricky question.",
     "optionsString": "am understanding,understand,understood,was understanding",
-    "correctOption": "understand"
+    "correctOption": "understand",
+    "quizQuestion": "Complete the sentence with the correct option:\n\"I ____ the grammar lesson completely now.\""
   },
   {
     "id": 151,
@@ -465,7 +577,8 @@
     "exampleText": "• Opinion / Stative (think): I think this is a fantastic opportunity for all of us.\n• Mental Activity / Dynamic (thinking): I am thinking about moving to a new neighborhood.\n• Possession / Stative (have): She has a beautiful garden behind her cottage.\n• Action / Experience / Dynamic (having): We are having a great time at the beach.",
     "speechPrompt": "I think this is a fantastic opportunity for all of us.",
     "optionsString": "think,am thinking,thought,thinks",
-    "correctOption": "am thinking"
+    "correctOption": "am thinking",
+    "quizQuestion": "Complete the sentence with the correct option:\n\"I ____ about moving to a new neighborhood.\""
   },
   {
     "id": 152,
@@ -476,7 +589,8 @@
     "exampleText": "• Spontaneous Decision / Prediction (will): I am thirsty; I will buy a bottle of water.\n• Prior Plan / Evidence (be going to): Look at those dark clouds; it is going to rain.\n• Fixed Schedule / Arrangement (Present Continuous): I am meeting the dentist tomorrow at 10 AM.",
     "speechPrompt": "Look at those dark clouds; it is going to rain soon.",
     "optionsString": "will meet,am meeting,meet,met",
-    "correctOption": "am meeting"
+    "correctOption": "am meeting",
+    "quizQuestion": "Complete the sentence with the correct option:\n\"I ____ the dentist tomorrow at 10 AM.\""
   },
   {
     "id": 153,
@@ -487,7 +601,8 @@
     "exampleText": "• Future Time Clause with 'When': When he arrives at the station, we will pick him up.\n• Future Time Clause with 'As soon as': As soon as I finish the report, I will send it to you.\n• Future Time Clause with 'If': If it rains tomorrow, we will move the party indoors.",
     "speechPrompt": "When he comes home, we will start dinner immediately.",
     "optionsString": "arrive,will arrive,arrived,arriving",
-    "correctOption": "arrive"
+    "correctOption": "arrive",
+    "quizQuestion": "Which option correctly applies the rule for Future Time Clauses: Present Simple After 'When', 'If', 'As Soon As'?"
   },
   {
     "id": 154,
@@ -498,7 +613,8 @@
     "exampleText": "• Wh- Question Structure (Wh- + Aux + Subject + Verb): Where do you work during the summer?\n• Wh- Question in Past Tense: Why did you call the customer service desk?",
     "speechPrompt": "What time does the morning train depart?",
     "optionsString": "you bought,did you buy,bought you,do you bought",
-    "correctOption": "did you buy"
+    "correctOption": "did you buy",
+    "quizQuestion": "Which option correctly applies the rule for Wh- Question Formation: Word Order Rules?"
   },
   {
     "id": 155,
@@ -509,7 +625,8 @@
     "exampleText": "• Subject Question (No auxiliary 'do/did'): Who broke the glass vase on the table?\n• Object Question (With auxiliary 'do/did'): Who did you invite to the birthday party?",
     "speechPrompt": "Who gave you this wonderful advice?",
     "optionsString": "Who called,Who did call,Who calling,Who was called",
-    "correctOption": "Who called"
+    "correctOption": "Who called",
+    "quizQuestion": "Which option correctly applies the rule for Subject Questions vs Object Questions?"
   },
   {
     "id": 156,
@@ -520,7 +637,8 @@
     "exampleText": "• Positive Statement + Negative Tag: You live in Chicago, don't you?\n• Negative Statement + Positive Tag: She isn't coming to the conference, is she?",
     "speechPrompt": "You haven't seen my car keys, have you?",
     "optionsString": "is she,isn't she,doesn't she,was she",
-    "correctOption": "isn't she"
+    "correctOption": "isn't she",
+    "quizQuestion": "Which option correctly applies the rule for Question Tags: Positive/Negative Matching Rules?"
   },
   {
     "id": 157,
@@ -531,7 +649,8 @@
     "exampleText": "• Direct Question: Where is the post office?\n• Polite Indirect Question (Statement Word Order): Could you please tell me where the post office is?",
     "speechPrompt": "I was wondering if you could help me with this task.",
     "optionsString": "where is the bank,where the bank is,the bank where is,is where the bank",
-    "correctOption": "where the bank is"
+    "correctOption": "where the bank is",
+    "quizQuestion": "Which option correctly applies the rule for Indirect Questions for Polite Conversation?"
   },
   {
     "id": 158,
@@ -542,7 +661,8 @@
     "exampleText": "• Zero Conditional (General Fact / Scientific Truth): If you heat ice, it melts into water.\n• First Conditional (Real Future Possibility): If I pass the final exam, I will celebrate with my family.",
     "speechPrompt": "If you study consistently, you will improve your English skills.",
     "optionsString": "will rain,rains,rained,is raining",
-    "correctOption": "rains"
+    "correctOption": "rains",
+    "quizQuestion": "Which option correctly applies the rule for Zero & First Conditionals: Facts & Real Possibilities?"
   },
   {
     "id": 159,
@@ -553,7 +673,8 @@
     "exampleText": "• Hypothetical Present / Unreal Situation: If I won a million dollars, I would buy a house on the coast.\n• Giving Friendly Advice (If I were you...): If I were you, I would take that job offer immediately.",
     "speechPrompt": "If I were you, I would take that job offer immediately.",
     "optionsString": "have,had,would have,will have",
-    "correctOption": "had"
+    "correctOption": "had",
+    "quizQuestion": "Which option correctly applies the rule for Second Conditional: Hypothetical Present & Advice?"
   },
   {
     "id": 160,
@@ -564,7 +685,8 @@
     "exampleText": "• Unreal Past Event & Regret: If I had set my alarm clock, I would not have missed the flight.\n• Imaginary Past Outcome: If we had left earlier, we would have avoided the traffic jam.",
     "speechPrompt": "If we had left earlier, we would have avoided the traffic jams.",
     "optionsString": "had set,set,would set,have set",
-    "correctOption": "had set"
+    "correctOption": "had set",
+    "quizQuestion": "Complete the sentence with the correct option:\n\"If I ____ my alarm clock, I would not have missed the flight.\""
   },
   {
     "id": 161,
@@ -576,7 +698,8 @@
     "speechPrompt": "He was exhausted, yet he continued running.",
     "optionsString": "and,but,or,so",
     "correctOption": "but",
-    "orderIndex": 61
+    "orderIndex": 61,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"I wanted to go for a walk, ____ it began to rain heavily.\""
   },
   {
     "id": 162,
@@ -588,7 +711,8 @@
     "speechPrompt": "We stayed inside because the weather was stormy.",
     "optionsString": "Because,Since,So,Although",
     "correctOption": "Since",
-    "orderIndex": 62
+    "orderIndex": 62,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"____ it was a public holiday, all banks were closed.\""
   },
   {
     "id": 163,
@@ -600,7 +724,8 @@
     "speechPrompt": "You can either choose the red coat or the blue jacket.",
     "optionsString": "either...or,neither...nor,both...and,not only...but also",
     "correctOption": "not only...but also",
-    "orderIndex": 63
+    "orderIndex": 63,
+    "quizQuestion": "Which option correctly applies the rule for Correlative Conjunctions: Pairs in Harmony?"
   },
   {
     "id": 164,
@@ -612,7 +737,8 @@
     "speechPrompt": "Despite the heavy rain, they arrived on time.",
     "optionsString": "Although,Despite,However,In spite",
     "correctOption": "Although",
-    "orderIndex": 64
+    "orderIndex": 64,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"____ it was freezing outside, we went for a walk in the park.\""
   },
   {
     "id": 165,
@@ -624,7 +750,8 @@
     "speechPrompt": "He woke up early in order to catch the first train.",
     "optionsString": "so that,in order to,because,unless",
     "correctOption": "so that",
-    "orderIndex": 65
+    "orderIndex": 65,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"She saved money every month ____ she could buy a laptop.\""
   },
   {
     "id": 166,
@@ -636,7 +763,8 @@
     "speechPrompt": "She is very talented; furthermore, she works extremely hard.",
     "optionsString": "however,therefore,moreover,in contrast",
     "correctOption": "however",
-    "orderIndex": 66
+    "orderIndex": 66,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"The exam was very difficult; ____, most students passed.\""
   },
   {
     "id": 167,
@@ -648,7 +776,8 @@
     "speechPrompt": "Although I was tired, I finished my work before midnight.",
     "optionsString": "whereas,although,because,despite",
     "correctOption": "whereas",
-    "orderIndex": 67
+    "orderIndex": 67,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"I enjoy reading books, ____ my brother prefers playing video games.\""
   },
   {
     "id": 168,
@@ -660,7 +789,8 @@
     "speechPrompt": "My birthday is in September.",
     "optionsString": "at,on,in,by",
     "correctOption": "at",
-    "orderIndex": 68
+    "orderIndex": 68,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"The meeting starts ____ 9:30 AM sharply.\""
   },
   {
     "id": 169,
@@ -672,7 +802,8 @@
     "speechPrompt": "There is a beautiful painting on the wall.",
     "optionsString": "at,on,in,by",
     "correctOption": "at",
-    "orderIndex": 69
+    "orderIndex": 69,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"She is standing ____ the bus stop near the bakery.\""
   },
   {
     "id": 170,
@@ -684,7 +815,8 @@
     "speechPrompt": "The boat sailed across the calm river.",
     "optionsString": "into,onto,through,across",
     "correctOption": "into",
-    "orderIndex": 70
+    "orderIndex": 70,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"He walked ____ the conference room and sat down.\""
   },
   {
     "id": 171,
@@ -696,7 +828,8 @@
     "speechPrompt": "He is deeply interested in learning ancient history.",
     "optionsString": "at,in,of,for",
     "correctOption": "at",
-    "orderIndex": 71
+    "orderIndex": 71,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"She is remarkably good ____ solving complex puzzles.\""
   },
   {
     "id": 172,
@@ -708,7 +841,8 @@
     "speechPrompt": "Who does this briefcase belong to?",
     "optionsString": "on,to,from,for",
     "correctOption": "on",
-    "orderIndex": 72
+    "orderIndex": 72,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"Our weekend picnic plans depend ____ the weather forecast.\""
   },
   {
     "id": 173,
@@ -720,7 +854,8 @@
     "speechPrompt": "In fact, she had already solved the problem.",
     "optionsString": "in,at,on,by",
     "correctOption": "in",
-    "orderIndex": 73
+    "orderIndex": 73,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"____ fact, we finished the project two days before the deadline.\""
   },
   {
     "id": 174,
@@ -732,7 +867,8 @@
     "speechPrompt": "You should spend at least thirty minutes reading daily.",
     "optionsString": "at,in,on,by",
     "correctOption": "at",
-    "orderIndex": 74
+    "orderIndex": 74,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"The city street lights turn on automatically ____ night.\""
   },
   {
     "id": 175,
@@ -744,7 +880,8 @@
     "speechPrompt": "I am certain he didn't break the vase on purpose.",
     "optionsString": "on,in,at,by",
     "correctOption": "on",
-    "orderIndex": 75
+    "orderIndex": 75,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"He showed up right ____ time for the job interview.\""
   },
   {
     "id": 176,
@@ -756,7 +893,8 @@
     "speechPrompt": "They traveled across Europe by train.",
     "optionsString": "by,on,in,with",
     "correctOption": "by",
-    "orderIndex": 76
+    "orderIndex": 76,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"We traveled to Chicago ____ train.\""
   },
   {
     "id": 177,
@@ -768,7 +906,8 @@
     "speechPrompt": "Road repairs will be completed over the weekend.",
     "optionsString": "under,over,above,below",
     "correctOption": "under",
-    "orderIndex": 77
+    "orderIndex": 77,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"The team performed exceptionally well ____ pressure.\""
   },
   {
     "id": 178,
@@ -780,7 +919,8 @@
     "speechPrompt": "There is a summary at the end of each chapter.",
     "optionsString": "In the end,At the end,To the end,By the end",
     "correctOption": "In the end",
-    "orderIndex": 78
+    "orderIndex": 78,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"____, we decided to sign the contract.\""
   },
   {
     "id": 179,
@@ -792,7 +932,8 @@
     "speechPrompt": "We arrived in time to see the opening ceremony.",
     "optionsString": "on time,in time,at time,by time",
     "correctOption": "on time",
-    "orderIndex": 79
+    "orderIndex": 79,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"The train departed ____ at 8:00 AM.\""
   },
   {
     "id": 180,
@@ -804,7 +945,8 @@
     "speechPrompt": "Scientists are working on a solution to climate change.",
     "optionsString": "for,to,of,on",
     "correctOption": "for",
-    "orderIndex": 80
+    "orderIndex": 80,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"What was the main reason ____ the sudden change in plans?\""
   },
   {
     "id": 181,
@@ -816,7 +958,8 @@
     "speechPrompt": "His late arrival was due to severe traffic.",
     "optionsString": "because of,due to,owing to,thanks to",
     "correctOption": "because of",
-    "orderIndex": 81
+    "orderIndex": 81,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"The match was postponed ____ heavy downpour.\""
   },
   {
     "id": 182,
@@ -828,7 +971,8 @@
     "speechPrompt": "We rode in my friend's car to the beach.",
     "optionsString": "on,in,by,at",
     "correctOption": "on",
-    "orderIndex": 82
+    "orderIndex": 82,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"We met several tourists while sitting ____ the cross-country train.\""
   },
   {
     "id": 183,
@@ -840,7 +984,8 @@
     "speechPrompt": "She entered the office silently.",
     "optionsString": "discuss,discuss about,discuss on,discuss over",
     "correctOption": "discuss",
-    "orderIndex": 83
+    "orderIndex": 83,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"____ : We need to discuss the new budget proposal.\""
   },
   {
     "id": 184,
@@ -852,7 +997,8 @@
     "speechPrompt": "Everyone attended the seminar except for John.",
     "optionsString": "Besides,Except for,Apart from,Beside",
     "correctOption": "Besides",
-    "orderIndex": 84
+    "orderIndex": 84,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"____ managing the sales department, she oversees customer support.\""
   },
   {
     "id": 185,
@@ -864,7 +1010,8 @@
     "speechPrompt": "I am writing with regard to your recent job application.",
     "optionsString": "According to,With regard to,In spite of,Due to",
     "correctOption": "According to",
-    "orderIndex": 85
+    "orderIndex": 85,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"____ the weather report, it will snow tomorrow.\""
   },
   {
     "id": 186,
@@ -876,7 +1023,8 @@
     "speechPrompt": "Who were you speaking with on the phone?",
     "optionsString": "to,at,with,about",
     "correctOption": "to",
-    "orderIndex": 86
+    "orderIndex": 86,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"What kind of music do you like listening ____?\""
   },
   {
     "id": 187,
@@ -888,7 +1036,8 @@
     "speechPrompt": "I borrowed a coat from my brother for the winter trip.",
     "optionsString": "lend,borrow,keep,take",
     "correctOption": "lend",
-    "orderIndex": 87
+    "orderIndex": 87,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"I will ____ you my laptop for the presentation.\""
   },
   {
     "id": 188,
@@ -900,7 +1049,8 @@
     "speechPrompt": "The thieves robbed three local jewelry stores.",
     "optionsString": "stole,robbed,taken,snatched",
     "correctOption": "stole",
-    "orderIndex": 88
+    "orderIndex": 88,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"Someone ____ my leather wallet from my jacket.\""
   },
   {
     "id": 189,
@@ -912,7 +1062,8 @@
     "speechPrompt": "He studies for two hours every evening.",
     "optionsString": "learn,study,teach,master",
     "correctOption": "learn",
-    "orderIndex": 89
+    "orderIndex": 89,
+    "quizQuestion": "Which option correctly applies the rule for Study vs Learn vs Teach?"
   },
   {
     "id": 190,
@@ -924,7 +1075,8 @@
     "speechPrompt": "The sun will rise at six in the morning.",
     "optionsString": "raise,rise,arise,rose",
     "correctOption": "raise",
-    "orderIndex": 90
+    "orderIndex": 90,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"lift or increase something): Please ____ your hand if you have a question.\""
   },
   {
     "id": 191,
@@ -936,7 +1088,8 @@
     "speechPrompt": "I need to lie down for a short nap.",
     "optionsString": "lay,lie,laid,lain",
     "correctOption": "lay",
-    "orderIndex": 91
+    "orderIndex": 91,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"Please ____ the books gently on the wooden desk.\""
   },
   {
     "id": 192,
@@ -948,7 +1101,8 @@
     "speechPrompt": "He said that he would call us back.",
     "optionsString": "told,said,spoke,talked",
     "correctOption": "told",
-    "orderIndex": 92
+    "orderIndex": 92,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"He ____ me the good news right away.\""
   },
   {
     "id": 193,
@@ -960,7 +1114,8 @@
     "speechPrompt": "Please listen carefully to the speaker.",
     "optionsString": "hear,listen,listening,heard",
     "correctOption": "hear",
-    "orderIndex": 93
+    "orderIndex": 93,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"Did you ____ that loud noise outside?\""
   },
   {
     "id": 194,
@@ -972,7 +1127,8 @@
     "speechPrompt": "Look at those colorful flowers in the garden.",
     "optionsString": "watch,see,look,observe",
     "correctOption": "watch",
-    "orderIndex": 94
+    "orderIndex": 94,
+    "quizQuestion": "Which option correctly applies the rule for See vs Look vs Watch?"
   },
   {
     "id": 195,
@@ -984,7 +1140,8 @@
     "speechPrompt": "She does her best in every project.",
     "optionsString": "make,do,made,done",
     "correctOption": "make",
-    "orderIndex": 95
+    "orderIndex": 95,
+    "quizQuestion": "Which option correctly applies the rule for Make vs Do?"
   },
   {
     "id": 196,
@@ -996,7 +1153,8 @@
     "speechPrompt": "Don't forget to take your umbrella when you leave.",
     "optionsString": "bring,take,fetch,carry",
     "correctOption": "bring",
-    "orderIndex": 96
+    "orderIndex": 96,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"Please ____ me a glass of water.\""
   },
   {
     "id": 197,
@@ -1008,7 +1166,8 @@
     "speechPrompt": "We are planning to go to Spain next summer.",
     "optionsString": "coming,going,come,go",
     "correctOption": "coming",
-    "orderIndex": 97
+    "orderIndex": 97,
+    "quizQuestion": "Which option correctly applies the rule for Come vs Go?"
   },
   {
     "id": 198,
@@ -1020,7 +1179,8 @@
     "speechPrompt": "I distinctly remember locking the front door.",
     "optionsString": "remind,remember,recalling,mind",
     "correctOption": "remind",
-    "orderIndex": 98
+    "orderIndex": 98,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"Please ____ me to call the doctor tomorrow.\""
   },
   {
     "id": 199,
@@ -1032,7 +1192,8 @@
     "speechPrompt": "She gave me valuable advice about my career.",
     "optionsString": "advised,advice,advising,advices",
     "correctOption": "advised",
-    "orderIndex": 99
+    "orderIndex": 99,
+    "quizQuestion": "Which option correctly applies the rule for Advise vs Advice?"
   },
   {
     "id": 200,
@@ -1044,7 +1205,8 @@
     "speechPrompt": "The new policy had a positive effect on sales.",
     "optionsString": "affect,effect,affected,effects",
     "correctOption": "affect",
-    "orderIndex": 100
+    "orderIndex": 100,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"to influence): The weather will ____ our outdoor picnic plans.\""
   },
   {
     "id": 201,
@@ -1056,7 +1218,8 @@
     "speechPrompt": "Everyone arrived on time except for Mark.",
     "optionsString": "accept,except,accepting,excepted",
     "correctOption": "accept",
-    "orderIndex": 101
+    "orderIndex": 101,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"receive or agree to): I gladly ____ your invitation to the anniversary dinner.\""
   },
   {
     "id": 202,
@@ -1068,7 +1231,8 @@
     "speechPrompt": "This coat is very loose on me.",
     "optionsString": "lose,loose,lost,loosen",
     "correctOption": "lose",
-    "orderIndex": 102
+    "orderIndex": 102,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"misplace or fail to win): Be careful not to ____ your passport at the airport.\""
   },
   {
     "id": 203,
@@ -1080,7 +1244,8 @@
     "speechPrompt": "Stress has become part of everyday life.",
     "optionsString": "every day,everyday,everydays,each day",
     "correctOption": "every day",
-    "orderIndex": 103
+    "orderIndex": 103,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"each day): I practice speaking English ____ for thirty minutes.\""
   },
   {
     "id": 204,
@@ -1092,7 +1257,8 @@
     "speechPrompt": "We ate dinner and then went for a walk.",
     "optionsString": "than,then,there,their",
     "correctOption": "than",
-    "orderIndex": 104
+    "orderIndex": 104,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"She is taller ____ her elder brother.\""
   },
   {
     "id": 205,
@@ -1104,7 +1270,8 @@
     "speechPrompt": "The students forgot their textbooks.",
     "optionsString": "They're,Their,There,Them",
     "correctOption": "They're",
-    "orderIndex": 105
+    "orderIndex": 105,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"____ planning to visit us during the winter holidays.\""
   },
   {
     "id": 206,
@@ -1116,7 +1283,8 @@
     "speechPrompt": "The company updated its privacy policy.",
     "optionsString": "It's,Its,It,Its'",
     "correctOption": "It's",
-    "orderIndex": 106
+    "orderIndex": 106,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"____ going to be a sunny day today.\""
   },
   {
     "id": 207,
@@ -1128,7 +1296,8 @@
     "speechPrompt": "Is this your umbrella left on the chair?",
     "optionsString": "You're,Your,You,Yours",
     "correctOption": "You're",
-    "orderIndex": 107
+    "orderIndex": 107,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"____ going to do fantastic on the exam!\""
   },
   {
     "id": 208,
@@ -1140,7 +1309,8 @@
     "speechPrompt": "Whose jacket is this sitting on the bench?",
     "optionsString": "Who's,Whose,Who,Whos",
     "correctOption": "Who's",
-    "orderIndex": 108
+    "orderIndex": 108,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"____ coming to the dinner party tonight?\""
   },
   {
     "id": 209,
@@ -1152,7 +1322,8 @@
     "speechPrompt": "I bought new letterheads and envelopes at the stationery shop.",
     "optionsString": "stationary,stationery,station,stationed",
     "correctOption": "stationary",
-    "orderIndex": 109
+    "orderIndex": 109,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"The exercise bike remains ____ in the room.\""
   },
   {
     "id": 210,
@@ -1164,7 +1335,8 @@
     "speechPrompt": "Mr. Davis is the principal of our high school.",
     "optionsString": "principle,principal,principles,principally",
     "correctOption": "principle",
-    "orderIndex": 110
+    "orderIndex": 110,
+    "quizQuestion": "Which option correctly applies the rule for Principal vs Principle?"
   },
   {
     "id": 211,
@@ -1176,7 +1348,8 @@
     "speechPrompt": "Besides reading, I enjoy cooking and painting.",
     "optionsString": "beside,besides,aside,next",
     "correctOption": "beside",
-    "orderIndex": 111
+    "orderIndex": 111,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"She sat ____ her best friend during the concert.\""
   },
   {
     "id": 212,
@@ -1188,7 +1361,8 @@
     "speechPrompt": "There is a secret agreement between the two directors.",
     "optionsString": "among,between,with,in",
     "correctOption": "among",
-    "orderIndex": 112
+    "orderIndex": 112,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"The treasure was divided ____ the four sailors.\""
   },
   {
     "id": 213,
@@ -1200,7 +1374,8 @@
     "speechPrompt": "Sometimes I like to listen to classical music.",
     "optionsString": "sometime,sometimes,some time,someway",
     "correctOption": "sometime",
-    "orderIndex": 113
+    "orderIndex": 113,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"Let's grab coffee together ____ next week.\""
   },
   {
     "id": 214,
@@ -1212,7 +1387,8 @@
     "speechPrompt": "We stood all together for the group photograph.",
     "optionsString": "altogether,all together,together,all",
     "correctOption": "altogether",
-    "orderIndex": 114
+    "orderIndex": 114,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"That is an ____ different situation.\""
   },
   {
     "id": 215,
@@ -1224,7 +1400,8 @@
     "speechPrompt": "She paid me a nice compliment on my speech.",
     "optionsString": "complements,compliments,complement,complimented",
     "correctOption": "complements",
-    "orderIndex": 115
+    "orderIndex": 115,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"The red wine ____ the steak perfectly.\""
   },
   {
     "id": 216,
@@ -1236,7 +1413,8 @@
     "speechPrompt": "My grandparents immigrated to America eighty years ago.",
     "optionsString": "immigrated,emigrated,migrated,moved",
     "correctOption": "immigrated",
-    "orderIndex": 116
+    "orderIndex": 116,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"They ____ to Canada to start a new business.\""
   },
   {
     "id": 217,
@@ -1248,7 +1426,8 @@
     "speechPrompt": "She loves reading historical novels set in the 18th century.",
     "optionsString": "historic,historical,historian,history",
     "correctOption": "historic",
-    "orderIndex": 117
+    "orderIndex": 117,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"Today is a ____ moment for space exploration.\""
   },
   {
     "id": 218,
@@ -1260,7 +1439,8 @@
     "speechPrompt": "The government announced new economic policies today.",
     "optionsString": "economical,economic,economy,economically",
     "correctOption": "economical",
-    "orderIndex": 118
+    "orderIndex": 118,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"Driving a hybrid car is very ____ on fuel.\""
   },
   {
     "id": 219,
@@ -1272,7 +1452,8 @@
     "speechPrompt": "She is very sensitive to loud noises and bright lights.",
     "optionsString": "sensible,sensitive,sense,sensibly",
     "correctOption": "sensible",
-    "orderIndex": 119
+    "orderIndex": 119,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"It is ____ to save money for emergency expenses.\""
   },
   {
     "id": 220,
@@ -1284,7 +1465,8 @@
     "speechPrompt": "Camels can travel long distances across the desert.",
     "optionsString": "dessert,desert,deserts,desserts",
     "correctOption": "dessert",
-    "orderIndex": 120
+    "orderIndex": 120,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"We ordered chocolate lava cake for ____.\""
   },
   {
     "id": 221,
@@ -1296,7 +1478,8 @@
     "speechPrompt": "The news was quite unexpected and surprising.",
     "optionsString": "quiet,quite,quit,quieter",
     "correctOption": "quiet",
-    "orderIndex": 121
+    "orderIndex": 121,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"Please be ____ while the test is in progress.\""
   },
   {
     "id": 222,
@@ -1308,7 +1491,8 @@
     "speechPrompt": "The senators gathered inside the Capitol building.",
     "optionsString": "capital,capitol,capitals,capitols",
     "correctOption": "capital",
-    "orderIndex": 122
+    "orderIndex": 122,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"Paris is the ____ of France, and start your name with a capital letter.\""
   },
   {
     "id": 223,
@@ -1320,7 +1504,8 @@
     "speechPrompt": "His continual interruptions disturbed the whole presentation.",
     "optionsString": "continuous,continual,continually,continuously",
     "correctOption": "continuous",
-    "orderIndex": 123
+    "orderIndex": 123,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"The rainfall was ____ for five full hours.\""
   },
   {
     "id": 224,
@@ -1332,7 +1517,8 @@
     "speechPrompt": "How much farther is it to the top of the hill?",
     "optionsString": "further,farther,farthest,furthest",
     "correctOption": "further",
-    "orderIndex": 124
+    "orderIndex": 124,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"Please contact our support office for ____ information.\""
   },
   {
     "id": 225,
@@ -1344,7 +1530,8 @@
     "speechPrompt": "Please add less sugar to my tea.",
     "optionsString": "fewer,less,little,few",
     "correctOption": "fewer",
-    "orderIndex": 125
+    "orderIndex": 125,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"There were ____ attendees at the meeting today than yesterday.\""
   },
   {
     "id": 226,
@@ -1356,7 +1543,8 @@
     "speechPrompt": "A significant amount of water was wasted.",
     "optionsString": "number,amount,quantity,total",
     "correctOption": "number",
-    "orderIndex": 126
+    "orderIndex": 126,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"A large ____ of students attended the seminar.\""
   },
   {
     "id": 227,
@@ -1368,7 +1556,8 @@
     "speechPrompt": "He seemed totally uninterested in the conversation.",
     "optionsString": "disinterested,uninterested,interest,uninterestedly",
     "correctOption": "disinterested",
-    "orderIndex": 127
+    "orderIndex": 127,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"A judge must remain a ____ party in court.\""
   },
   {
     "id": 228,
@@ -1380,7 +1569,8 @@
     "speechPrompt": "She is a kind and thoughtful person.",
     "optionsString": "people,person,persons,peoples",
     "correctOption": "people",
-    "orderIndex": 128
+    "orderIndex": 128,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"Many ____ enjoy traveling during the summer.\""
   },
   {
     "id": 229,
@@ -1392,7 +1582,8 @@
     "speechPrompt": "I need to ensure all details are correct.",
     "optionsString": "accept,except,affect,effect",
     "correctOption": "accept",
-    "orderIndex": 129
+    "orderIndex": 129,
+    "quizQuestion": "Which option correctly applies the rule for Mastering Commonly Confused Words in Context?"
   },
   {
     "id": 230,
@@ -1404,7 +1595,8 @@
     "speechPrompt": "The manager gave him and me the new assignment.",
     "optionsString": "I,me,myself,mine",
     "correctOption": "I",
-    "orderIndex": 130
+    "orderIndex": 130,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"She and ____ completed the project ahead of schedule.\""
   },
   {
     "id": 231,
@@ -1416,7 +1608,8 @@
     "speechPrompt": "Is this your notebook on the desk?",
     "optionsString": "mine,my,yours,your",
     "correctOption": "mine",
-    "orderIndex": 131
+    "orderIndex": 131,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"That blue umbrella over there is ____.\""
   },
   {
     "id": 232,
@@ -1428,7 +1621,8 @@
     "speechPrompt": "She looked at herself in the mirror.",
     "optionsString": "myself,herself,himself,yourselves",
     "correctOption": "myself",
-    "orderIndex": 132
+    "orderIndex": 132,
+    "quizQuestion": "Which option correctly applies the rule for Reflexive & Emphatic Pronouns (Myself, Yourself)?"
   },
   {
     "id": 233,
@@ -1440,7 +1634,8 @@
     "speechPrompt": "This is the camera that I bought last week.",
     "optionsString": "who,whom,whose,which",
     "correctOption": "who",
-    "orderIndex": 133
+    "orderIndex": 133,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"The artist ____ painted this mural lives in Chicago.\""
   },
   {
     "id": 234,
@@ -1452,7 +1647,8 @@
     "speechPrompt": "The book that you recommended was brilliant.",
     "optionsString": "who,which,that,whom",
     "correctOption": "who",
-    "orderIndex": 134
+    "orderIndex": 134,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"The doctor ____ treated my knee was very kind.\""
   },
   {
     "id": 235,
@@ -1464,7 +1660,8 @@
     "speechPrompt": "Does anybody know the correct answer?",
     "optionsString": "is,are,were,be",
     "correctOption": "is",
-    "orderIndex": 135
+    "orderIndex": 135,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"Everyone ____ excited about the company retreat.\""
   },
   {
     "id": 236,
@@ -1476,7 +1673,8 @@
     "speechPrompt": "That was a fantastic performance last night.",
     "optionsString": "These,This,Those,That",
     "correctOption": "These",
-    "orderIndex": 136
+    "orderIndex": 136,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"This book in my hand is fascinating, and ____ shoes are comfortable.\""
   },
   {
     "id": 237,
@@ -1488,7 +1686,8 @@
     "speechPrompt": "Team members supported one another throughout the project.",
     "optionsString": "each other,one another,themselves,myself",
     "correctOption": "each other",
-    "orderIndex": 137
+    "orderIndex": 137,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"The two brothers always support ____.\""
   },
   {
     "id": 238,
@@ -1500,7 +1699,8 @@
     "speechPrompt": "There is a solution to every challenge.",
     "optionsString": "It,There,This,That",
     "correctOption": "It",
-    "orderIndex": 138
+    "orderIndex": 138,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"____ is six o'clock, and it is starting to snow outside.\""
   },
   {
     "id": 239,
@@ -1512,7 +1712,8 @@
     "speechPrompt": "This secret stays between you and me.",
     "optionsString": "I,me,myself,mine",
     "correctOption": "I",
-    "orderIndex": 139
+    "orderIndex": 139,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"John and ____ : John and I went to the conference together.\""
   },
   {
     "id": 240,
@@ -1524,7 +1725,8 @@
     "speechPrompt": "She decided to study medicine at university.",
     "optionsString": "reading,to read,read,reads",
     "correctOption": "reading",
-    "orderIndex": 140
+    "orderIndex": 140,
+    "quizQuestion": "Which option correctly applies the rule for Gerunds vs Infinitives: Enjoy swimming vs Want to swim?"
   },
   {
     "id": 241,
@@ -1536,7 +1738,8 @@
     "speechPrompt": "Don't forget to lock the door when you leave.",
     "optionsString": "meeting,to meet,meet,met",
     "correctOption": "meeting",
-    "orderIndex": 141
+    "orderIndex": 141,
+    "quizQuestion": "Which option correctly applies the rule for Verbs Changing Meaning with Gerund or Infinitive?"
   },
   {
     "id": 242,
@@ -1548,7 +1751,8 @@
     "speechPrompt": "She was bored during the long lecture.",
     "optionsString": "bored,boring,bores,bore",
     "correctOption": "bored",
-    "orderIndex": 142
+    "orderIndex": 142,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"I feel ____ during long lectures.\""
   },
   {
     "id": 243,
@@ -1560,7 +1764,8 @@
     "speechPrompt": "Did you use to play basketball in school?",
     "optionsString": "used to,am used to,got used to,use to",
     "correctOption": "used to",
-    "orderIndex": 143
+    "orderIndex": 143,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"I ____ live in London when I was a student.\""
   },
   {
     "id": 244,
@@ -1572,7 +1777,8 @@
     "speechPrompt": "Are you used to the cold weather here yet?",
     "optionsString": "is used to,used to,got used to,uses to",
     "correctOption": "is used to",
-    "orderIndex": 144
+    "orderIndex": 144,
+    "quizQuestion": "Which option correctly applies the rule for 'Be Used To' + Gerund/Noun for Familiarity?"
   },
   {
     "id": 245,
@@ -1584,7 +1790,8 @@
     "speechPrompt": "You will soon get used to living in a big city.",
     "optionsString": "get used to,used to,be used to,uses to",
     "correctOption": "get used to",
-    "orderIndex": 145
+    "orderIndex": 145,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"Don't worry, you will soon ____ your new schedule.\""
   },
   {
     "id": 246,
@@ -1596,7 +1803,8 @@
     "speechPrompt": "He used to smoke, but he quit last year.",
     "optionsString": "getting used to,used to,be used to,used for",
     "correctOption": "getting used to",
-    "orderIndex": 146
+    "orderIndex": 146,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"I am ____ cooking my own meals.\""
   },
   {
     "id": 247,
@@ -1608,7 +1816,8 @@
     "speechPrompt": "It took an hour to arrive at the station.",
     "optionsString": "an,a,the,zero article",
     "correctOption": "an",
-    "orderIndex": 147
+    "orderIndex": 147,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"She waited for ____ hour to speak with an honest official.\""
   },
   {
     "id": 248,
@@ -1620,7 +1829,8 @@
     "speechPrompt": "Could you pass me the salt on the table?",
     "optionsString": "The,A,An,Zero article",
     "correctOption": "The",
-    "orderIndex": 148
+    "orderIndex": 148,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"Please pass me ____ key on the kitchen table.\""
   },
   {
     "id": 249,
@@ -1632,7 +1842,8 @@
     "speechPrompt": "She is fluent in English and French.",
     "optionsString": "Knowledge,The knowledge,A knowledge,An knowledge",
     "correctOption": "Knowledge",
-    "orderIndex": 149
+    "orderIndex": 149,
+    "quizQuestion": "Which option correctly applies the rule for Zero Article: When NOT to Use Articles?"
   },
   {
     "id": 250,
@@ -1644,7 +1855,8 @@
     "speechPrompt": "I bought some fresh apples at the market.",
     "optionsString": "any,some,no,many",
     "correctOption": "any",
-    "orderIndex": 150
+    "orderIndex": 150,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"I don't have ____ questions. Do you have any milk left?\""
   },
   {
     "id": 251,
@@ -1656,7 +1868,8 @@
     "speechPrompt": "How much time do we have before departure?",
     "optionsString": "many,much,a lot of,few",
     "correctOption": "many",
-    "orderIndex": 151
+    "orderIndex": 151,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"There aren't ____ open seats left in the auditorium.\""
   },
   {
     "id": 252,
@@ -1668,7 +1881,8 @@
     "speechPrompt": "There is little water left in the jug.",
     "optionsString": "a few,few,a little,little",
     "correctOption": "a few",
-    "orderIndex": 152
+    "orderIndex": 152,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"I have ____ friends coming over tonight.\""
   },
   {
     "id": 253,
@@ -1680,7 +1894,8 @@
     "speechPrompt": "Every employee must attend the quarterly meeting.",
     "optionsString": "Each,Every,All,Both",
     "correctOption": "Each",
-    "orderIndex": 153
+    "orderIndex": 153,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"____ student received an award individually.\""
   },
   {
     "id": 254,
@@ -1692,7 +1907,8 @@
     "speechPrompt": "Both of my brothers live in Sydney.",
     "optionsString": "Neither,Either,Both,None",
     "correctOption": "Neither",
-    "orderIndex": 154
+    "orderIndex": 154,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"____ answer is completely correct.\""
   },
   {
     "id": 255,
@@ -1704,7 +1920,8 @@
     "speechPrompt": "All students must submit their work today.",
     "optionsString": "whole,all,most,no",
     "correctOption": "whole",
-    "orderIndex": 155
+    "orderIndex": 155,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"I spent the ____ day reading a captivating book.\""
   },
   {
     "id": 256,
@@ -1716,7 +1933,8 @@
     "speechPrompt": "Mount Everest is the highest mountain in the world.",
     "optionsString": "the,a,an,zero article",
     "correctOption": "the",
-    "orderIndex": 156
+    "orderIndex": 156,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"____ Amazon River flows into the Atlantic Ocean near the USA.\""
   },
   {
     "id": 257,
@@ -1728,7 +1946,8 @@
     "speechPrompt": "I need a few more minutes to complete this.",
     "optionsString": "a,an,the,some",
     "correctOption": "a",
-    "orderIndex": 157
+    "orderIndex": 157,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"I bought ____ /ə/ new book at the shop.\""
   },
   {
     "id": 258,
@@ -1740,7 +1959,8 @@
     "speechPrompt": "English and Spanish are widely spoken.",
     "optionsString": "Paris,paris,PARIS,Parisian",
     "correctOption": "Paris",
-    "orderIndex": 158
+    "orderIndex": 158,
+    "quizQuestion": "Which option correctly applies the rule for Capitalization Rules in Written English?"
   },
   {
     "id": 259,
@@ -1752,7 +1972,8 @@
     "speechPrompt": "I bought apples, bananas, and oranges.",
     "optionsString": "raining,,raining,raining;,raining:",
     "correctOption": "raining,",
-    "orderIndex": 159
+    "orderIndex": 159,
+    "quizQuestion": "Which option correctly applies the rule for Comma Rules: Separating Clauses & Lists?"
   },
   {
     "id": 260,
@@ -1764,7 +1985,8 @@
     "speechPrompt": "It's important to double-check your work.",
     "optionsString": "children's,childrens',childrens,children'es",
     "correctOption": "children's",
-    "orderIndex": 160
+    "orderIndex": 160,
+    "quizQuestion": "Which option correctly applies the rule for Apostrophe Rules: Possessives vs Contractions?"
   },
   {
     "id": 261,
@@ -1776,7 +1998,8 @@
     "speechPrompt": "\"We are ready,\" declared the team lead.",
     "optionsString": "said,,said:,,said.,said;",
     "correctOption": "said,",
-    "orderIndex": 161
+    "orderIndex": 161,
+    "quizQuestion": "Which option correctly applies the rule for Quotation Marks & Direct Speech Formatting?"
   },
   {
     "id": 262,
@@ -1788,7 +2011,8 @@
     "speechPrompt": "Please bring three items: a pen, a notebook, and a ruler.",
     "optionsString": ";,:,--,,",
     "correctOption": ";",
-    "orderIndex": 162
+    "orderIndex": 162,
+    "quizQuestion": "Which option correctly applies the rule for Semicolons & Colons Usage Masterclass?"
   },
   {
     "id": 263,
@@ -1800,7 +2024,8 @@
     "speechPrompt": "This is a fast-growing tech company.",
     "optionsString": "well-known,well known,wellknow,well_known",
     "correctOption": "well-known",
-    "orderIndex": 163
+    "orderIndex": 163,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"She is a ____ international author.\""
   },
   {
     "id": 264,
@@ -1812,7 +2037,8 @@
     "speechPrompt": "What a wonderful surprise this is!",
     "optionsString": "?,!,.,,",
     "correctOption": "?",
-    "orderIndex": 164
+    "orderIndex": 164,
+    "quizQuestion": "Which option correctly applies the rule for Question Marks & Exclamation Marks Tone Control?"
   },
   {
     "id": 265,
@@ -1824,7 +2050,8 @@
     "speechPrompt": "The report includes all recent figures.",
     "optionsString": "(which was held outdoors),{which was held outdoors},[which was held outdoors],<which was held outdoors>",
     "correctOption": "(which was held outdoors)",
-    "orderIndex": 165
+    "orderIndex": 165,
+    "quizQuestion": "Which option correctly applies the rule for Parentheses & Brackets in Professional Text?"
   },
   {
     "id": 266,
@@ -1836,7 +2063,8 @@
     "speechPrompt": "She loves reading; she reads every night.",
     "optionsString": ";,.,,,:",
     "correctOption": ";",
-    "orderIndex": 166
+    "orderIndex": 166,
+    "quizQuestion": "Which option correctly applies the rule for Common Punctuation Traps in Written Communication?"
   },
   {
     "id": 267,
@@ -1848,7 +2076,8 @@
     "speechPrompt": "In summary, we achieved all our goals.",
     "optionsString": "rang,,rang;,rang:,rang.",
     "correctOption": "rang,",
-    "orderIndex": 167
+    "orderIndex": 167,
+    "quizQuestion": "Which option correctly applies the rule for Punctuation Pause Cues for Spoken Intonation?"
   },
   {
     "id": 268,
@@ -1860,7 +2089,8 @@
     "speechPrompt": "An exquisite dinner was prepared by the chef.",
     "optionsString": "was prepared,prepared,is preparing,has prepared",
     "correctOption": "was prepared",
-    "orderIndex": 168
+    "orderIndex": 168,
+    "quizQuestion": "Which option correctly applies the rule for Active vs Passive Voice Structural Comparison?"
   },
   {
     "id": 269,
@@ -1872,7 +2102,8 @@
     "speechPrompt": "Spanish is spoken in many countries.",
     "optionsString": "was opened,opened,is opening,has opened",
     "correctOption": "was opened",
-    "orderIndex": 169
+    "orderIndex": 169,
+    "quizQuestion": "Which option correctly applies the rule for Converting Present & Past Tenses to Passive?"
   },
   {
     "id": 270,
@@ -1884,7 +2115,8 @@
     "speechPrompt": "This problem can be easily solved.",
     "optionsString": "must be submitted,must submit,must submitting,must have submit",
     "correctOption": "must be submitted",
-    "orderIndex": 170
+    "orderIndex": 170,
+    "quizQuestion": "Which option correctly applies the rule for Passive Voice with Modal Verbs (Can Be Done, Should Be Sent)?"
   },
   {
     "id": 271,
@@ -1896,7 +2128,8 @@
     "speechPrompt": "Our server was updated last night.",
     "optionsString": "was conducted,conducted,conducts,is conducting",
     "correctOption": "was conducted",
-    "orderIndex": 171
+    "orderIndex": 171,
+    "quizQuestion": "Which option correctly applies the rule for Strategic Uses of Passive Voice in Formal & Technical English?"
   },
   {
     "id": 272,
@@ -1908,7 +2141,8 @@
     "speechPrompt": "Could you turn it on?",
     "optionsString": "turn off,turn off it,turn it off,turning off",
     "correctOption": "turn it off",
-    "orderIndex": 172
+    "orderIndex": 172,
+    "quizQuestion": "Which option correctly applies the rule for Understanding Phrasal Verbs & Separable Rules?"
   },
   {
     "id": 273,
@@ -1920,7 +2154,8 @@
     "speechPrompt": "It took him a month to get over the flu.",
     "optionsString": "gets along,gets over,gets by,gets up",
     "correctOption": "gets along",
-    "orderIndex": 173
+    "orderIndex": 173,
+    "quizQuestion": "Which option correctly applies the rule for Essential Phrasal Verbs with 'Get'?"
   },
   {
     "id": 274,
@@ -1932,7 +2167,8 @@
     "speechPrompt": "He takes after his father in demeanor.",
     "optionsString": "take off,take over,take after,take in",
     "correctOption": "take off",
-    "orderIndex": 174
+    "orderIndex": 174,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"The plane will ____ in twenty minutes.\""
   },
   {
     "id": 275,
@@ -1944,7 +2180,8 @@
     "speechPrompt": "He surprisingly turned up at the party late.",
     "optionsString": "turned down,turned up,turned out,turned off",
     "correctOption": "turned down",
-    "orderIndex": 175
+    "orderIndex": 175,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"He ____ the job offer because of the long commute.\""
   },
   {
     "id": 276,
@@ -1956,7 +2193,8 @@
     "speechPrompt": "She looks after her younger brother.",
     "optionsString": "looking forward to,looking after,looking up,looking into",
     "correctOption": "looking forward to",
-    "orderIndex": 176
+    "orderIndex": 176,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"I am ____ visiting you next month.\""
   },
   {
     "id": 277,
@@ -1968,7 +2206,8 @@
     "speechPrompt": "She brought up an interesting point during the meeting.",
     "optionsString": "give up,bring up,give away,bring about",
     "correctOption": "give up",
-    "orderIndex": 177
+    "orderIndex": 177,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"Never ____ on achieving your career goals.\""
   },
   {
     "id": 278,
@@ -1980,7 +2219,8 @@
     "speechPrompt": "He came up with a brilliant business idea.",
     "optionsString": "came across,came up with,went on,went through",
     "correctOption": "came across",
-    "orderIndex": 178
+    "orderIndex": 178,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"I ____ an old photo album while cleaning the attic.\""
   },
   {
     "id": 279,
@@ -1992,7 +2232,8 @@
     "speechPrompt": "I cannot put up with this loud noise any longer.",
     "optionsString": "put off,put up with,put on,put away",
     "correctOption": "put off",
-    "orderIndex": 179
+    "orderIndex": 179,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"Never ____ until tomorrow what you can do today.\""
   },
   {
     "id": 280,
@@ -2004,7 +2245,8 @@
     "speechPrompt": "My car broke down on the highway this morning.",
     "optionsString": "called off,broke down,called back,broke out",
     "correctOption": "called off",
-    "orderIndex": 180
+    "orderIndex": 180,
+    "quizQuestion": "Which option correctly applies the rule for Essential Phrasal Verbs with 'Call' & 'Break'?"
   },
   {
     "id": 281,
@@ -2016,7 +2258,8 @@
     "speechPrompt": "Our team will carry out the project plan successfully.",
     "optionsString": "set up,carry out,follow up,wind up",
     "correctOption": "set up",
-    "orderIndex": 181
+    "orderIndex": 181,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"She ____ a video conference for Tuesday morning.\""
   },
   {
     "id": 282,
@@ -2028,7 +2271,8 @@
     "speechPrompt": "I need to catch up with my old friends.",
     "optionsString": "run out of,catch up with,cut down on,look up to",
     "correctOption": "run out of",
-    "orderIndex": 182
+    "orderIndex": 182,
+    "quizQuestion": "Which option correctly applies the rule for Three-Word Phrasal Verbs (Run out of, Catch up with)?"
   },
   {
     "id": 283,
@@ -2040,7 +2284,8 @@
     "speechPrompt": "We checked in at the hotel reception.",
     "optionsString": "dropped off,checked in,picked up,saw off",
     "correctOption": "dropped off",
-    "orderIndex": 183
+    "orderIndex": 183,
+    "quizQuestion": "Which option correctly applies the rule for Phrasal Verbs for Travel, Socializing & Daily Life?"
   },
   {
     "id": 284,
@@ -2052,7 +2297,8 @@
     "speechPrompt": "Hold on a minute while I grab my coat.",
     "optionsString": "catch up,hold on,carry on,keep up",
     "correctOption": "catch up",
-    "orderIndex": 184
+    "orderIndex": 184,
+    "quizQuestion": "Which option correctly applies the rule for Using Phrasal Verbs Naturally in Everyday Speech?"
   },
   {
     "id": 285,
@@ -2064,7 +2310,8 @@
     "speechPrompt": "It is impossible to finish this without assistance.",
     "optionsString": "happiness,happy,happily,unhappy",
     "correctOption": "happiness",
-    "orderIndex": 185
+    "orderIndex": 185,
+    "quizQuestion": "Which option correctly applies the rule for Prefixes & Suffixes: Rapid Vocabulary Expansion?"
   },
   {
     "id": 286,
@@ -2076,7 +2323,8 @@
     "speechPrompt": "He likes tea, but she prefers coffee.",
     "optionsString": "Complex,Simple,Compound,Compound-Complex",
     "correctOption": "Complex",
-    "orderIndex": 186
+    "orderIndex": 186,
+    "quizQuestion": "Which option correctly applies the rule for Sentence Types: Simple, Compound & Complex Structures?"
   },
   {
     "id": 287,
@@ -2088,7 +2336,8 @@
     "speechPrompt": "They drove carefully on the highway during the storm.",
     "optionsString": "played the piano beautifully,played beautifully the piano,beautifully played the piano,the piano played beautifully",
     "correctOption": "played the piano beautifully",
-    "orderIndex": 187
+    "orderIndex": 187,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"He ____ in the auditorium last night.\""
   },
   {
     "id": 288,
@@ -2100,7 +2349,8 @@
     "speechPrompt": "He told us that he would call us back later.",
     "optionsString": "was working,is working,worked,has worked",
     "correctOption": "was working",
-    "orderIndex": 188
+    "orderIndex": 188,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"He said that he ____ late that night.\""
   },
   {
     "id": 289,
@@ -2112,7 +2362,8 @@
     "speechPrompt": "Never will I forget this extraordinary trip.",
     "optionsString": "Rarely have I heard,Rarely I have heard,Rarely heard I,Rarely I heard",
     "correctOption": "Rarely have I heard",
-    "orderIndex": 189
+    "orderIndex": 189,
+    "quizQuestion": "Which option correctly applies the rule for Inversion for Strong Emphasis in Formal Speech?"
   },
   {
     "id": 290,
@@ -2124,7 +2375,8 @@
     "speechPrompt": "I look forward to hearing from you soon.",
     "optionsString": "inquire,ask,wonder,check",
     "correctOption": "inquire",
-    "orderIndex": 190
+    "orderIndex": 190,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"Dear Mr. Smith, I am writing to ____ regarding...\""
   },
   {
     "id": 291,
@@ -2136,7 +2388,8 @@
     "speechPrompt": "He spoke clearly and persuasively during the speech.",
     "optionsString": "always arrives,arrives always,is always arriving,always arrive",
     "correctOption": "always arrives",
-    "orderIndex": 191
+    "orderIndex": 191,
+    "quizQuestion": "Which option correctly applies the rule for Adverbs of Manner, Degree & Frequency?"
   },
   {
     "id": 292,
@@ -2148,7 +2401,8 @@
     "speechPrompt": "The movie was extremely interesting.",
     "optionsString": "absolutely,very,fairly,quite",
     "correctOption": "absolutely",
-    "orderIndex": 192
+    "orderIndex": 192,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"The weather outside was ____ freezing!\""
   },
   {
     "id": 293,
@@ -2160,7 +2414,8 @@
     "speechPrompt": "Actually, that makes a lot of sense.",
     "optionsString": "Well,Actually,You know,I mean",
     "correctOption": "Well",
-    "orderIndex": 193
+    "orderIndex": 193,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"____, actually, I haven't considered that option yet.\""
   },
   {
     "id": 294,
@@ -2172,7 +2427,8 @@
     "speechPrompt": "It seems to me that we need more data.",
     "optionsString": "In my opinion,It seems to me,From my view,I think",
     "correctOption": "In my opinion",
-    "orderIndex": 194
+    "orderIndex": 194,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"____, investing in green energy is vital.\""
   },
   {
     "id": 295,
@@ -2184,7 +2440,8 @@
     "speechPrompt": "I couldn't agree with you more.",
     "optionsString": "I see your point but,I completely agree,You are wrong,I disagree",
     "correctOption": "I see your point but",
-    "orderIndex": 195
+    "orderIndex": 195,
+    "quizQuestion": "Which option correctly applies the rule for Expressing Agreement & Disagreement Gracefully?"
   },
   {
     "id": 296,
@@ -2196,7 +2453,8 @@
     "speechPrompt": "If I understand correctly, you want us to start today.",
     "optionsString": "elaborate,explain,say,tell",
     "correctOption": "elaborate",
-    "orderIndex": 196
+    "orderIndex": 196,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"Could you ____ a bit more on that specific point?\""
   },
   {
     "id": 297,
@@ -2208,7 +2466,8 @@
     "speechPrompt": "She WANTS to BUY a NEW CAR.",
     "optionsString": "NEED focus MAIN OBJECTIVES,We need to focus,on the main objectives,focus on main",
     "correctOption": "NEED focus MAIN OBJECTIVES",
-    "orderIndex": 197
+    "orderIndex": 197,
+    "quizQuestion": "Which option correctly applies the rule for Sentence Stress & Rhythm in Spoken English?"
   },
   {
     "id": 298,
@@ -2220,7 +2479,8 @@
     "speechPrompt": "Where do you live? (Falling)",
     "optionsString": "Rising,Falling,Flat,Monotone",
     "correctOption": "Rising",
-    "orderIndex": 198
+    "orderIndex": 198,
+    "quizQuestion": "Which option correctly applies the rule for Intonation Patterns: Rising vs Falling Tones?"
   },
   {
     "id": 299,
@@ -2232,7 +2492,8 @@
     "speechPrompt": "He held an apple in his hand.",
     "optionsString": "check it out,check-it-out,check_it_out,checkitout",
     "correctOption": "check it out",
-    "orderIndex": 199
+    "orderIndex": 199,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"Hey, ____ on the notice board!\""
   },
   {
     "id": 300,
@@ -2244,7 +2505,8 @@
     "speechPrompt": "They are going to launch the product tomorrow.",
     "optionsString": "must be,gonna,wanna,gotcha",
     "correctOption": "must be",
-    "orderIndex": 200
+    "orderIndex": 200,
+    "quizQuestion": "Which option correctly applies the rule for Connected Speech: Elision & Blending Sounds?"
   },
   {
     "id": 301,
@@ -2256,7 +2518,8 @@
     "speechPrompt": "We need to modify our marketing strategy.",
     "optionsString": "substantial,big,huge,large",
     "correctOption": "substantial",
-    "orderIndex": 201
+    "orderIndex": 201,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"'big' -> '____': The company reported a substantial increase in quarterly revenue.\""
   },
   {
     "id": 302,
@@ -2268,7 +2531,8 @@
     "speechPrompt": "The exam turned out to be a piece of cake.",
     "optionsString": "hit the nail on the head,piece of cake,break the ice,under the weather",
     "correctOption": "hit the nail on the head",
-    "orderIndex": 202
+    "orderIndex": 202,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"Your diagnosis of the problem ____.\""
   },
   {
     "id": 303,
@@ -2280,7 +2544,8 @@
     "speechPrompt": "He bought a charming antique Italian leather jacket.",
     "optionsString": "elegant long red silk,red long elegant silk,silk red long elegant,long red silk elegant",
     "correctOption": "elegant long red silk",
-    "orderIndex": 203
+    "orderIndex": 203,
+    "quizQuestion": "Which option correctly applies the rule for Adjective Order Rules (OSASCOMP Formula)?"
   },
   {
     "id": 304,
@@ -2292,7 +2557,8 @@
     "speechPrompt": "She is much taller than her sister.",
     "optionsString": "most challenging,more challenging,challengingest,most challenge",
     "correctOption": "most challenging",
-    "orderIndex": 204
+    "orderIndex": 204,
+    "quizQuestion": "Which option correctly applies the rule for Comparative & Superlative Adjectives Rules?"
   },
   {
     "id": 305,
@@ -2304,7 +2570,8 @@
     "speechPrompt": "The students in the classroom are listening attentively.",
     "optionsString": "is,are,were,be",
     "correctOption": "is",
-    "orderIndex": 205
+    "orderIndex": 205,
+    "quizQuestion": "Which option correctly applies the rule for Subject-Verb Agreement: Singular & Plural Harmony?"
   },
   {
     "id": 306,
@@ -2316,7 +2583,8 @@
     "speechPrompt": "My family is planning a summer vacation.",
     "optionsString": "has,have,are,were",
     "correctOption": "has",
-    "orderIndex": 206
+    "orderIndex": 206,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"The committee ____ reached a unanimous decision.\""
   },
   {
     "id": 307,
@@ -2328,7 +2596,8 @@
     "speechPrompt": "She didn't see anybody at the park.",
     "optionsString": "anything,nothing,something,everything",
     "correctOption": "anything",
-    "orderIndex": 207
+    "orderIndex": 207,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"I don't know ____ about that issue.\""
   },
   {
     "id": 308,
@@ -2340,7 +2609,8 @@
     "speechPrompt": "Each member brought her own equipment.",
     "optionsString": "their,his,her,its",
     "correctOption": "their",
-    "orderIndex": 208
+    "orderIndex": 208,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"Every student must submit ____ homework on time.\""
   },
   {
     "id": 309,
@@ -2352,7 +2622,8 @@
     "speechPrompt": "Having finished the report, she turned off her computer.",
     "optionsString": "Walking down the street I noticed,Walking down the street the shop noticed,Walking the street noticed I,Noticed walking street",
     "correctOption": "Walking down the street I noticed",
-    "orderIndex": 209
+    "orderIndex": 209,
+    "quizQuestion": "Which option correctly applies the rule for Dangling & Misplaced Modifiers and How to Fix Them?"
   },
   {
     "id": 310,
@@ -2364,7 +2635,8 @@
     "speechPrompt": "He promised to study hard, practice daily, and attend all lectures.",
     "optionsString": "hiking,to hike,hiked,hikes",
     "correctOption": "hiking",
-    "orderIndex": 210
+    "orderIndex": 210,
+    "quizQuestion": "Which option correctly applies the rule for Parallel Structure in Lists & Sentences?"
   },
   {
     "id": 311,
@@ -2376,7 +2648,8 @@
     "speechPrompt": "The office is in close proximity to the station.",
     "optionsString": "repeat,repeat again,repeat back,re-repeat",
     "correctOption": "repeat",
-    "orderIndex": 211
+    "orderIndex": 211,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"'____ again' -> 'repeat': Please repeat the instructions clearly.\""
   },
   {
     "id": 312,
@@ -2388,7 +2661,8 @@
     "speechPrompt": "Let's listen to some relaxing music.",
     "optionsString": "married to,married with,married by,married at",
     "correctOption": "married to",
-    "orderIndex": 212
+    "orderIndex": 212,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"____ : She has been married to Mark for five years.\""
   },
   {
     "id": 313,
@@ -2400,7 +2674,8 @@
     "speechPrompt": "When she arrived, everyone welcomed her warmly.",
     "optionsString": "opened,opens,opening,has opened",
     "correctOption": "opened",
-    "orderIndex": 213
+    "orderIndex": 213,
+    "quizQuestion": "Which option correctly applies the rule for Tense Consistency Across Paragraphs & Narratives?"
   },
   {
     "id": 314,
@@ -2412,7 +2687,8 @@
     "speechPrompt": "She spearheaded the new marketing campaign.",
     "optionsString": "managed,was managing,manage,have managed",
     "correctOption": "managed",
-    "orderIndex": 214
+    "orderIndex": 214,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"I ____ a team of ten engineers and delivered projects on time.\""
   },
   {
     "id": 315,
@@ -2424,7 +2700,8 @@
     "speechPrompt": "I'm gonna leave soon.",
     "optionsString": "We are,We're,Us are,We'm",
     "correctOption": "We are",
-    "orderIndex": 215
+    "orderIndex": 215,
+    "quizQuestion": "Which option correctly applies the rule for Spoken vs Written English Grammar Conventions?"
   },
   {
     "id": 316,
@@ -2436,7 +2713,8 @@
     "speechPrompt": "Although it was late, we finished the task.",
     "optionsString": "would have informed,will inform,had informed,informed",
     "correctOption": "would have informed",
-    "orderIndex": 216
+    "orderIndex": 216,
+    "quizQuestion": "Which option correctly applies the rule for Comprehensive Grammar Diagnostic Checkup?"
   },
   {
     "id": 317,
@@ -2448,7 +2726,8 @@
     "speechPrompt": "I am confident in my ability to speak English clearly.",
     "optionsString": "is,are,were,be",
     "correctOption": "is",
-    "orderIndex": 217
+    "orderIndex": 217,
+    "quizQuestion": "Which option correctly applies the rule for Final Grammar Mastery Review & Assessment?"
   },
   {
     "id": 318,
@@ -2460,7 +2739,8 @@
     "speechPrompt": "I am feeling a bit under the weather today.",
     "optionsString": "on cloud nine,under the weather,seeing red,over the moon",
     "correctOption": "on cloud nine",
-    "orderIndex": 218
+    "orderIndex": 218,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"____: She was on cloud nine after receiving her promotion.\""
   },
   {
     "id": 319,
@@ -2472,7 +2752,8 @@
     "speechPrompt": "We had to burn the midnight oil to meet the deadline.",
     "optionsString": "learn the ropes,burn the midnight oil,hit the ground running,cut corners",
     "correctOption": "learn the ropes",
-    "orderIndex": 219
+    "orderIndex": 219,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"It takes a few weeks to ____ in a new company.\""
   },
   {
     "id": 320,
@@ -2484,7 +2765,8 @@
     "speechPrompt": "This vacation won't break the bank.",
     "optionsString": "bite the bullet,break the bank,at a crossroads,cost an arm and a leg",
     "correctOption": "bite the bullet",
-    "orderIndex": 220
+    "orderIndex": 220,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"I decided to ____ and go to the dentist.\""
   },
   {
     "id": 321,
@@ -2496,7 +2778,8 @@
     "speechPrompt": "He is a compassionate and reliable friend.",
     "optionsString": "meticulous,charismatic,compassionate,reliable",
     "correctOption": "meticulous",
-    "orderIndex": 221
+    "orderIndex": 221,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"She is a ____ researcher who checks every fact twice.\""
   },
   {
     "id": 322,
@@ -2508,7 +2791,8 @@
     "speechPrompt": "The bustling city market was filled with vivid colors.",
     "optionsString": "tranquil,bustling,picturesque,vibrant",
     "correctOption": "tranquil",
-    "orderIndex": 222
+    "orderIndex": 222,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"We spent a ____ afternoon sitting beside the mountain lake.\""
   },
   {
     "id": 323,
@@ -2520,7 +2804,8 @@
     "speechPrompt": "The kitchen was sparkling and spotless.",
     "optionsString": "exhausted,spotless,freezing,brilliant",
     "correctOption": "exhausted",
-    "orderIndex": 223
+    "orderIndex": 223,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"'very tired' -> '____': After running the marathon, he felt completely exhausted.\""
   },
   {
     "id": 324,
@@ -2532,7 +2817,8 @@
     "speechPrompt": "Let's take a quick fifteen-minute break.",
     "optionsString": "made progress,took progress,had progress,did progress",
     "correctOption": "made progress",
-    "orderIndex": 224
+    "orderIndex": 224,
+    "quizQuestion": "Which option correctly applies the rule for Collocations with 'Take', 'Have', & 'Make'?"
   },
   {
     "id": 325,
@@ -2544,7 +2830,8 @@
     "speechPrompt": "You should pay close attention to the instructions.",
     "optionsString": "keep in mind,pay attention,do a favor,keep a promise",
     "correctOption": "keep in mind",
-    "orderIndex": 225
+    "orderIndex": 225,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"____ that the office is closed on holidays.\""
   },
   {
     "id": 326,
@@ -2556,7 +2843,8 @@
     "speechPrompt": "I am so sorry to hear about your bad news.",
     "optionsString": "Warmest congratulations,I am sorry,Kudos,Well done",
     "correctOption": "Warmest congratulations",
-    "orderIndex": 226
+    "orderIndex": 226,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"____ on winning first place!\""
   },
   {
     "id": 327,
@@ -2568,7 +2856,8 @@
     "speechPrompt": "How about we schedule the meeting for Tuesday morning?",
     "optionsString": "strongly recommend,how about,why don't we,I suggest",
     "correctOption": "strongly recommend",
-    "orderIndex": 227
+    "orderIndex": 227,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"I ____ that we update our software immediately.\""
   },
   {
     "id": 328,
@@ -2580,7 +2869,8 @@
     "speechPrompt": "In short, we need to increase our efficiency.",
     "optionsString": "To sum up,In short,In essence,To put it another way",
     "correctOption": "To sum up",
-    "orderIndex": 228
+    "orderIndex": 228,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"____, our main priority is improving user experience.\""
   },
   {
     "id": 329,
@@ -2592,7 +2882,8 @@
     "speechPrompt": "Out of nowhere, a heavy downpour started.",
     "optionsString": "To make a long story short,Out of nowhere,Before I knew it,It all started when",
     "correctOption": "To make a long story short",
-    "orderIndex": 229
+    "orderIndex": 229,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"____, we managed to catch the last train.\""
   },
   {
     "id": 330,
@@ -2604,7 +2895,8 @@
     "speechPrompt": "All the news was positive.",
     "optionsString": "piece of advice,advices,an advice,many advices",
     "correctOption": "piece of advice",
-    "orderIndex": 230
+    "orderIndex": 230,
+    "quizQuestion": "Which option correctly applies the rule for Countable vs Uncountable Nouns & Tricky Nouns?"
   },
   {
     "id": 331,
@@ -2616,7 +2908,8 @@
     "speechPrompt": "The sheep were grazing peacefully in the field.",
     "optionsString": "glasses,glass,pair of glass,glasse",
     "correctOption": "glasses",
-    "orderIndex": 231
+    "orderIndex": 231,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"Where did I place my reading ____ and sharp scissors?\""
   },
   {
     "id": 332,
@@ -2628,7 +2921,8 @@
     "speechPrompt": "They are my brother's close friends.",
     "optionsString": "roof of the house,house's roof,roof house,roofs house",
     "correctOption": "roof of the house",
-    "orderIndex": 232
+    "orderIndex": 232,
+    "quizQuestion": "Which option correctly applies the rule for Compound Nouns & Possessive Nouns Rules?"
   },
   {
     "id": 333,
@@ -2640,7 +2934,8 @@
     "speechPrompt": "I will get the mechanic to check the brakes.",
     "optionsString": "made me rewrite,made me to rewrite,got me rewrite,let me to rewrite",
     "correctOption": "made me rewrite",
-    "orderIndex": 233
+    "orderIndex": 233,
+    "quizQuestion": "Which option correctly applies the rule for Causative Verbs: Make, Have, Get, Let, & Help?"
   },
   {
     "id": 334,
@@ -2652,6 +2947,7 @@
     "speechPrompt": "The doctor recommended that she rest for three days.",
     "optionsString": "taking,to take,that he takes,him to take",
     "correctOption": "taking",
-    "orderIndex": 234
+    "orderIndex": 234,
+    "quizQuestion": "Complete the sentence with the correct option:\n\"suggest + -ing: I suggest ____ a short fifteen-minute walk to clear your mind.\""
   }
 ]

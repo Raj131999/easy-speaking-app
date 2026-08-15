@@ -32,6 +32,7 @@ import com.example.data.TongueTwister
 import com.example.ui.EnglishViewModel
 import com.example.ui.Screen
 import com.example.ui.WordScoreType
+import com.example.ui.components.SpokenVoiceToTextCard
 import com.example.ui.theme.StreakGold
 import com.example.ui.theme.TealPrimary
 
@@ -49,6 +50,7 @@ fun TongueTwistersScreen(
     val isTtsSpeaking by viewModel.isTtsSpeaking.collectAsState()
     val lastScore by viewModel.lastScore.collectAsState()
     val scoredWords by viewModel.scoredWords.collectAsState()
+    val recognizedText by viewModel.recognizedText.collectAsState()
 
     val scrollState = rememberScrollState()
 
@@ -57,23 +59,10 @@ fun TongueTwistersScreen(
         if (index == -1) 0 else index
     }
 
-    // Keep track of attempt scores locally for visual chart
-    val attemptScores = remember { mutableStateListOf<Int>() }
-
-    // Clear history when twister changes
+    // Clear score when twister changes
     LaunchedEffect(activeTwister) {
-        attemptScores.clear()
         viewModel.lastScore.value = null
         viewModel.scoredWords.value = emptyList()
-    }
-
-    // Add score to attempt history
-    LaunchedEffect(lastScore) {
-        lastScore?.let { score ->
-            if (attemptScores.isEmpty() || attemptScores.last() != score) {
-                attemptScores.add(score)
-            }
-        }
     }
 
     if (activeTwister == null) {
@@ -451,6 +440,13 @@ fun TongueTwistersScreen(
                             )
                         )
 
+                        // Real-time Voice to Text Display
+                        SpokenVoiceToTextCard(
+                            isRecording = isRecording,
+                            recognizedText = recognizedText,
+                            hasEvaluated = lastScore != null
+                        )
+
                         lastScore?.let { score ->
                             HorizontalDivider()
 
@@ -498,78 +494,6 @@ fun TongueTwistersScreen(
                                         )
                                     }
                                 }
-                            }
-                        }
-
-                        // --- ACCURACY ATTEMPTS LINE GRAPH ---
-                        if (attemptScores.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                text = "PRACTICE PROGRESS TIMELINE",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-
-                            // Custom drawing showing attempt line graph
-                            Canvas(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(100.dp)
-                                    .padding(vertical = 8.dp)
-                            ) {
-                                val width = size.width
-                                val height = size.height
-                                val pointsCount = attemptScores.size
-
-                                if (pointsCount > 1) {
-                                    val spacing = width / (pointsCount - 1)
-                                    for (i in 0 until pointsCount - 1) {
-                                        val x1 = i * spacing
-                                        val y1 = height - (attemptScores[i].toFloat() / 100f * height)
-
-                                        val x2 = (i + 1) * spacing
-                                        val y2 = height - (attemptScores[i + 1].toFloat() / 100f * height)
-
-                                        drawLine(
-                                            color = TealPrimary,
-                                            start = Offset(x1, y1),
-                                            end = Offset(x2, y2),
-                                            strokeWidth = 6f,
-                                            cap = StrokeCap.Round
-                                        )
-
-                                        // Draw points
-                                        drawCircle(
-                                            color = StreakGold,
-                                            radius = 8f,
-                                            center = Offset(x1, y1)
-                                        )
-                                    }
-                                    // Last point
-                                    drawCircle(
-                                        color = StreakGold,
-                                        radius = 8f,
-                                        center = Offset((pointsCount - 1) * spacing, height - (attemptScores.last().toFloat() / 100f * height))
-                                    )
-                                } else {
-                                    // Draw single point centered
-                                    val singleY = height - (attemptScores[0].toFloat() / 100f * height)
-                                    drawCircle(
-                                        color = TealPrimary,
-                                        radius = 12f,
-                                        center = Offset(width / 2, singleY)
-                                    )
-                                }
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("Attempt 1", style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant))
-                                Text("Latest attempt", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, color = TealPrimary))
                             }
                         }
 

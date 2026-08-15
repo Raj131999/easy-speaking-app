@@ -107,4 +107,16 @@ interface EnglishDao {
 
     @Update
     suspend fun updateTongueTwister(twister: TongueTwister)
+
+
+    // --- Daily XP Claims Queries ---
+    @Query("SELECT dateStr FROM daily_xp_claims WHERE itemKey = :itemKey LIMIT 1")
+    suspend fun getXpClaimDate(itemKey: String): String?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertXpClaim(claim: DailyXpClaim)
+
+    @Query("DELETE FROM daily_xp_claims")
+    suspend fun deleteAllXpClaims()
 }
+

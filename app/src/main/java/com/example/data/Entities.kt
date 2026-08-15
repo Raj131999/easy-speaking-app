@@ -27,6 +27,7 @@ data class GrammarLesson(
     val explanation: String,
     val exampleText: String,
     val exampleTranslation: String,
+    val quizQuestion: String = "", // Question text for quick comprehension check
     val optionsString: String, // Comma-separated quiz options
     val correctOption: String,
     val speechPrompt: String, // A sentence for speaking practice
@@ -87,4 +88,10 @@ data class TongueTwister(
     val maxAccuracy: Int = 0,
     val practiceCount: Int = 0,
     val isCompleted: Boolean = false
+)
+
+@Entity(tableName = "daily_xp_claims")
+data class DailyXpClaim(
+    @PrimaryKey val itemKey: String, // e.g. "grammar_1", "daily_sentence_5", "paragraph_2", "tongue_twister_3", "conversation_4"
+    val dateStr: String // e.g. "2026-08-14"
 )

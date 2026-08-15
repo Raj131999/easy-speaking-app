@@ -27,6 +27,7 @@ import com.example.data.DailySentence
 import com.example.ui.EnglishViewModel
 import com.example.ui.Screen
 import com.example.ui.WordScoreType
+import com.example.ui.components.SpokenVoiceToTextCard
 import com.example.ui.theme.StreakGold
 import com.example.ui.theme.TealPrimary
 
@@ -44,6 +45,7 @@ fun DailySentencesScreen(
     val isTtsSpeaking by viewModel.isTtsSpeaking.collectAsState()
     val lastScore by viewModel.lastScore.collectAsState()
     val scoredWords by viewModel.scoredWords.collectAsState()
+    val recognizedText by viewModel.recognizedText.collectAsState()
 
     val currentIndex = remember(activeSentence, sentences) {
         val index = sentences.indexOfFirst { it.id == activeSentence?.id }
@@ -403,6 +405,13 @@ fun DailySentencesScreen(
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     color = if (isRecording) Color(0xFFFF5252) else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                            )
+
+                            // Real-time Voice to Text Display
+                            SpokenVoiceToTextCard(
+                                isRecording = isRecording,
+                                recognizedText = recognizedText,
+                                hasEvaluated = lastScore != null
                             )
 
                             // Accuracy Score and Feedback

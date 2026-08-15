@@ -13,9 +13,10 @@ import androidx.room.RoomDatabase
         ConversationSet::class,
         DailySentence::class,
         ParagraphSet::class,
-        TongueTwister::class
+        TongueTwister::class,
+        DailyXpClaim::class
     ],
-    version = 3,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

@@ -29,6 +29,7 @@ import com.example.data.ParagraphSet
 import com.example.ui.EnglishViewModel
 import com.example.ui.Screen
 import com.example.ui.WordScoreType
+import com.example.ui.components.SpokenVoiceToTextCard
 import com.example.ui.theme.StreakGold
 import com.example.ui.theme.TealPrimary
 
@@ -55,6 +56,7 @@ fun ParagraphScreen(
     val isTtsSpeaking by viewModel.isTtsSpeaking.collectAsState()
     val lastScore by viewModel.lastScore.collectAsState()
     val scoredWords by viewModel.scoredWords.collectAsState()
+    val recognizedText by viewModel.recognizedText.collectAsState()
 
     val scrollState = rememberScrollState()
 
@@ -366,6 +368,13 @@ fun ParagraphScreen(
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     color = if (isRecording) Color(0xFFFF5252) else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                            )
+
+                            // Real-time Voice to Text Display
+                            SpokenVoiceToTextCard(
+                                isRecording = isRecording,
+                                recognizedText = recognizedText,
+                                hasEvaluated = lastScore != null
                             )
 
                             // Scoring Output

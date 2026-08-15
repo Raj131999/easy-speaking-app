@@ -45,6 +45,8 @@ fun HomeScreen(
     val sentences by viewModel.dailySentences.collectAsState()
     val paragraphs by viewModel.paragraphs.collectAsState()
     val twisters by viewModel.tongueTwisters.collectAsState()
+    val dismissedKeys by viewModel.dismissedWeakItemKeys.collectAsState()
+    val isStruggledSectionDismissed by viewModel.isStruggledSectionDismissed.collectAsState()
 
     // Calculate module completions and counts
     val grammarDone = grammar.count { it.isCompleted }
@@ -67,9 +69,13 @@ fun HomeScreen(
     val twisterTotal = twisters.size.takeIf { it > 0 } ?: 1
     val twisterComp = twisterDone.toFloat() / twisterTotal
 
-    // Filter weak points (accuracy < 85)
-    val weakSentences = sentences.filter { it.timesPracticed > 0 && it.lastAccuracy < 85 }
-    val weakTwisters = twisters.filter { it.practiceCount > 0 && it.maxAccuracy < 85 }
+    // Filter weak points (accuracy < 85 and not dismissed)
+    val weakSentences = sentences.filter {
+        it.timesPracticed > 0 && it.lastAccuracy < 85 && !dismissedKeys.contains("sentence_${it.id}")
+    }
+    val weakTwisters = twisters.filter {
+        it.practiceCount > 0 && it.maxAccuracy < 85 && !dismissedKeys.contains("twister_${it.id}")
+    }
 
     LazyColumn(
         modifier = modifier
@@ -154,11 +160,13 @@ fun HomeScreen(
         }
 
         // --- WEAK POINTS (SPACED REPETITION) ---
-        if (weakSentences.isNotEmpty() || weakTwisters.isNotEmpty()) {
+        if (!isStruggledSectionDismissed && (weakSentences.isNotEmpty() || weakTwisters.isNotEmpty())) {
             item {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp, bottom = 8.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Warning,
@@ -172,8 +180,20 @@ fun HomeScreen(
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onBackground
-                        )
+                        ),
+                        modifier = Modifier.weight(1f)
                     )
+                    IconButton(
+                        onClick = { viewModel.dismissStruggledSection() },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close Struggled Sounds & Phrases",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
 
@@ -186,6 +206,9 @@ fun HomeScreen(
                     onClick = {
                         viewModel.activeDailySentence.value = item
                         viewModel.navigateTo(Screen.DailySentences)
+                    },
+                    onDismiss = {
+                        viewModel.dismissWeakItem("sentence_${item.id}")
                     }
                 )
             }
@@ -199,6 +222,9 @@ fun HomeScreen(
                     onClick = {
                         viewModel.activeTongueTwister.value = item
                         viewModel.navigateTo(Screen.TongueTwister)
+                    },
+                    onDismiss = {
+                        viewModel.dismissWeakItem("twister_${item.id}")
                     }
                 )
             }
@@ -661,7 +687,8 @@ fun WeakItemCard(
     subtext: String,
     accuracy: Int,
     focus: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onDismiss: (() -> Unit)? = null
 ) {
     Card(
         shape = RoundedCornerShape(16.dp),
@@ -673,7 +700,7 @@ fun WeakItemCard(
             .padding(vertical = 4.dp)
     ) {
         Row(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
@@ -683,7 +710,7 @@ fun WeakItemCard(
                     .background(Red500)
             )
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(10.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Row(
@@ -734,6 +761,21 @@ fun WeakItemCard(
                     color = Red900
                 )
             )
+
+            if (onDismiss != null) {
+                Spacer(modifier = Modifier.width(6.dp))
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Dismiss item",
+                        tint = Red700,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
         }
     }
 }

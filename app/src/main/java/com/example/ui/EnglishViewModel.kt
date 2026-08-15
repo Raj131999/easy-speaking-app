@@ -131,6 +131,23 @@ class EnglishViewModel(
     // For tracking general events
     val showRewardOverlay = MutableStateFlow<Int?>(null) // Contains XP amount if showing
 
+    // Struggled sounds & phrases dismissal states
+    val dismissedWeakItemKeys = MutableStateFlow<Set<String>>(emptySet())
+    val isStruggledSectionDismissed = MutableStateFlow(false)
+
+    fun dismissWeakItem(key: String) {
+        dismissedWeakItemKeys.value = dismissedWeakItemKeys.value + key
+    }
+
+    fun dismissStruggledSection() {
+        isStruggledSectionDismissed.value = true
+    }
+
+    fun restoreStruggledSection() {
+        isStruggledSectionDismissed.value = false
+        dismissedWeakItemKeys.value = emptySet()
+    }
+
     init {
         // Initialize Database Content on startup
         viewModelScope.launch {
@@ -356,11 +373,42 @@ class EnglishViewModel(
         updateTtsSettings()
     }
 
+    fun extractSpokenExample(text: String): String {
+        return text.lines()
+            .map { line ->
+                var cleaned = line.trim()
+                if (cleaned.startsWith("•") || cleaned.startsWith("-") || cleaned.startsWith("*")) {
+                    cleaned = cleaned.replaceFirst("^[•\\-*]\\s*".toRegex(), "").trim()
+                    if (cleaned.contains(":")) {
+                        val afterColon = cleaned.substringAfter(":").trim()
+                        if (afterColon.isNotBlank()) {
+                            cleaned = afterColon
+                        }
+                    }
+                } else if (cleaned.contains(":")) {
+                    val prefix = cleaned.substringBefore(":").trim()
+                    // If it's a topic header (short label without sentence terminators)
+                    if (prefix.length <= 60 && !prefix.contains(".") && !prefix.contains("?") && !prefix.contains("!")) {
+                        val afterColon = cleaned.substringAfter(":").trim()
+                        if (afterColon.isNotBlank()) {
+                            cleaned = afterColon
+                        }
+                    }
+                }
+                cleaned
+            }
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
+    }
+
     fun speak(text: String, forceStart: Boolean = false) {
         if (!ttsReady.value) {
             Log.e("EnglishViewModel", "TTS is not ready yet.")
             return
         }
+
+        val spokenText = extractSpokenExample(text)
+        if (spokenText.isBlank()) return
 
         val currentlySpeaking = isTtsSpeaking.value || (tts?.isSpeaking == true)
         if (currentlySpeaking && !forceStart) {
@@ -368,12 +416,12 @@ class EnglishViewModel(
         } else {
             stopTts()
             stopRecordedVoicePlayback()
-            currentTtsText.value = text
+            currentTtsText.value = spokenText
             isTtsSpeaking.value = true
             val params = Bundle()
             val utteranceId = "easy_speaking_tts_${System.currentTimeMillis()}"
             params.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId)
-            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
+            tts?.speak(spokenText, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
         }
     }
 
@@ -514,7 +562,7 @@ class EnglishViewModel(
             lastScore.value = finalScore
             scoredWords.value = analysis
 
-            // Track user XP progression
+            // Track user XP progression (Max once per lesson/exercise per calendar day)
             val xpAwarded = if (finalScore > 0) {
                 when {
                     finalScore >= 90 -> 15
@@ -526,8 +574,13 @@ class EnglishViewModel(
             }
 
             if (xpAwarded > 0) {
-                repository.awardXP(xpAwarded)
-                showRewardOverlay.value = xpAwarded
+                val itemKey = if (itemId > 0) "${itemType}_${itemId}" else "${itemType}_${targetText.trim().hashCode()}"
+                val xpClaimed = repository.awardLessonXp(itemKey, xpAwarded)
+                if (xpClaimed) {
+                    showRewardOverlay.value = xpAwarded
+                } else {
+                    showRewardOverlay.value = null
+                }
             } else {
                 showRewardOverlay.value = null
             }
@@ -723,8 +776,13 @@ class EnglishViewModel(
             // Dialogue complete!
             viewModelScope.launch {
                 repository.updateConversation(conv.copy(isCompleted = true))
-                repository.awardXP(30)
-                showRewardOverlay.value = 30
+                val itemKey = "conversation_${conv.id}"
+                val xpClaimed = repository.awardLessonXp(itemKey, 30)
+                if (xpClaimed) {
+                    showRewardOverlay.value = 30
+                } else {
+                    showRewardOverlay.value = null
+                }
                 navigateTo(Screen.Home)
             }
         }
@@ -780,6 +838,8 @@ class EnglishViewModel(
             tongueTwisters.value.forEach {
                 repository.updateTongueTwister(it.copy(isCompleted = false, maxAccuracy = 0, practiceCount = 0))
             }
+            repository.deleteAllDailyXpClaims()
+            restoreStruggledSection()
         }
     }
 

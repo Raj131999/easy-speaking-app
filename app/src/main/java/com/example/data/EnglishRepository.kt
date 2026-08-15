@@ -79,6 +79,7 @@ class EnglishRepository(private val englishDao: EnglishDao) {
                         explanation = jsonObject.getString("explanation"),
                         exampleText = jsonObject.getString("exampleText"),
                         exampleTranslation = jsonObject.optString("exampleTranslation", ""),
+                        quizQuestion = jsonObject.optString("quizQuestion", ""),
                         optionsString = jsonObject.optString("optionsString", ""),
                         correctOption = jsonObject.optString("correctOption", ""),
                         speechPrompt = jsonObject.getString("speechPrompt"),
@@ -296,5 +297,26 @@ class EnglishRepository(private val englishDao: EnglishDao) {
             todayXP = todayXp
         )
         englishDao.insertUserProgress(updatedProgress)
+    }
+
+    // Award XP only once per day per lesson/item
+    suspend fun awardLessonXp(itemKey: String, xpAmount: Int): Boolean {
+        if (xpAmount <= 0) return false
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val todayStr = sdf.format(Date())
+        val lastClaimDate = englishDao.getXpClaimDate(itemKey)
+        if (lastClaimDate == todayStr) {
+            // Already claimed XP for this lesson today
+            Log.d("EnglishRepository", "XP for $itemKey already claimed today ($todayStr). Skipping XP.")
+            return false
+        }
+        awardXP(xpAmount)
+        englishDao.insertXpClaim(DailyXpClaim(itemKey = itemKey, dateStr = todayStr))
+        Log.d("EnglishRepository", "Awarded $xpAmount XP for $itemKey on $todayStr")
+        return true
+    }
+
+    suspend fun deleteAllDailyXpClaims() {
+        englishDao.deleteAllXpClaims()
     }
 }
