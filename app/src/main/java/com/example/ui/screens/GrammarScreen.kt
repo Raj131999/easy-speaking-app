@@ -46,6 +46,7 @@ fun GrammarScreen(
     val lesson by viewModel.activeGrammarLesson.collectAsState()
     val lessons by viewModel.grammarLessons.collectAsState()
     val isRecording by viewModel.isRecording.collectAsState()
+    val isProcessing by viewModel.isProcessingSpeech.collectAsState()
     val isPlayingBack by viewModel.isPlayingBack.collectAsState()
     val isTtsSpeaking by viewModel.isTtsSpeaking.collectAsState()
     val lastScore by viewModel.lastScore.collectAsState()
@@ -979,6 +980,7 @@ fun GrammarScreen(
                                     Spacer(modifier = Modifier.height(12.dp))
                                     SpokenVoiceToTextCard(
                                         isRecording = isRecording,
+                                        isProcessing = isProcessing,
                                         recognizedText = recognizedText,
                                         hasEvaluated = lastScore != null
                                     )

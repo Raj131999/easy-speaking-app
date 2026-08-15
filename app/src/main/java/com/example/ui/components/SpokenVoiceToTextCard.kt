@@ -39,20 +39,21 @@ import com.example.ui.theme.TealPrimary
 @Composable
 fun SpokenVoiceToTextCard(
     isRecording: Boolean,
+    isProcessing: Boolean,
     recognizedText: String,
     hasEvaluated: Boolean,
     modifier: Modifier = Modifier
 ) {
-    // Show during active recording if anything is recognized, or after evaluation has completed
+    // Show during active recording, processing, or after evaluation has completed
     val isSpokenEmpty = recognizedText.trim().isEmpty()
 
-    if (isRecording || hasEvaluated) {
+    if (isRecording || isProcessing || hasEvaluated) {
         Box(
             modifier = modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(16.dp))
                 .background(
-                    if (isRecording) {
+                    if (isRecording || isProcessing) {
                         TealPrimary.copy(alpha = 0.08f)
                     } else if (isSpokenEmpty) {
                         MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
@@ -62,7 +63,7 @@ fun SpokenVoiceToTextCard(
                 )
                 .border(
                     width = 1.dp,
-                    color = if (isRecording) {
+                    color = if (isRecording || isProcessing) {
                         TealPrimary.copy(alpha = 0.35f)
                     } else if (isSpokenEmpty) {
                         MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
@@ -87,13 +88,13 @@ fun SpokenVoiceToTextCard(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Icon(
-                            imageVector = if (isSpokenEmpty && !isRecording) {
+                            imageVector = if (isSpokenEmpty && !isRecording && !isProcessing) {
                                 Icons.Default.VoiceOverOff
                             } else {
                                 Icons.Default.RecordVoiceOver
                             },
                             contentDescription = "Spoken voice transcript",
-                            tint = if (isRecording) {
+                            tint = if (isRecording || isProcessing) {
                                 Color(0xFFFF5252)
                             } else if (isSpokenEmpty) {
                                 MaterialTheme.colorScheme.onSurfaceVariant
@@ -103,11 +104,11 @@ fun SpokenVoiceToTextCard(
                             modifier = Modifier.size(18.dp)
                         )
                         Text(
-                            text = if (isRecording) "LIVE SPEECH CONVERSION:" else "YOU SPOKE:",
+                            text = if (isRecording || isProcessing) "LIVE SPEECH CONVERSION:" else "YOU SPOKE:",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 1.sp,
-                                color = if (isRecording) {
+                                color = if (isRecording || isProcessing) {
                                     Color(0xFFFF5252)
                                 } else if (isSpokenEmpty) {
                                     MaterialTheme.colorScheme.onSurfaceVariant
@@ -118,9 +119,9 @@ fun SpokenVoiceToTextCard(
                         )
                     }
 
-                    if (isRecording) {
+                    if (isRecording || isProcessing) {
                         Text(
-                            text = "Listening...",
+                            text = if (isProcessing) "Finalizing..." else "Listening...",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 color = Color(0xFFFF5252),
                                 fontStyle = FontStyle.Italic
@@ -133,10 +134,10 @@ fun SpokenVoiceToTextCard(
                     Text(
                         text = if (isRecording) {
                             "Listening to your voice..."
-                        } else if (hasEvaluated) {
-                            "Nothing is spoken"
-                        } else {
+                        } else if (isProcessing) {
                             "Processing your speech..."
+                        } else {
+                            "Nothing is spoken"
                         },
                         style = MaterialTheme.typography.bodyMedium.copy(
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),

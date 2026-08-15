@@ -16,6 +16,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.util.*
 
@@ -113,6 +115,8 @@ class EnglishViewModel(
     // Offline Speech Recognition State
     private var speechRecognizer: SpeechRecognizer? = null
     val recognizedText = MutableStateFlow("")
+    private var recognitionDeferred: CompletableDeferred<String>? = null
+    val isProcessingSpeech = MutableStateFlow(false)
 
     // Voice recording timing states
     private var recordStartTime: Long = 0
@@ -187,7 +191,13 @@ class EnglishViewModel(
     private fun initSpeechRecognizer() {
         try {
             if (SpeechRecognizer.isRecognitionAvailable(getApplication())) {
-                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(getApplication())
+                // Use on-device recognizer if API level is 31+ (Android 12) for faster offline support
+                speechRecognizer = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                    SpeechRecognizer.createOnDeviceSpeechRecognizer(getApplication())
+                } else {
+                    SpeechRecognizer.createSpeechRecognizer(getApplication())
+                }
+
                 speechRecognizer?.setRecognitionListener(object : RecognitionListener {
                     override fun onReadyForSpeech(params: Bundle?) {
                         Log.d("EnglishViewModel", "onReadyForSpeech")
@@ -214,14 +224,14 @@ class EnglishViewModel(
                             else -> "Unknown error: $error"
                         }
                         Log.e("EnglishViewModel", "SpeechRecognizer error: $message")
-                        // Don't clear recognizedText here as it might have partial results
+                        recognitionDeferred?.complete("")
                     }
                     override fun onResults(results: Bundle?) {
                         val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                        if (!matches.isNullOrEmpty()) {
-                            recognizedText.value = matches[0]
-                            Log.d("EnglishViewModel", "SpeechRecognizer final result: ${matches[0]}")
-                        }
+                        val text = matches?.getOrNull(0) ?: ""
+                        recognizedText.value = text
+                        Log.d("EnglishViewModel", "SpeechRecognizer final result: $text")
+                        recognitionDeferred?.complete(text)
                     }
                     override fun onPartialResults(partialResults: Bundle?) {
                         val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
@@ -527,6 +537,8 @@ class EnglishViewModel(
             lastScore.value = null
             scoredWords.value = emptyList()
             recognizedText.value = ""
+            isProcessingSpeech.value = false
+            recognitionDeferred = CompletableDeferred()
             currentTargetText.value = targetText
             maxRecordedAmplitude.value = 0
             synchronized(amplitudeSamples) {
@@ -566,16 +578,22 @@ class EnglishViewModel(
         if (!isRecording.value) return
         viewModelScope.launch {
             isRecording.value = false
+            isProcessingSpeech.value = true
             amplitudeJob?.cancel()
             
             // Stop recorder to finalize the audio file
             voiceRecorder.stopRecording()
             
-            // 3. CRITICAL: Allow the SpeechRecognizer to continue processing buffered audio for a bit longer
-            // to ensure "You Spoke" is populated even if recognition is slow.
-            // We wait 2 seconds total from the moment user hits stop.
-            delay(2000)
+            // 3. CRITICAL: Allow the SpeechRecognizer to continue processing buffered audio
             stopListeningOffline()
+
+            // Wait for SpeechRecognizer results with a timeout (e.g. 2.5 seconds)
+            val result = withTimeoutOrNull(2500) {
+                recognitionDeferred?.await()
+            } ?: recognizedText.value // fallback to partial if final never came
+            
+            recognizedText.value = result
+            isProcessingSpeech.value = false
 
             val recordDurationMs = System.currentTimeMillis() - recordStartTime
 

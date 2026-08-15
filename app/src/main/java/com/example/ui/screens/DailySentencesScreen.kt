@@ -44,6 +44,7 @@ fun DailySentencesScreen(
     val activeSentence by viewModel.activeDailySentence.collectAsState()
 
     val isRecording by viewModel.isRecording.collectAsState()
+    val isProcessing by viewModel.isProcessingSpeech.collectAsState()
     val isPlayingBack by viewModel.isPlayingBack.collectAsState()
     val isTtsSpeaking by viewModel.isTtsSpeaking.collectAsState()
     val lastScore by viewModel.lastScore.collectAsState()
@@ -422,6 +423,7 @@ fun DailySentencesScreen(
                             // Real-time Voice to Text Display
                             SpokenVoiceToTextCard(
                                 isRecording = isRecording,
+                                isProcessing = isProcessing,
                                 recognizedText = recognizedText,
                                 hasEvaluated = lastScore != null
                             )
