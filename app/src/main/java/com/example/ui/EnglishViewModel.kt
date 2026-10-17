@@ -2,7 +2,9 @@ package com.example.ui
 
 import android.app.Application
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
+import android.os.ParcelFileDescriptor
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -101,6 +103,7 @@ class EnglishViewModel(
 
     // Voice recording and play states
     private val voiceRecorder = VoiceRecorder(application)
+    private val recordedAudioStream = java.io.ByteArrayOutputStream()
     val isRecording = MutableStateFlow(false)
     val isPlayingBack = MutableStateFlow(false)
     val lastScore = MutableStateFlow<Int?>(null)
@@ -274,7 +277,14 @@ class EnglishViewModel(
                             }
                         }
                         override fun onBufferReceived(buffer: ByteArray?) {
-                            Log.d("SPEECH_DEBUG", "RecognitionListener: onBufferReceived size = ${buffer?.size ?: 0}")
+                            if (buffer != null && buffer.isNotEmpty()) {
+                                try {
+                                    recordedAudioStream.write(buffer)
+                                    Log.d("SPEECH_DEBUG", "RecognitionListener: onBufferReceived size = ${buffer.size} (total = ${recordedAudioStream.size()})")
+                                } catch (e: Exception) {
+                                    Log.e("SPEECH_DEBUG", "onBufferReceived error", e)
+                                }
+                            }
                         }
                         override fun onEndOfSpeech() {
                             Log.d("SPEECH_DEBUG", "RecognitionListener: onEndOfSpeech")
@@ -309,6 +319,32 @@ class EnglishViewModel(
                                 recognizedText.value = matches[0]
                                 Log.d("SPEECH_DEBUG", "RecognitionListener: final recognizedText set to '${matches[0]}'")
                             }
+
+                            try {
+                                if (results != null) {
+                                    for (key in results.keySet()) {
+                                        Log.d("SPEECH_DEBUG", "onResults Bundle key: $key = ${results.get(key)}")
+                                    }
+                                    @Suppress("DEPRECATION")
+                                    val audioUri = results.getParcelable<android.net.Uri>("android.speech.extra.AUDIO_SOURCE")
+                                        ?: results.getParcelable<android.net.Uri>("android.speech.extra.AUDIO")
+                                    val audioBytes = results.getByteArray("android.speech.extra.AUDIO_DATA")
+                                        ?: results.getByteArray("android.speech.extra.AUDIO")
+
+                                    Log.d("SPEECH_DEBUG", "RecognitionListener: onResults audioUri=$audioUri, audioBytes=${audioBytes?.size}, recordedAudioStream=${recordedAudioStream.size()}")
+
+                                    if (recordedAudioStream.size() > 0) {
+                                        voiceRecorder.saveRawPcmToWav(recordedAudioStream.toByteArray())
+                                    } else if (audioBytes != null && audioBytes.isNotEmpty()) {
+                                        voiceRecorder.saveRawPcmToWav(audioBytes)
+                                    } else if (audioUri != null) {
+                                        voiceRecorder.copyUriToWav(getApplication(), audioUri)
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                Log.e("SPEECH_DEBUG", "Error extracting audio from SpeechRecognizer results", e)
+                            }
+
                             speechResultDeferred?.complete(recognizedText.value)
                         }
                         override fun onPartialResults(partialResults: Bundle?) {
@@ -350,6 +386,8 @@ class EnglishViewModel(
                     putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getApplication<Application>().packageName)
                     putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                     putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                    putExtra("android.speech.extra.GET_AUDIO", true)
+                    putExtra("android.speech.extra.GET_AUDIO_FORMAT", "audio/AMR")
                 }
                 speechRecognizer?.startListening(intent)
                 Log.d("SPEECH_DEBUG", "startListeningOffline: startListening intent sent (langTag: $langTag)")
@@ -359,6 +397,41 @@ class EnglishViewModel(
             }
         }
     }
+
+    private suspend fun transcribePcmFile(pcmFile: File) {
+        try {
+            Log.d("SPEECH_DEBUG", "transcribePcmFile: starting for PCM file ${pcmFile.absolutePath} (${pcmFile.length()} bytes)")
+            try {
+                speechRecognizer?.cancel()
+            } catch (e: Exception) {}
+
+            if (speechRecognizer == null) {
+                initSpeechRecognizer()
+                delay(150)
+            }
+            val langTag = Locale.US.toLanguageTag()
+            val pfd = ParcelFileDescriptor.open(pcmFile, ParcelFileDescriptor.MODE_READ_ONLY)
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, langTag)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, langTag)
+                putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getApplication<Application>().packageName)
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                putExtra("android.speech.extra.AUDIO_SOURCE", pfd)
+                putExtra("android.speech.extra.AUDIO_SOURCE_ENCODING", 2)
+                putExtra("android.speech.extra.AUDIO_SOURCE_SAMPLING_RATE", 16000)
+                putExtra("android.speech.extra.AUDIO_SOURCE_CHANNELS", 1)
+            }
+            speechRecognizer?.startListening(intent)
+            Log.d("SPEECH_DEBUG", "transcribePcmFile: startListening intent sent with pfd: $pfd")
+        } catch (e: Exception) {
+            Log.e("SPEECH_DEBUG", "transcribePcmFile error", e)
+            speechResultDeferred?.complete("")
+        }
+    }
+
+
 
     private fun stopListeningOffline() {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
@@ -632,8 +705,28 @@ class EnglishViewModel(
             recordStartTime = System.currentTimeMillis()
             isRecording.value = true
 
-            // Start SpeechRecognizer as the single active microphone track
-            startListeningOffline()
+            // Clear previous recording so old audio is never replayed
+            voiceRecorder.clearRecordedFile()
+
+            // Start VoiceRecorder as sole microphone recorder while user speaks
+            val started = voiceRecorder.startRecording()
+            Log.d("SPEECH_DEBUG", "startRecording: VoiceRecorder started = $started")
+
+            if (started) {
+                amplitudeJob?.cancel()
+                amplitudeJob = viewModelScope.launch {
+                    while (isRecording.value) {
+                        delay(100)
+                        val amp = voiceRecorder.getMaxAmplitude()
+                        synchronized(amplitudeSamples) {
+                            amplitudeSamples.add(amp)
+                        }
+                        if (amp > maxRecordedAmplitude.value) {
+                            maxRecordedAmplitude.value = amp
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -641,17 +734,32 @@ class EnglishViewModel(
         viewModelScope.launch {
             Log.d("SPEECH_DEBUG", "=== STOP RECORDING PRACTICE === targetText: '$targetText', itemType: $itemType")
             isRecording.value = false
-            stopListeningOffline()
+            amplitudeJob?.cancel()
+
+            // Stop VoiceRecorder first so microphone is released and PCM file is finalized
+            voiceRecorder.stopRecording()
 
             val recordDurationMs = System.currentTimeMillis() - recordStartTime
-            Log.d("SPEECH_DEBUG", "stopRecording: Record duration = ${recordDurationMs}ms. Waiting up to 1500ms for speechResultDeferred...")
+            val pcmFile = voiceRecorder.getPcmFile()
+            Log.d("SPEECH_DEBUG", "stopRecording: Record duration = ${recordDurationMs}ms. PCM file = ${pcmFile?.absolutePath} (${pcmFile?.length()} bytes)")
 
-            // Wait up to 1500ms for SpeechRecognizer's final results callback to complete
+            // Reset recognizedText and prepare deferred result BEFORE starting PCM transcription
+            recognizedText.value = ""
+            speechResultDeferred = kotlinx.coroutines.CompletableDeferred()
+
+            // Transcribe speech using the pure PCM 16kHz audio file
+            if (pcmFile != null && pcmFile.length() > 0) {
+                transcribePcmFile(pcmFile)
+            } else {
+                startListeningOffline()
+            }
+
+            // Wait up to 3500ms for SpeechRecognizer's final transcription results to complete
             try {
-                kotlinx.coroutines.withTimeout(1500) {
+                kotlinx.coroutines.withTimeout(3500) {
                     speechResultDeferred?.await()
                 }
-                Log.d("SPEECH_DEBUG", "stopRecording: speechResultDeferred finished! Final recognizedText = '${recognizedText.value}'")
+                Log.d("SPEECH_DEBUG", "stopRecording: Transcription completed! Final recognizedText = '${recognizedText.value}'")
             } catch (e: Exception) {
                 Log.e("SPEECH_DEBUG", "stopRecording: Timed out waiting for speech recognition result! Latest recognizedText = '${recognizedText.value}'", e)
             }
@@ -771,11 +879,16 @@ class EnglishViewModel(
 
         stopTts()
 
-        if (voiceRecorder.getRecordedFile() != null) {
+        val recordedFile = voiceRecorder.getRecordedFile()
+        Log.d("SPEECH_DEBUG", "playRecordedVoice: recordedFile = ${recordedFile?.absolutePath}, length = ${recordedFile?.length()}")
+
+        if (recordedFile != null && recordedFile.length() > 44) {
             isPlayingBack.value = true
             voiceRecorder.startPlayback {
                 isPlayingBack.value = false
             }
+        } else if (currentTargetText.value.isNotEmpty()) {
+            speak(currentTargetText.value)
         }
     }
 
