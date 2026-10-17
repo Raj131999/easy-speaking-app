@@ -113,6 +113,7 @@ class EnglishViewModel(
     // Offline Speech Recognition State
     private var speechRecognizer: SpeechRecognizer? = null
     val recognizedText = MutableStateFlow("")
+    private var speechResultDeferred: kotlinx.coroutines.CompletableDeferred<String>? = null
 
     // Voice recording timing states
     private var recordStartTime: Long = 0
@@ -243,19 +244,40 @@ class EnglishViewModel(
     private fun initSpeechRecognizer() {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
             try {
-                if (SpeechRecognizer.isRecognitionAvailable(getApplication())) {
+                val available = SpeechRecognizer.isRecognitionAvailable(getApplication())
+                Log.d("SPEECH_DEBUG", "initSpeechRecognizer: SpeechRecognizer.isRecognitionAvailable = $available")
+                if (available) {
+                    try {
+                        speechRecognizer?.destroy()
+                    } catch (e: Exception) {
+                        // ignore
+                    }
                     speechRecognizer = SpeechRecognizer.createSpeechRecognizer(getApplication())
+                    Log.d("SPEECH_DEBUG", "initSpeechRecognizer: SpeechRecognizer created successfully: $speechRecognizer")
                     speechRecognizer?.setRecognitionListener(object : RecognitionListener {
                         override fun onReadyForSpeech(params: Bundle?) {
-                            Log.d("EnglishViewModel", "onReadyForSpeech")
+                            Log.d("SPEECH_DEBUG", "RecognitionListener: onReadyForSpeech")
                         }
                         override fun onBeginningOfSpeech() {
-                            Log.d("EnglishViewModel", "onBeginningOfSpeech")
+                            Log.d("SPEECH_DEBUG", "RecognitionListener: onBeginningOfSpeech")
                         }
-                        override fun onRmsChanged(rmsdB: Float) {}
-                        override fun onBufferReceived(buffer: ByteArray?) {}
+                        override fun onRmsChanged(rmsdB: Float) {
+                            if (rmsdB > 0.5f) {
+                                val scaledAmp = (rmsdB * 1200).toInt().coerceIn(100, 32767)
+                                synchronized(amplitudeSamples) {
+                                    amplitudeSamples.add(scaledAmp)
+                                }
+                                if (scaledAmp > maxRecordedAmplitude.value) {
+                                    maxRecordedAmplitude.value = scaledAmp
+                                }
+                                Log.d("SPEECH_DEBUG", "RecognitionListener: onRmsChanged audio level = $rmsdB (amp = $scaledAmp)")
+                            }
+                        }
+                        override fun onBufferReceived(buffer: ByteArray?) {
+                            Log.d("SPEECH_DEBUG", "RecognitionListener: onBufferReceived size = ${buffer?.size ?: 0}")
+                        }
                         override fun onEndOfSpeech() {
-                            Log.d("EnglishViewModel", "onEndOfSpeech")
+                            Log.d("SPEECH_DEBUG", "RecognitionListener: onEndOfSpeech")
                         }
                         override fun onError(error: Int) {
                             val errorName = when (error) {
@@ -270,34 +292,42 @@ class EnglishViewModel(
                                 SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "ERROR_SPEECH_TIMEOUT (6)"
                                 else -> "UNKNOWN_ERROR ($error)"
                             }
-                            // ERROR_NO_MATCH (7) and ERROR_SPEECH_TIMEOUT (6) are standard conversational events when no speech is detected
-                            if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT || error == SpeechRecognizer.ERROR_CLIENT) {
-                                Log.d("EnglishViewModel", "SpeechRecognizer non-fatal status: $errorName")
-                            } else {
-                                Log.w("EnglishViewModel", "SpeechRecognizer status: $errorName")
+                            Log.e("SPEECH_DEBUG", "RecognitionListener: onError: $errorName. Current recognizedText: '${recognizedText.value}'")
+                            if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY || error == SpeechRecognizer.ERROR_CLIENT) {
+                                try {
+                                    speechRecognizer?.cancel()
+                                    speechRecognizer?.destroy()
+                                } catch (e: Exception) {}
+                                speechRecognizer = null
                             }
+                            speechResultDeferred?.complete(recognizedText.value)
                         }
                         override fun onResults(results: Bundle?) {
                             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                            Log.d("SPEECH_DEBUG", "RecognitionListener: onResults matches = $matches")
                             if (!matches.isNullOrEmpty()) {
                                 recognizedText.value = matches[0]
-                                Log.d("EnglishViewModel", "SpeechRecognizer final result: ${matches[0]}")
+                                Log.d("SPEECH_DEBUG", "RecognitionListener: final recognizedText set to '${matches[0]}'")
                             }
+                            speechResultDeferred?.complete(recognizedText.value)
                         }
                         override fun onPartialResults(partialResults: Bundle?) {
                             val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                            Log.d("SPEECH_DEBUG", "RecognitionListener: onPartialResults matches = $matches")
                             if (!matches.isNullOrEmpty()) {
                                 recognizedText.value = matches[0]
-                                Log.d("EnglishViewModel", "SpeechRecognizer partial result: ${matches[0]}")
+                                Log.d("SPEECH_DEBUG", "RecognitionListener: partial recognizedText set to '${matches[0]}'")
                             }
                         }
-                        override fun onEvent(eventType: Int, params: Bundle?) {}
+                        override fun onEvent(eventType: Int, params: Bundle?) {
+                            Log.d("SPEECH_DEBUG", "RecognitionListener: onEvent type = $eventType")
+                        }
                     })
                 } else {
-                    Log.w("EnglishViewModel", "SpeechRecognizer not available on this device")
+                    Log.w("SPEECH_DEBUG", "initSpeechRecognizer: SpeechRecognizer NOT available on this device!")
                 }
             } catch (e: Exception) {
-                Log.e("EnglishViewModel", "Failed to initialize SpeechRecognizer", e)
+                Log.e("SPEECH_DEBUG", "initSpeechRecognizer: Failed to initialize SpeechRecognizer", e)
             }
         }
     }
@@ -305,21 +335,27 @@ class EnglishViewModel(
     private fun startListeningOffline() {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
             try {
+                Log.d("SPEECH_DEBUG", "startListeningOffline: starting...")
                 recognizedText.value = ""
+                speechResultDeferred = kotlinx.coroutines.CompletableDeferred()
                 if (speechRecognizer == null) {
                     initSpeechRecognizer()
-                    delay(200)
+                    delay(250)
                 }
+                val langTag = Locale.US.toLanguageTag()
                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toString())
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, langTag)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, langTag)
+                    putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getApplication<Application>().packageName)
                     putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                     putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
                 }
                 speechRecognizer?.startListening(intent)
-                Log.d("EnglishViewModel", "SpeechRecognizer started listening")
+                Log.d("SPEECH_DEBUG", "startListeningOffline: startListening intent sent (langTag: $langTag)")
             } catch (e: Exception) {
-                Log.e("EnglishViewModel", "Error starting SpeechRecognizer", e)
+                Log.e("SPEECH_DEBUG", "startListeningOffline: Error starting SpeechRecognizer", e)
+                speechResultDeferred?.complete("")
             }
         }
     }
@@ -327,10 +363,11 @@ class EnglishViewModel(
     private fun stopListeningOffline() {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
             try {
+                Log.d("SPEECH_DEBUG", "stopListeningOffline: calling stopListening()...")
                 speechRecognizer?.stopListening()
-                Log.d("EnglishViewModel", "SpeechRecognizer stopped listening")
             } catch (e: Exception) {
-                Log.d("EnglishViewModel", "SpeechRecognizer stop ignored: ${e.message}")
+                Log.e("SPEECH_DEBUG", "stopListeningOffline: Error stopping SpeechRecognizer: ${e.message}")
+                speechResultDeferred?.complete(recognizedText.value)
             }
         }
     }
@@ -584,6 +621,7 @@ class EnglishViewModel(
         stopTts()
         stopRecordedVoicePlayback()
         viewModelScope.launch {
+            Log.d("SPEECH_DEBUG", "=== START RECORDING PRACTICE === targetText: '$targetText'")
             lastScore.value = null
             scoredWords.value = emptyList()
             currentTargetText.value = targetText
@@ -592,45 +630,39 @@ class EnglishViewModel(
                 amplitudeSamples.clear()
             }
             recordStartTime = System.currentTimeMillis()
-            val started = voiceRecorder.startRecording()
-            isRecording.value = started
+            isRecording.value = true
 
-            if (started) {
-                startListeningOffline()
-                amplitudeJob?.cancel()
-                amplitudeJob = viewModelScope.launch {
-                    while (isRecording.value) {
-                        delay(100)
-                        val amp = voiceRecorder.getMaxAmplitude()
-                        synchronized(amplitudeSamples) {
-                            amplitudeSamples.add(amp)
-                        }
-                        if (amp > maxRecordedAmplitude.value) {
-                            maxRecordedAmplitude.value = amp
-                        }
-                    }
-                }
-            }
+            // Start SpeechRecognizer as the single active microphone track
+            startListeningOffline()
         }
     }
 
     fun stopRecording(targetText: String, itemType: String, itemId: Int) {
         viewModelScope.launch {
+            Log.d("SPEECH_DEBUG", "=== STOP RECORDING PRACTICE === targetText: '$targetText', itemType: $itemType")
             isRecording.value = false
-            amplitudeJob?.cancel()
             stopListeningOffline()
-            voiceRecorder.stopRecording()
 
             val recordDurationMs = System.currentTimeMillis() - recordStartTime
+            Log.d("SPEECH_DEBUG", "stopRecording: Record duration = ${recordDurationMs}ms. Waiting up to 1500ms for speechResultDeferred...")
 
-            // Brief processing delay for speech recognition or audio flush
-            delay(500)
+            // Wait up to 1500ms for SpeechRecognizer's final results callback to complete
+            try {
+                kotlinx.coroutines.withTimeout(1500) {
+                    speechResultDeferred?.await()
+                }
+                Log.d("SPEECH_DEBUG", "stopRecording: speechResultDeferred finished! Final recognizedText = '${recognizedText.value}'")
+            } catch (e: Exception) {
+                Log.e("SPEECH_DEBUG", "stopRecording: Timed out waiting for speech recognition result! Latest recognizedText = '${recognizedText.value}'", e)
+            }
 
             val cleanTarget = targetText.replace(Regex("[^a-zA-Z\\s]"), "")
             val words = cleanTarget.split(" ").filter { it.isNotEmpty() }
 
             val cleanRecognized = recognizedText.value.replace(Regex("[^a-zA-Z\\s]"), "").trim()
             val recognizedWords = cleanRecognized.split(" ").filter { it.isNotEmpty() }
+
+            Log.d("SPEECH_DEBUG", "stopRecording: Evaluation targetWords=$words, recognizedWords=$recognizedWords")
 
             val recordedFile = voiceRecorder.getRecordedFile()
             val fileSize = recordedFile?.length() ?: 0L
@@ -646,6 +678,7 @@ class EnglishViewModel(
             )
 
             val finalScore = score.coerceIn(0, 100)
+            Log.d("SPEECH_DEBUG", "stopRecording: Evaluation finalScore=$finalScore, analysis=$analysis")
             lastScore.value = finalScore
             scoredWords.value = analysis
 
