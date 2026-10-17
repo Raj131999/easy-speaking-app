@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -66,6 +67,10 @@ fun ConversationScreen(
     var selectedQuizAnswer by remember { mutableStateOf<String?>(null) }
     var showQuizFeedback by remember { mutableStateOf(false) }
     var selectedLevel by remember(conv) { mutableStateOf("Basic") }
+    var showLevelCompleteDialog by remember { mutableStateOf(false) }
+    var completedLevelName by remember { mutableStateOf("") }
+    var completedLevelXp by remember { mutableStateOf(0) }
+    var scrollToTargetIndex by remember { mutableStateOf<Int?>(null) }
 
     val activeDialogueJson = remember(conv, selectedLevel) {
         conv?.let { item ->
@@ -81,14 +86,34 @@ fun ConversationScreen(
         if (activeDialogueJson.isNotEmpty()) viewModel.parseDialogueJson(activeDialogueJson) else emptyList()
     }
 
-    // Auto-scroll map to next uncompleted conversation
-    LaunchedEffect(conv == null) {
+    val currentConvIndex = remember(conv, conversationsList) {
+        if (conv == null) -1 else conversationsList.indexOfFirst { it.id == conv!!.id }
+    }
+
+    val conversationsCompletedCount = remember(conversationsList) {
+        conversationsList.count { it.isCompleted }
+    }
+
+    // Auto-scroll map to next uncompleted conversation or explicit target
+    LaunchedEffect(conv == null, conversationsCompletedCount, scrollToTargetIndex) {
         if (conv == null && conversationsList.isNotEmpty()) {
-            val targetIdx = conversationsList.indexOfFirst { !it.isCompleted }.takeIf { it >= 0 } ?: 0
-            if (targetIdx > 0) {
+            val targetIdx = scrollToTargetIndex ?: conversationsList.indexOfFirst { !it.isCompleted }.takeIf { it >= 0 } ?: (conversationsList.size - 1)
+            if (targetIdx in conversationsList.indices) {
                 mapListState.animateScrollToItem(targetIdx)
             }
+            scrollToTargetIndex = null
         }
+    }
+
+    // Intercept back button when practicing conversation to return to that conversation on the map
+    BackHandler(enabled = (conv != null)) {
+        if (currentConvIndex >= 0) {
+            scrollToTargetIndex = currentConvIndex
+        }
+        viewModel.activeConversation.value = null
+        viewModel.lastScore.value = null
+        viewModel.scoredWords.value = emptyList()
+        viewModel.recognizedText.value = ""
     }
 
     // Auto-scroll list when the active index changes
@@ -98,11 +123,14 @@ fun ConversationScreen(
         }
     }
 
-    // Reset local quiz state when the active conversation changes
+    // Reset local state when the active conversation changes
     LaunchedEffect(conv) {
         showQuiz = false
         selectedQuizAnswer = null
         showQuizFeedback = false
+        showLevelCompleteDialog = false
+        completedLevelName = ""
+        completedLevelXp = 0
     }
 
     if (conv == null) {
@@ -176,8 +204,14 @@ fun ConversationScreen(
                 ) {
                     itemsIndexed(conversationsList) { index, conversation ->
                         val isCompleted = conversation.isCompleted
+                        val completedCount = listOf(conversation.isBasicCompleted, conversation.isIntermediateCompleted, conversation.isAdvancedCompleted).count { it }
                         val isFirstUncompleted = conversationsList.indexOfFirst { !it.isCompleted } == index
                         val isActive = isFirstUncompleted || (conversationsList.all { it.isCompleted } && index == 0)
+                        val statusText = when {
+                            isCompleted -> "Mastered (3/3 Levels)"
+                            completedCount > 0 -> "In Progress ($completedCount/3 Levels)"
+                            else -> "0/3 Levels Completed"
+                        }
 
                         val isLeft = index % 2 == 0
 
@@ -195,10 +229,11 @@ fun ConversationScreen(
                                     MapLocationCard(
                                         title = cleanConversationTitle(conversation.title),
                                         subtitle = conversation.scenario,
-                                        score = if (isCompleted) 100 else null, // Dialogues are perfect when completed
+                                        score = if (isCompleted) 100 else if (completedCount > 0) (completedCount * 100 / 3) else null,
                                         isCompleted = isCompleted,
                                         isActive = isActive,
-                                        accentColor = TealPrimary
+                                        accentColor = TealPrimary,
+                                        customStatusText = statusText
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(16.dp))
@@ -224,10 +259,11 @@ fun ConversationScreen(
                                     MapLocationCard(
                                         title = cleanConversationTitle(conversation.title),
                                         subtitle = conversation.scenario,
-                                        score = if (isCompleted) 100 else null,
+                                        score = if (isCompleted) 100 else if (completedCount > 0) (completedCount * 100 / 3) else null,
                                         isCompleted = isCompleted,
                                         isActive = isActive,
-                                        accentColor = TealPrimary
+                                        accentColor = TealPrimary,
+                                        customStatusText = statusText
                                     )
                                 }
                             }
@@ -247,7 +283,15 @@ fun ConversationScreen(
                 TopAppBar(
                     title = { Text("Roleplay Dialogue") },
                     navigationIcon = {
-                        IconButton(onClick = { viewModel.activeConversation.value = null }) {
+                        IconButton(onClick = {
+                            if (currentConvIndex >= 0) {
+                                scrollToTargetIndex = currentConvIndex
+                            }
+                            viewModel.activeConversation.value = null
+                            viewModel.lastScore.value = null
+                            viewModel.scoredWords.value = emptyList()
+                            viewModel.recognizedText.value = ""
+                        }) {
                             Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
                         }
                     },
@@ -308,15 +352,45 @@ fun ConversationScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
                 ) {
                     listOf("Basic", "Intermediate", "Advanced").forEach { lvl ->
+                        val isLvlDone = when (lvl) {
+                            "Basic" -> item.isBasicCompleted
+                            "Intermediate" -> item.isIntermediateCompleted
+                            "Advanced" -> item.isAdvancedCompleted
+                            else -> false
+                        }
+
                         FilterChip(
                             selected = selectedLevel == lvl,
                             onClick = {
                                 if (selectedLevel != lvl) {
                                     selectedLevel = lvl
                                     viewModel.activeConversationIndex.value = 0
+                                    showQuiz = false
+                                    selectedQuizAnswer = null
+                                    showQuizFeedback = false
+                                    viewModel.lastScore.value = null
+                                    viewModel.scoredWords.value = emptyList()
+                                    viewModel.recognizedText.value = ""
+                                    viewModel.triggerTtsForCurrentDialogue()
                                 }
                             },
-                            label = { Text(lvl, fontSize = 12.sp, fontWeight = FontWeight.Bold) },
+                            leadingIcon = if (isLvlDone) {
+                                {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = "$lvl Completed",
+                                        tint = Color(0xFF2ECC71),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            } else null,
+                            label = {
+                                Text(
+                                    text = lvl,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            },
                             shape = RoundedCornerShape(20.dp),
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = TealPrimary.copy(alpha = 0.2f),
@@ -569,7 +643,12 @@ fun ConversationScreen(
                                                 text = "$score%",
                                                 style = MaterialTheme.typography.bodyMedium.copy(
                                                     fontWeight = FontWeight.Bold,
-                                                    color = if (score >= 90) Color(0xFF2ECC71) else StreakGold
+                                                    color = when {
+                                                        score >= 90 -> Color(0xFF2ECC71)
+                                                        score >= 70 -> StreakGold
+                                                        score >= 50 -> Color(0xFFFF9800)
+                                                        else -> Color(0xFFFF5252)
+                                                    }
                                                 )
                                             )
                                         }
@@ -577,13 +656,37 @@ fun ConversationScreen(
                                         Spacer(modifier = Modifier.height(12.dp))
                                         Button(
                                             onClick = {
-                                                viewModel.advanceDialogue(activeDialogueJson)
-                                                viewModel.lastScore.value = null // clear score for next line
+                                                if (currentIndex < dialogueLines.size - 1) {
+                                                    viewModel.advanceDialogue(activeDialogueJson)
+                                                    viewModel.lastScore.value = null
+                                                    viewModel.scoredWords.value = emptyList()
+                                                    viewModel.recognizedText.value = ""
+                                                } else {
+                                                    if (item.comprehensionQuestion.isNotBlank()) {
+                                                        showQuiz = true
+                                                        viewModel.lastScore.value = null
+                                                        viewModel.scoredWords.value = emptyList()
+                                                        viewModel.recognizedText.value = ""
+                                                    } else {
+                                                        viewModel.completeConversationLevel(item.id, selectedLevel) { _, xp ->
+                                                            completedLevelName = selectedLevel
+                                                            completedLevelXp = xp
+                                                            showLevelCompleteDialog = true
+                                                            viewModel.lastScore.value = null
+                                                            viewModel.scoredWords.value = emptyList()
+                                                            viewModel.recognizedText.value = ""
+                                                        }
+                                                    }
+                                                }
                                             },
                                             colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Text("Perfect! Continue Conversation", color = Color.Black, fontWeight = FontWeight.Bold)
+                                            Text(
+                                                text = if (currentIndex < dialogueLines.size - 1) "Perfect! Continue Conversation" else if (item.comprehensionQuestion.isNotBlank()) "Continue to Quiz" else "Complete $selectedLevel Level",
+                                                color = Color.Black,
+                                                fontWeight = FontWeight.Bold
+                                            )
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Icon(imageVector = Icons.Default.ArrowForward, contentDescription = "Next", tint = Color.Black)
                                         }
@@ -622,13 +725,23 @@ fun ConversationScreen(
                                                 if (currentIndex < dialogueLines.size - 1) {
                                                     viewModel.advanceDialogue(activeDialogueJson)
                                                 } else {
-                                                    // Go to comprehension check
-                                                    showQuiz = true
+                                                    if (item.comprehensionQuestion.isNotBlank()) {
+                                                        showQuiz = true
+                                                    } else {
+                                                        viewModel.completeConversationLevel(item.id, selectedLevel) { _, xp ->
+                                                            completedLevelName = selectedLevel
+                                                            completedLevelXp = xp
+                                                            showLevelCompleteDialog = true
+                                                        }
+                                                    }
                                                 }
                                             },
                                             colors = ButtonDefaults.buttonColors(containerColor = TealPrimary)
                                         ) {
-                                            Text("Next Line", color = Color.Black)
+                                            Text(
+                                                text = if (currentIndex < dialogueLines.size - 1) "Next Line" else if (item.comprehensionQuestion.isNotBlank()) "Quiz" else "Complete",
+                                                color = Color.Black
+                                            )
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Icon(imageVector = Icons.Default.ArrowForward, contentDescription = "Next", tint = Color.Black)
                                         }
@@ -747,6 +860,13 @@ fun ConversationScreen(
 
                             Spacer(modifier = Modifier.weight(1f))
 
+                            val expectedXp = when (selectedLevel) {
+                                "Basic" -> 20
+                                "Intermediate" -> 25
+                                "Advanced" -> 35
+                                else -> 20
+                            }
+
                             if (!showQuizFeedback) {
                                 Button(
                                     onClick = { showQuizFeedback = true },
@@ -761,20 +881,217 @@ fun ConversationScreen(
                             } else {
                                 Button(
                                     onClick = {
-                                        // Finalize Conversation
-                                        viewModel.advanceDialogue(activeDialogueJson)
+                                        viewModel.completeConversationLevel(item.id, selectedLevel) { _, xp ->
+                                            completedLevelName = selectedLevel
+                                            completedLevelXp = xp
+                                            showLevelCompleteDialog = true
+                                        }
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(50.dp)
                                 ) {
-                                    Text("Complete Lesson & Claim 30 XP", color = Color.Black, fontWeight = FontWeight.Bold)
+                                    Text("Complete $selectedLevel Level (+$expectedXp XP)", color = Color.Black, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
                     }
                 }
+            }
+
+            // Level Completion Dialog
+            if (showLevelCompleteDialog) {
+                val currentItem = conversationsList.find { it.id == item.id } ?: item
+                val isBasicDone = currentItem.isBasicCompleted || completedLevelName == "Basic"
+                val isInterDone = currentItem.isIntermediateCompleted || completedLevelName == "Intermediate"
+                val isAdvDone = currentItem.isAdvancedCompleted || completedLevelName == "Advanced"
+                val isAllDone = isBasicDone && isInterDone && isAdvDone
+
+                val nextLevelToSuggest = when (completedLevelName) {
+                    "Basic" -> if (!isInterDone) "Intermediate" else if (!isAdvDone) "Advanced" else null
+                    "Intermediate" -> if (!isAdvDone) "Advanced" else if (!isBasicDone) "Basic" else null
+                    "Advanced" -> if (!isBasicDone) "Basic" else if (!isInterDone) "Intermediate" else null
+                    else -> null
+                }
+
+                AlertDialog(
+                    onDismissRequest = {
+                        showLevelCompleteDialog = false
+                        viewModel.activeConversation.value = null
+                    },
+                    shape = RoundedCornerShape(24.dp),
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    title = {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isAllDone) StreakGold.copy(alpha = 0.2f) else TealPrimary.copy(alpha = 0.2f))
+                            ) {
+                                Icon(
+                                    imageVector = if (isAllDone) Icons.Default.EmojiEvents else Icons.Default.CheckCircle,
+                                    contentDescription = "Complete",
+                                    tint = if (isAllDone) StreakGold else TealPrimary,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = if (isAllDone) "Topic Mastered!" else "$completedLevelName Level Completed!",
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center
+                                )
+                            )
+                        }
+                    },
+                    text = {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Card(
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = StreakGold.copy(alpha = 0.12f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Star,
+                                        contentDescription = "XP",
+                                        tint = StreakGold,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "+$completedLevelXp XP Awarded",
+                                        style = MaterialTheme.typography.titleMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = StreakGold
+                                        )
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = "Topic Completion Progress:",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                listOf(
+                                    Triple("Basic", isBasicDone, 20),
+                                    Triple("Intermediate", isInterDone, 25),
+                                    Triple("Advanced", isAdvDone, 35)
+                                ).forEach { (lvl, isDone, xp) ->
+                                    Card(
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = if (isDone) Color(0xFF2ECC71).copy(alpha = 0.12f) else MaterialTheme.colorScheme.background
+                                        ),
+                                        border = if (isDone) BorderStroke(1.dp, Color(0xFF2ECC71)) else null
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(8.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                             Icon(
+                                                imageVector = if (isDone) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                                contentDescription = lvl,
+                                                tint = if (isDone) Color(0xFF2ECC71) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = lvl,
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 11.sp
+                                                )
+                                            )
+                                            Text(
+                                                text = if (isDone) "Done" else "${xp}XP",
+                                                style = MaterialTheme.typography.bodySmall.copy(
+                                                    fontSize = 10.sp,
+                                                    color = if (isDone) Color(0xFF2ECC71) else MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (isAllDone) {
+                                Text(
+                                    text = "All 3 levels completed! This conversation topic is now fully marked as completed on your map.",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                                    textAlign = TextAlign.Center
+                                )
+                            } else if (nextLevelToSuggest != null) {
+                                Text(
+                                    text = "Complete Basic, Intermediate, and Advanced levels to mark this entire topic as completed.",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (nextLevelToSuggest != null && !isAllDone) {
+                                Button(
+                                    onClick = {
+                                        showLevelCompleteDialog = false
+                                        selectedLevel = nextLevelToSuggest
+                                        viewModel.activeConversationIndex.value = 0
+                                        showQuiz = false
+                                        selectedQuizAnswer = null
+                                        showQuizFeedback = false
+                                        viewModel.lastScore.value = null
+                                        viewModel.scoredWords.value = emptyList()
+                                        viewModel.recognizedText.value = ""
+                                        viewModel.triggerTtsForCurrentDialogue()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Next Level: $nextLevelToSuggest", color = Color.Black, fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Icon(imageVector = Icons.Default.ArrowForward, contentDescription = null, tint = Color.Black)
+                                }
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    showLevelCompleteDialog = false
+                                    viewModel.activeConversation.value = null
+                                    viewModel.lastScore.value = null
+                                    viewModel.scoredWords.value = emptyList()
+                                    viewModel.recognizedText.value = ""
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(if (isAllDone) "Return to Map" else "Save & Return to Map")
+                            }
+                        }
+                    }
+                )
             }
         } ?: Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("No active conversation selected.")

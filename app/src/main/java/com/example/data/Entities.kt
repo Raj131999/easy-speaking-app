@@ -49,6 +49,9 @@ data class ConversationSet(
     val comprehensionQuestion: String = "",
     val comprehensionOptions: String = "",
     val comprehensionAnswer: String = "",
+    val isBasicCompleted: Boolean = false,
+    val isIntermediateCompleted: Boolean = false,
+    val isAdvancedCompleted: Boolean = false,
     val isCompleted: Boolean = false
 )
 

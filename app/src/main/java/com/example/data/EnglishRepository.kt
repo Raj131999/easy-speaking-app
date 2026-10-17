@@ -110,7 +110,12 @@ class EnglishRepository(private val englishDao: EnglishDao) {
         val updatedConvs = InitialData.conversations.map { initConv ->
             val existing = convs.find { it.id == initConv.id }
             if (existing != null) {
-                initConv.copy(isCompleted = existing.isCompleted)
+                initConv.copy(
+                    isBasicCompleted = existing.isBasicCompleted,
+                    isIntermediateCompleted = existing.isIntermediateCompleted,
+                    isAdvancedCompleted = existing.isAdvancedCompleted,
+                    isCompleted = existing.isCompleted
+                )
             } else {
                 initConv
             }

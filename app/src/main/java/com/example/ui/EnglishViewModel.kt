@@ -131,6 +131,62 @@ class EnglishViewModel(
     // For tracking general events
     val showRewardOverlay = MutableStateFlow<Int?>(null) // Contains XP amount if showing
 
+    // Review Session States
+    val isReviewSession = MutableStateFlow(false)
+    val reviewSentencesList = MutableStateFlow<List<DailySentence>>(emptyList())
+    val currentReviewIndex = MutableStateFlow(0)
+
+    fun startReviewSession(targetSentence: DailySentence? = null) {
+        viewModelScope.launch {
+            val allSentences = repository.dailySentences.firstOrNull() ?: dailySentences.value
+            val currentTime = System.currentTimeMillis()
+
+            val dueOrWeak = allSentences.filter { sentence ->
+                // Sentences scheduled for spaced repetition review or with low accuracy
+                (sentence.reviewScheduledTime in 1..currentTime) || 
+                (sentence.timesPracticed > 0 && sentence.lastAccuracy in 1..84)
+            }.sortedWith(
+                compareBy<DailySentence> { it.lastAccuracy }
+                    .thenBy { it.reviewScheduledTime }
+            )
+
+            val sessionList = if (targetSentence != null) {
+                val remaining = dueOrWeak.filter { it.id != targetSentence.id }
+                listOf(targetSentence) + remaining.take(4)
+            } else if (dueOrWeak.isNotEmpty()) {
+                dueOrWeak.take(5)
+            } else {
+                val practiced = allSentences.filter { it.timesPracticed > 0 }
+                if (practiced.isNotEmpty()) {
+                    practiced.sortedBy { it.lastAccuracy }.take(5)
+                } else {
+                    allSentences.take(5)
+                }
+            }
+
+            if (sessionList.isNotEmpty()) {
+                isReviewSession.value = true
+                reviewSentencesList.value = sessionList
+                currentReviewIndex.value = 0
+                activeDailySentence.value = sessionList.first()
+                lastScore.value = null
+                scoredWords.value = emptyList()
+                recognizedText.value = ""
+                navigateTo(Screen.DailySentences)
+            }
+        }
+    }
+
+    fun endReviewSession() {
+        isReviewSession.value = false
+        reviewSentencesList.value = emptyList()
+        currentReviewIndex.value = 0
+        activeDailySentence.value = null
+        lastScore.value = null
+        scoredWords.value = emptyList()
+        recognizedText.value = ""
+    }
+
     // Struggled sounds & phrases dismissal states
     val dismissedWeakItemKeys = MutableStateFlow<Set<String>>(emptySet())
     val isStruggledSectionDismissed = MutableStateFlow(false)
@@ -202,7 +258,24 @@ class EnglishViewModel(
                             Log.d("EnglishViewModel", "onEndOfSpeech")
                         }
                         override fun onError(error: Int) {
-                            Log.e("EnglishViewModel", "SpeechRecognizer error: $error")
+                            val errorName = when (error) {
+                                SpeechRecognizer.ERROR_AUDIO -> "ERROR_AUDIO (3)"
+                                SpeechRecognizer.ERROR_CLIENT -> "ERROR_CLIENT (5)"
+                                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "ERROR_INSUFFICIENT_PERMISSIONS (9)"
+                                SpeechRecognizer.ERROR_NETWORK -> "ERROR_NETWORK (2)"
+                                SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "ERROR_NETWORK_TIMEOUT (1)"
+                                SpeechRecognizer.ERROR_NO_MATCH -> "ERROR_NO_MATCH (7)"
+                                SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "ERROR_RECOGNIZER_BUSY (8)"
+                                SpeechRecognizer.ERROR_SERVER -> "ERROR_SERVER (4)"
+                                SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "ERROR_SPEECH_TIMEOUT (6)"
+                                else -> "UNKNOWN_ERROR ($error)"
+                            }
+                            // ERROR_NO_MATCH (7) and ERROR_SPEECH_TIMEOUT (6) are standard conversational events when no speech is detected
+                            if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT || error == SpeechRecognizer.ERROR_CLIENT) {
+                                Log.d("EnglishViewModel", "SpeechRecognizer non-fatal status: $errorName")
+                            } else {
+                                Log.w("EnglishViewModel", "SpeechRecognizer status: $errorName")
+                            }
                         }
                         override fun onResults(results: Bundle?) {
                             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
@@ -257,7 +330,7 @@ class EnglishViewModel(
                 speechRecognizer?.stopListening()
                 Log.d("EnglishViewModel", "SpeechRecognizer stopped listening")
             } catch (e: Exception) {
-                Log.e("EnglishViewModel", "Error stopping SpeechRecognizer", e)
+                Log.d("EnglishViewModel", "SpeechRecognizer stop ignored: ${e.message}")
             }
         }
     }
@@ -436,6 +509,11 @@ class EnglishViewModel(
     }
 
     fun navigateTo(screen: Screen) {
+        if (screen != Screen.DailySentences) {
+            isReviewSession.value = false
+            reviewSentencesList.value = emptyList()
+            currentReviewIndex.value = 0
+        }
         if (screen == Screen.Home) {
             screenStack.value = listOf(Screen.Home)
         } else {
@@ -460,7 +538,16 @@ class EnglishViewModel(
     }
 
     fun goBack(): Boolean {
-        // 1. Check if an active practice item is open
+        // 1. Check if review session is active
+        if (isReviewSession.value) {
+            endReviewSession()
+            if (screenStack.value.lastOrNull() == Screen.DailySentences) {
+                screenStack.value = screenStack.value.dropLast(1)
+            }
+            return true
+        }
+
+        // 2. Check if an active practice item is open
         if (activeGrammarLesson.value != null) {
             activeGrammarLesson.value = null
             return true
@@ -482,7 +569,7 @@ class EnglishViewModel(
             return true
         }
 
-        // 2. Pop screen stack if deeper than root
+        // 3. Pop screen stack if deeper than root
         val currentList = screenStack.value
         if (currentList.size > 1) {
             screenStack.value = currentList.dropLast(1)
@@ -563,7 +650,8 @@ class EnglishViewModel(
             scoredWords.value = analysis
 
             // Track user XP progression (Max once per lesson/exercise per calendar day)
-            val xpAwarded = if (finalScore > 0) {
+            // Conversations only award XP upon completing all sentences in a level, not per sentence
+            val xpAwarded = if (finalScore > 0 && itemType != "conversation") {
                 when {
                     finalScore >= 90 -> 15
                     finalScore >= 80 -> 10
@@ -632,99 +720,14 @@ class EnglishViewModel(
         amplitudeSamples: List<Int>,
         maxAmplitude: Int
     ): Pair<Int, List<Pair<String, WordScoreType>>> {
-        if (targetWords.isEmpty()) {
-            return Pair(0, emptyList())
-        }
-
-        // 1. If SpeechRecognizer returned recognized text, combine text alignment + audio metrics
-        if (recognizedWords.isNotEmpty()) {
-            val (textScore, wordAnalysis) = alignAndScore(targetWords, recognizedWords)
-            val activeSpeechCount = amplitudeSamples.count { it > 300 }
-            val finalScore = if (activeSpeechCount > 0 && maxAmplitude >= 300) {
-                (textScore * 0.85f + 15f).toInt().coerceAtMost(100)
-            } else {
-                textScore
-            }
-            return Pair(finalScore, wordAnalysis)
-        }
-
-        // 2. SpeechRecognizer text is empty (e.g. error / offline / mic channel held by recorder).
-        // Check if user actually spoke into the microphone!
-        val activeSpeechSamples = amplitudeSamples.filter { it >= 350 }
-        val maxAmp = if (amplitudeSamples.isNotEmpty()) amplitudeSamples.maxOrNull() ?: maxAmplitude else maxAmplitude
-
-        // If file is empty, duration too short, or mic signal is silent (< 350 amp), NO speech was captured
-        if (recordedFileSize < 1200 || recordDurationMs < 350 || maxAmp < 350 || activeSpeechSamples.isEmpty()) {
-            Log.d("EnglishViewModel", "No voice sound detected. Silence score = 0.")
+        if (targetWords.isEmpty() || recognizedWords.isEmpty()) {
+            // If no speech was spoken/recognized, score is strictly 0 and all words are marked Incorrect (Red)
             val silentAnalysis = targetWords.map { Pair(it, WordScoreType.Incorrect) }
             return Pair(0, silentAnalysis)
         }
 
-        // 3. REAL VOICE INPUT DETECTED: Compute pronunciation score strictly based on recorded audio input
-        val totalWords = targetWords.size
-        val expectedDurationMs = totalWords * 350L + 600L
-
-        // Volume & Clarity Score (35%)
-        val avgSpeechAmp = activeSpeechSamples.average().toFloat()
-        val volumeScore = when {
-            avgSpeechAmp >= 3500f -> 95f
-            avgSpeechAmp >= 2000f -> 88f
-            avgSpeechAmp >= 1000f -> 80f
-            avgSpeechAmp >= 500f -> 70f
-            else -> 60f
-        }
-
-        // Pace & Duration Match Score (35%)
-        val actualSpeechDurationMs = (activeSpeechSamples.size * 100L).coerceAtLeast(recordDurationMs)
-        val paceRatio = actualSpeechDurationMs.toFloat() / expectedDurationMs.toFloat()
-        val paceScore = when {
-            paceRatio in 0.65f..1.4f -> 95f
-            paceRatio in 0.5f..1.8f -> 85f
-            paceRatio in 0.35f..2.2f -> 72f
-            else -> 55f
-        }
-
-        // Articulation & Vocal Energy Dynamics Score (30%)
-        val mean = avgSpeechAmp
-        val variance = activeSpeechSamples.map { (it - mean) * (it - mean) }.average()
-        val stdDev = Math.sqrt(variance).toFloat()
-        val articulationScore = when {
-            stdDev >= 1200f -> 95f
-            stdDev >= 600f -> 85f
-            stdDev >= 250f -> 75f
-            else -> 60f
-        }
-
-        val computedAcousticScore = (volumeScore * 0.35f + paceScore * 0.35f + articulationScore * 0.30f).toInt().coerceIn(50, 98)
-
-        // Per-word timeline segmentation and scoring based on recorded voice energy
-        val wordAnalysis = mutableListOf<Pair<String, WordScoreType>>()
-        val samplesPerWord = (amplitudeSamples.size.toFloat() / totalWords.toFloat()).coerceAtLeast(1f)
-
-        for (i in 0 until totalWords) {
-            val word = targetWords[i]
-            val startSample = (i * samplesPerWord).toInt().coerceIn(0, amplitudeSamples.size)
-            val endSample = ((i + 1) * samplesPerWord).toInt().coerceIn(startSample, amplitudeSamples.size)
-
-            val wordSlice = if (startSample < endSample && startSample < amplitudeSamples.size) {
-                amplitudeSamples.subList(startSample, endSample)
-            } else {
-                emptyList()
-            }
-
-            val sliceMax = if (wordSlice.isNotEmpty()) wordSlice.maxOrNull() ?: 0 else maxAmp
-            val sliceAvg = if (wordSlice.isNotEmpty()) wordSlice.average() else 0.0
-
-            val wordStatus = when {
-                sliceMax >= 800 || sliceAvg >= 400 -> WordScoreType.Correct
-                sliceMax >= 350 || sliceAvg >= 200 -> WordScoreType.Hesitant
-                else -> WordScoreType.Incorrect
-            }
-            wordAnalysis.add(Pair(word, wordStatus))
-        }
-
-        Log.d("EnglishViewModel", "Voice input acoustic evaluation score: $computedAcousticScore for $totalWords words")
-        return Pair(computedAcousticScore, wordAnalysis)
+        // Compute pronunciation score strictly based on recognized spoken words vs target words
+        return alignAndScore(targetWords, recognizedWords)
     }
 
     fun playRecordedVoice() {
@@ -772,19 +775,42 @@ class EnglishViewModel(
         if (activeConversationIndex.value < totalLines - 1) {
             activeConversationIndex.value++
             triggerTtsForCurrentDialogue(jsonToUse)
-        } else {
-            // Dialogue complete!
-            viewModelScope.launch {
-                repository.updateConversation(conv.copy(isCompleted = true))
-                val itemKey = "conversation_${conv.id}"
-                val xpClaimed = repository.awardLessonXp(itemKey, 30)
-                if (xpClaimed) {
-                    showRewardOverlay.value = 30
-                } else {
-                    showRewardOverlay.value = null
-                }
-                navigateTo(Screen.Home)
+        }
+    }
+
+    fun completeConversationLevel(convId: Int, level: String, onCompleted: (Boolean, Int) -> Unit = { _, _ -> }) {
+        viewModelScope.launch {
+            val conv = conversations.value.find { it.id == convId } ?: activeConversation.value ?: return@launch
+            val isBasic = level.equals("Basic", ignoreCase = true)
+            val isInter = level.equals("Intermediate", ignoreCase = true)
+            val isAdv = level.equals("Advanced", ignoreCase = true)
+
+            val newBasic = if (isBasic) true else conv.isBasicCompleted
+            val newInter = if (isInter) true else conv.isIntermediateCompleted
+            val newAdv = if (isAdv) true else conv.isAdvancedCompleted
+            val allCompleted = newBasic && newInter && newAdv
+
+            val updatedConv = conv.copy(
+                isBasicCompleted = newBasic,
+                isIntermediateCompleted = newInter,
+                isAdvancedCompleted = newAdv,
+                isCompleted = allCompleted
+            )
+            repository.updateConversation(updatedConv)
+            activeConversation.value = updatedConv
+
+            val xpAmount = when {
+                isBasic -> 20
+                isInter -> 25
+                isAdv -> 35
+                else -> 20
             }
+            val itemKey = "conversation_${conv.id}_${level.lowercase()}"
+            val xpClaimed = repository.awardLessonXp(itemKey, xpAmount)
+            if (xpClaimed) {
+                showRewardOverlay.value = xpAmount
+            }
+            onCompleted(allCompleted, xpAmount)
         }
     }
 
@@ -827,7 +853,12 @@ class EnglishViewModel(
                 repository.updateGrammarLesson(it.copy(isCompleted = false))
             }
             conversations.value.forEach {
-                repository.updateConversation(it.copy(isCompleted = false))
+                repository.updateConversation(it.copy(
+                    isBasicCompleted = false,
+                    isIntermediateCompleted = false,
+                    isAdvancedCompleted = false,
+                    isCompleted = false
+                ))
             }
             dailySentences.value.forEach {
                 repository.updateDailySentence(it.copy(isCompleted = false, timesPracticed = 0, lastAccuracy = 0, consecutiveCorrect = 0, reviewScheduledTime = 0))
@@ -853,6 +884,12 @@ class EnglishViewModel(
     override fun onCleared() {
         super.onCleared()
         tts?.shutdown()
+        try {
+            speechRecognizer?.destroy()
+        } catch (e: Exception) {
+            // ignore
+        }
+        speechRecognizer = null
         voiceRecorder.stopRecording()
         voiceRecorder.stopPlayback()
     }

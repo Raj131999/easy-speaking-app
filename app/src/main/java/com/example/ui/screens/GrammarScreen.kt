@@ -68,6 +68,7 @@ fun GrammarScreen(
         usefulLessons.groupBy { it.category }
     }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
+    var scrollToTargetIndex by remember { mutableStateOf<Int?>(null) }
 
     // LazyListStates for maps
     val speechMapListState = rememberLazyListState()
@@ -87,37 +88,76 @@ fun GrammarScreen(
     val hasNextLesson = currentLessonIndex in 0 until (currentLessonList.size - 1)
     val nextLesson = if (hasNextLesson) currentLessonList[currentLessonIndex + 1] else null
 
-    // Auto scroll map to next uncompleted lesson
-    LaunchedEffect(lesson == null, selectedTab) {
-        if (lesson == null && selectedTab == 0 && speechLessons.isNotEmpty()) {
-            val targetIdx = speechLessons.indexOfFirst { !it.isCompleted }.takeIf { it >= 0 } ?: 0
-            if (targetIdx > 0) {
-                speechMapListState.animateScrollToItem(targetIdx)
-            }
+    val speechCompletedCount = speechLessons.count { it.isCompleted }
+    val categoryCompletedCount = remember(groupedUsefulLessons, selectedCategory) {
+        if (selectedCategory != null) {
+            (groupedUsefulLessons[selectedCategory] ?: emptyList()).count { it.isCompleted }
+        } else {
+            groupedUsefulLessons.values.flatten().count { it.isCompleted }
         }
     }
 
-    LaunchedEffect(lesson == null, selectedTab, selectedCategory) {
+    // Auto scroll map to next uncompleted lesson or explicit target lesson
+    LaunchedEffect(lesson == null, selectedTab, speechCompletedCount, scrollToTargetIndex) {
+        if (lesson == null && selectedTab == 0 && speechLessons.isNotEmpty()) {
+            val targetIdx = scrollToTargetIndex ?: speechLessons.indexOfFirst { !it.isCompleted }.takeIf { it >= 0 } ?: (speechLessons.size - 1)
+            if (targetIdx in speechLessons.indices) {
+                speechMapListState.animateScrollToItem(targetIdx)
+            }
+            scrollToTargetIndex = null
+        }
+    }
+
+    LaunchedEffect(lesson == null, selectedTab, selectedCategory, categoryCompletedCount, scrollToTargetIndex) {
         if (lesson == null && selectedTab == 1 && selectedCategory != null) {
             val catLessons = groupedUsefulLessons[selectedCategory] ?: emptyList()
-            val targetIdx = catLessons.indexOfFirst { !it.isCompleted }.takeIf { it >= 0 } ?: 0
-            if (targetIdx > 0) {
-                categoryLessonsMapListState.animateScrollToItem(targetIdx)
+            if (catLessons.isNotEmpty()) {
+                val targetIdx = scrollToTargetIndex ?: catLessons.indexOfFirst { !it.isCompleted }.takeIf { it >= 0 } ?: (catLessons.size - 1)
+                if (targetIdx in catLessons.indices) {
+                    categoryLessonsMapListState.animateScrollToItem(targetIdx)
+                }
             }
+            scrollToTargetIndex = null
         } else if (lesson == null && selectedTab == 1 && selectedCategory == null) {
             val categoryList = groupedUsefulLessons.keys.toList()
             val targetIdx = categoryList.indexOfFirst { cat ->
                 val list = groupedUsefulLessons[cat] ?: emptyList()
                 list.isNotEmpty() && !list.all { it.isCompleted }
             }.takeIf { it >= 0 } ?: 0
-            if (targetIdx > 0) {
+            if (targetIdx in categoryList.indices) {
                 categoryMapListState.animateScrollToItem(targetIdx)
             }
+            scrollToTargetIndex = null
         }
+    }
+
+    // Intercept back button when practicing a lesson to return to that lesson on the map
+    BackHandler(enabled = (lesson != null)) {
+        val activeItem = lesson
+        if (activeItem != null) {
+            if (activeItem.id <= 15) {
+                selectedTab = 0
+            } else {
+                selectedTab = 1
+                selectedCategory = activeItem.category
+            }
+            if (currentLessonIndex >= 0) {
+                scrollToTargetIndex = currentLessonIndex
+            }
+        }
+        viewModel.activeGrammarLesson.value = null
+        viewModel.lastScore.value = null
+        viewModel.scoredWords.value = emptyList()
+        viewModel.recognizedText.value = ""
     }
 
     // Intercept back button when in category view to return to categories list
     BackHandler(enabled = (lesson == null && selectedCategory != null)) {
+        val categoryList = groupedUsefulLessons.keys.toList()
+        val catIdx = categoryList.indexOf(selectedCategory).takeIf { it >= 0 }
+        if (catIdx != null) {
+            scrollToTargetIndex = catIdx
+        }
         selectedCategory = null
     }
 
@@ -433,7 +473,14 @@ fun GrammarScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 IconButton(
-                                    onClick = { selectedCategory = null },
+                                    onClick = {
+                                        val categoryList = groupedUsefulLessons.keys.toList()
+                                        val catIdx = categoryList.indexOf(selectedCategory).takeIf { it >= 0 }
+                                        if (catIdx != null) {
+                                            scrollToTargetIndex = catIdx
+                                        }
+                                        selectedCategory = null
+                                    },
                                     modifier = Modifier
                                         .size(36.dp)
                                         .background(TealPrimary.copy(alpha = 0.1f), CircleShape)
@@ -570,7 +617,24 @@ fun GrammarScreen(
                 TopAppBar(
                     title = { Text("Spoken Grammar") },
                     navigationIcon = {
-                        IconButton(onClick = { viewModel.activeGrammarLesson.value = null }) {
+                        IconButton(onClick = {
+                            val activeItem = lesson
+                            if (activeItem != null) {
+                                if (activeItem.id <= 15) {
+                                    selectedTab = 0
+                                } else {
+                                    selectedTab = 1
+                                    selectedCategory = activeItem.category
+                                }
+                                if (currentLessonIndex >= 0) {
+                                    scrollToTargetIndex = currentLessonIndex
+                                }
+                            }
+                            viewModel.activeGrammarLesson.value = null
+                            viewModel.lastScore.value = null
+                            viewModel.scoredWords.value = emptyList()
+                            viewModel.recognizedText.value = ""
+                        }) {
                             Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
                         }
                     },
@@ -984,7 +1048,12 @@ fun GrammarScreen(
                                             text = "$score%",
                                             style = MaterialTheme.typography.displayMedium.copy(
                                                 fontWeight = FontWeight.Bold,
-                                                color = if (score >= 90) Color(0xFF2ECC71) else if (score >= 80) StreakGold else Color(0xFFFF5252)
+                                                color = when {
+                                                    score >= 90 -> Color(0xFF2ECC71)
+                                                    score >= 70 -> StreakGold
+                                                    score >= 50 -> Color(0xFFFF9800)
+                                                    else -> Color(0xFFFF5252)
+                                                }
                                             )
                                         )
 
@@ -1072,6 +1141,9 @@ fun GrammarScreen(
                                                         } else {
                                                             selectedTab = 1
                                                             selectedCategory = activeItem.category
+                                                        }
+                                                        if (hasNextLesson) {
+                                                            scrollToTargetIndex = currentLessonIndex + 1
                                                         }
                                                     }
                                                     viewModel.activeGrammarLesson.value = null

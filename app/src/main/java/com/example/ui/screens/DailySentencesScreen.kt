@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,6 +32,7 @@ import com.example.ui.EnglishViewModel
 import com.example.ui.Screen
 import com.example.ui.WordScoreType
 import com.example.ui.components.SpokenVoiceToTextCard
+import com.example.ui.theme.PolishTeal
 import com.example.ui.theme.StreakGold
 import com.example.ui.theme.TealPrimary
 
@@ -42,6 +44,9 @@ fun DailySentencesScreen(
 ) {
     val sentences by viewModel.dailySentences.collectAsState()
     val activeSentence by viewModel.activeDailySentence.collectAsState()
+    val isReviewSession by viewModel.isReviewSession.collectAsState()
+    val reviewList by viewModel.reviewSentencesList.collectAsState()
+    val reviewIndex by viewModel.currentReviewIndex.collectAsState()
 
     val isRecording by viewModel.isRecording.collectAsState()
     val isPlayingBack by viewModel.isPlayingBack.collectAsState()
@@ -50,23 +55,47 @@ fun DailySentencesScreen(
     val scoredWords by viewModel.scoredWords.collectAsState()
     val recognizedText by viewModel.recognizedText.collectAsState()
 
-    val currentIndex = remember(activeSentence, sentences) {
+    val currentList = if (isReviewSession) reviewList else sentences
+    val effectiveIndex = if (isReviewSession) {
+        reviewIndex.coerceIn(0, (reviewList.size - 1).coerceAtLeast(0))
+    } else {
         val index = sentences.indexOfFirst { it.id == activeSentence?.id }
         if (index == -1) 0 else index
     }
+    val totalCount = currentList.size
 
     val mapListState = rememberLazyListState()
+    var scrollToTargetIndex by remember { mutableStateOf<Int?>(null) }
 
-    LaunchedEffect(activeSentence == null) {
-        if (activeSentence == null && sentences.isNotEmpty()) {
-            val targetIdx = sentences.indexOfFirst { it.timesPracticed == 0 }.takeIf { it >= 0 } ?: 0
-            if (targetIdx > 0) {
+    val completedCount = remember(sentences) { sentences.count { it.timesPracticed > 0 } }
+
+    LaunchedEffect(activeSentence == null, isReviewSession, completedCount, scrollToTargetIndex) {
+        if (!isReviewSession && activeSentence == null && sentences.isNotEmpty()) {
+            val targetIdx = scrollToTargetIndex ?: sentences.indexOfFirst { it.timesPracticed == 0 }.takeIf { it >= 0 } ?: (sentences.size - 1)
+            if (targetIdx in sentences.indices) {
                 mapListState.animateScrollToItem(targetIdx)
             }
+            scrollToTargetIndex = null
         }
     }
 
-    if (activeSentence == null) {
+    // Intercept back button when in workout view or review session
+    BackHandler(enabled = (activeSentence != null || isReviewSession)) {
+        if (isReviewSession) {
+            viewModel.endReviewSession()
+            viewModel.goBack()
+        } else {
+            if (effectiveIndex in sentences.indices) {
+                scrollToTargetIndex = effectiveIndex
+            }
+            viewModel.activeDailySentence.value = null
+            viewModel.lastScore.value = null
+            viewModel.scoredWords.value = emptyList()
+            viewModel.recognizedText.value = ""
+        }
+    }
+
+    if (!isReviewSession && activeSentence == null) {
         // --- MAP VIEW OF LOCATIONS ---
         Scaffold(
             topBar = {
@@ -207,13 +236,53 @@ fun DailySentencesScreen(
             }
         }
     } else {
-        // --- PRACTICE VIEW ---
+        // --- PRACTICE / REVIEW VIEW ---
+        val sentence = if (isReviewSession) {
+            reviewList.getOrNull(effectiveIndex) ?: reviewList.firstOrNull()
+        } else {
+            sentences.find { it.id == activeSentence?.id } ?: sentences.getOrNull(effectiveIndex) ?: sentences.firstOrNull()
+        }
+
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Daily Speaking Gym") },
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(if (isReviewSession) "Spaced Review Gym" else "Daily Speaking Gym")
+                            if (isReviewSession) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = PolishTeal.copy(alpha = 0.15f),
+                                    border = BorderStroke(1.dp, PolishTeal.copy(alpha = 0.3f))
+                                ) {
+                                    Text(
+                                        text = "REVIEW",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = PolishTeal
+                                        ),
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+                    },
                     navigationIcon = {
-                        IconButton(onClick = { viewModel.activeDailySentence.value = null }) {
+                        IconButton(onClick = {
+                            if (isReviewSession) {
+                                viewModel.endReviewSession()
+                                viewModel.goBack()
+                            } else {
+                                if (effectiveIndex in sentences.indices) {
+                                  scrollToTargetIndex = effectiveIndex
+                                }
+                                viewModel.activeDailySentence.value = null
+                                viewModel.lastScore.value = null
+                                viewModel.scoredWords.value = emptyList()
+                                viewModel.recognizedText.value = ""
+                            }
+                        }) {
                             Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
                         }
                     },
@@ -224,9 +293,7 @@ fun DailySentencesScreen(
             },
             modifier = modifier.fillMaxSize()
         ) { innerPadding ->
-            if (sentences.isNotEmpty()) {
-                val sentence = sentences.getOrNull(currentIndex) ?: sentences.first()
-
+            if (sentence != null) {
                 val scrollState = rememberScrollState()
 
                 Column(
@@ -246,10 +313,14 @@ fun DailySentencesScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "SENTENCE ${currentIndex + 1} OF ${sentences.size}",
+                            text = if (isReviewSession) {
+                                "REVIEW ITEM ${effectiveIndex + 1} OF $totalCount"
+                            } else {
+                                "SENTENCE ${effectiveIndex + 1} OF $totalCount"
+                            },
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = TealPrimary,
+                                color = if (isReviewSession) PolishTeal else TealPrimary,
                                 letterSpacing = 1.2.sp
                             )
                         )
@@ -264,12 +335,12 @@ fun DailySentencesScreen(
                     }
 
                     LinearProgressIndicator(
-                        progress = { (currentIndex + 1).toFloat() / sentences.size },
+                        progress = { if (totalCount > 0) (effectiveIndex + 1).toFloat() / totalCount else 1f },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(6.dp)
                             .clip(RoundedCornerShape(3.dp)),
-                        color = TealPrimary,
+                        color = if (isReviewSession) PolishTeal else TealPrimary,
                         trackColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f)
                     )
 
@@ -287,7 +358,7 @@ fun DailySentencesScreen(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "REPEAT AFTER ME:",
+                                text = if (isReviewSession) "REVIEW AND REPEAT:" else "REPEAT AFTER ME:",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     letterSpacing = 1.sp
@@ -310,8 +381,8 @@ fun DailySentencesScreen(
                             FilledTonalButton(
                                 onClick = { viewModel.speak(sentence.text) },
                                 colors = ButtonDefaults.filledTonalButtonColors(
-                                    containerColor = if (isTtsSpeaking) Color(0xFFFF5252) else TealPrimary.copy(alpha = 0.15f),
-                                    contentColor = if (isTtsSpeaking) Color.White else TealPrimary
+                                    containerColor = if (isTtsSpeaking) Color(0xFFFF5252) else if (isReviewSession) PolishTeal.copy(alpha = 0.15f) else TealPrimary.copy(alpha = 0.15f),
+                                    contentColor = if (isTtsSpeaking) Color.White else if (isReviewSession) PolishTeal else TealPrimary
                                 ),
                                 shape = RoundedCornerShape(12.dp)
                             ) {
@@ -371,7 +442,7 @@ fun DailySentencesScreen(
                                         modifier = Modifier
                                             .size(76.dp)
                                             .clip(CircleShape)
-                                            .background(if (isRecording) Color(0xFFFF5252) else TealPrimary)
+                                            .background(if (isRecording) Color(0xFFFF5252) else if (isReviewSession) PolishTeal else TealPrimary)
                                             .clickable {
                                                 if (isRecording) {
                                                     viewModel.stopRecording(sentence.text, "daily_sentence", sentence.id)
@@ -446,7 +517,12 @@ fun DailySentencesScreen(
                                         text = "$score%",
                                         style = MaterialTheme.typography.titleLarge.copy(
                                             fontWeight = FontWeight.Bold,
-                                            color = if (score >= 90) Color(0xFF2ECC71) else StreakGold
+                                            color = when {
+                                                score >= 90 -> Color(0xFF2ECC71)
+                                                score >= 70 -> StreakGold
+                                                score >= 50 -> Color(0xFFFF9800)
+                                                else -> Color(0xFFFF5252)
+                                            }
                                         )
                                     )
                                 }
@@ -484,26 +560,55 @@ fun DailySentencesScreen(
                                 // Next navigation button
                                 Button(
                                     onClick = {
-                                        if (currentIndex < sentences.size - 1) {
-                                            // Advance to next card
-                                            viewModel.activeDailySentence.value = sentences[currentIndex + 1]
-                                            viewModel.lastScore.value = null
-                                            viewModel.scoredWords.value = emptyList()
+                                        if (isReviewSession) {
+                                            if (reviewIndex < reviewList.size - 1) {
+                                                val nextIdx = reviewIndex + 1
+                                                viewModel.currentReviewIndex.value = nextIdx
+                                                viewModel.activeDailySentence.value = reviewList[nextIdx]
+                                                viewModel.lastScore.value = null
+                                                viewModel.scoredWords.value = emptyList()
+                                                viewModel.recognizedText.value = ""
+                                            } else {
+                                                // Completed review session! Return cleanly to home
+                                                viewModel.endReviewSession()
+                                                viewModel.navigateTo(Screen.Home)
+                                            }
                                         } else {
-                                            // Completed workout! Go back to Map
-                                            viewModel.activeDailySentence.value = null
+                                            if (effectiveIndex < sentences.size - 1) {
+                                                // Advance to next card
+                                                viewModel.activeDailySentence.value = sentences[effectiveIndex + 1]
+                                                viewModel.lastScore.value = null
+                                                viewModel.scoredWords.value = emptyList()
+                                            } else {
+                                                // Completed workout! Go back to Map
+                                                if (effectiveIndex in sentences.indices) {
+                                                    scrollToTargetIndex = effectiveIndex
+                                                }
+                                                viewModel.activeDailySentence.value = null
+                                                viewModel.lastScore.value = null
+                                                viewModel.scoredWords.value = emptyList()
+                                                viewModel.recognizedText.value = ""
+                                            }
                                         }
                                     },
-                                    colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
+                                    colors = ButtonDefaults.buttonColors(containerColor = if (isReviewSession) PolishTeal else TealPrimary),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text(
-                                        text = if (currentIndex < sentences.size - 1) "Next Sentence" else "Back to Map",
+                                        text = if (isReviewSession) {
+                                            if (reviewIndex < reviewList.size - 1) "Next Review Item" else "Finish Review Session"
+                                        } else {
+                                            if (effectiveIndex < sentences.size - 1) "Next Sentence" else "Back to Map"
+                                        },
                                         color = Color.Black,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Icon(imageVector = Icons.Default.ArrowForward, contentDescription = "Next", tint = Color.Black)
+                                    Icon(
+                                        imageVector = if (isReviewSession && reviewIndex == reviewList.size - 1) Icons.Default.CheckCircle else Icons.Default.ArrowForward,
+                                        contentDescription = "Next",
+                                        tint = Color.Black
+                                    )
                                 }
                             }
                         }
@@ -511,7 +616,7 @@ fun DailySentencesScreen(
                 }
             } else {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No workout sentences available.")
+                    Text("No review sentences available.")
                 }
             }
         }

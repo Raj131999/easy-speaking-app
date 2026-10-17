@@ -38,8 +38,7 @@ class VoiceRecorder(private val context: Context) {
             }
 
             recorder.apply {
-                // VOICE_RECOGNITION applies high-pass filter, noise suppression and AGC (Automatic Gain Control)
-                setAudioSource(MediaRecorder.AudioSource.VOICE_RECOGNITION)
+                setAudioSource(MediaRecorder.AudioSource.MIC)
                 setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
                 setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
                 // 16kHz sampling rate is the universal standard for speech recognition and extremely stable on emulator virtual mics

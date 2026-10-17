@@ -98,11 +98,7 @@ fun HomeScreen(
         // --- SPACED REPETITION REVIEW / MASTERY CARD ---
         item {
             ReviewHubCard(sentences = sentences, onReviewClick = {
-                val reviewItem = sentences.firstOrNull { it.reviewScheduledTime > 0 } ?: sentences.firstOrNull()
-                if (reviewItem != null) {
-                    viewModel.activeDailySentence.value = reviewItem
-                    viewModel.navigateTo(Screen.DailySentences)
-                }
+                viewModel.startReviewSession()
             })
         }
 
@@ -204,8 +200,7 @@ fun HomeScreen(
                     accuracy = item.lastAccuracy,
                     focus = item.soundFocus.takeIf { it.isNotEmpty() } ?: "Fluency",
                     onClick = {
-                        viewModel.activeDailySentence.value = item
-                        viewModel.navigateTo(Screen.DailySentences)
+                        viewModel.startReviewSession(item)
                     },
                     onDismiss = {
                         viewModel.dismissWeakItem("sentence_${item.id}")

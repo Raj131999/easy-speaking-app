@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -61,14 +62,29 @@ fun TongueTwistersScreen(
         if (index == -1) 0 else index
     }
 
-    // Auto-scroll map to next uncompleted tongue twister
-    LaunchedEffect(activeTwister == null) {
+    var scrollToTargetIndex by remember { mutableStateOf<Int?>(null) }
+    val twistersCompletedCount = remember(twisters) { twisters.count { it.isCompleted } }
+
+    // Auto-scroll map to next uncompleted tongue twister or explicit target
+    LaunchedEffect(activeTwister == null, twistersCompletedCount, scrollToTargetIndex) {
         if (activeTwister == null && twisters.isNotEmpty()) {
-            val targetIdx = twisters.indexOfFirst { !it.isCompleted }.takeIf { it >= 0 } ?: 0
-            if (targetIdx > 0) {
+            val targetIdx = scrollToTargetIndex ?: twisters.indexOfFirst { !it.isCompleted }.takeIf { it >= 0 } ?: (twisters.size - 1)
+            if (targetIdx in twisters.indices) {
                 mapListState.animateScrollToItem(targetIdx)
             }
+            scrollToTargetIndex = null
         }
+    }
+
+    // Intercept back button when in soundroom practice to return to that twister on the map
+    BackHandler(enabled = (activeTwister != null)) {
+        if (currentIndex in twisters.indices) {
+            scrollToTargetIndex = currentIndex
+        }
+        viewModel.activeTongueTwister.value = null
+        viewModel.lastScore.value = null
+        viewModel.scoredWords.value = emptyList()
+        viewModel.recognizedText.value = ""
     }
 
     // Clear score when twister changes
@@ -221,7 +237,15 @@ fun TongueTwistersScreen(
                 TopAppBar(
                     title = { Text("Tongue Twister Soundroom") },
                     navigationIcon = {
-                        IconButton(onClick = { viewModel.activeTongueTwister.value = null }) {
+                        IconButton(onClick = {
+                            if (currentIndex in twisters.indices) {
+                                scrollToTargetIndex = currentIndex
+                            }
+                            viewModel.activeTongueTwister.value = null
+                            viewModel.lastScore.value = null
+                            viewModel.scoredWords.value = emptyList()
+                            viewModel.recognizedText.value = ""
+                        }) {
                             Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
                         }
                     },
@@ -476,7 +500,12 @@ fun TongueTwistersScreen(
                                     text = "$score%",
                                     style = MaterialTheme.typography.titleLarge.copy(
                                         fontWeight = FontWeight.Bold,
-                                        color = if (score >= 90) Color(0xFF2ECC71) else StreakGold
+                                        color = when {
+                                            score >= 90 -> Color(0xFF2ECC71)
+                                            score >= 70 -> StreakGold
+                                            score >= 50 -> Color(0xFFFF9800)
+                                            else -> Color(0xFFFF5252)
+                                        }
                                     )
                                 )
                             }
@@ -517,7 +546,13 @@ fun TongueTwistersScreen(
                                 if (currentIndex < twisters.size - 1) {
                                     viewModel.activeTongueTwister.value = twisters[currentIndex + 1]
                                 } else {
+                                    if (currentIndex in twisters.indices) {
+                                        scrollToTargetIndex = currentIndex
+                                    }
                                     viewModel.activeTongueTwister.value = null
+                                    viewModel.lastScore.value = null
+                                    viewModel.scoredWords.value = emptyList()
+                                    viewModel.recognizedText.value = ""
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),

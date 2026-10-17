@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -61,6 +62,7 @@ fun ParagraphScreen(
 
     val scrollState = rememberScrollState()
     val mapListState = rememberLazyListState()
+    var scrollToTargetIndex by remember { mutableStateOf<Int?>(null) }
 
     val currentParaIndex = remember(paragraph, paragraphsList) {
         if (paragraph == null) -1 else paragraphsList.indexOfFirst { it.id == paragraph?.id }
@@ -68,13 +70,28 @@ fun ParagraphScreen(
     val hasNextPara = currentParaIndex in 0 until (paragraphsList.size - 1)
     val nextPara = if (hasNextPara) paragraphsList[currentParaIndex + 1] else null
 
-    LaunchedEffect(paragraph == null) {
+    val parasCompletedCount = remember(paragraphsList) { paragraphsList.count { it.isCompleted } }
+
+    // Auto-scroll map to next uncompleted paragraph or explicit target
+    LaunchedEffect(paragraph == null, parasCompletedCount, scrollToTargetIndex) {
         if (paragraph == null && paragraphsList.isNotEmpty()) {
-            val targetIdx = paragraphsList.indexOfFirst { !it.isCompleted }.takeIf { it >= 0 } ?: 0
-            if (targetIdx > 0) {
+            val targetIdx = scrollToTargetIndex ?: paragraphsList.indexOfFirst { !it.isCompleted }.takeIf { it >= 0 } ?: (paragraphsList.size - 1)
+            if (targetIdx in paragraphsList.indices) {
                 mapListState.animateScrollToItem(targetIdx)
             }
+            scrollToTargetIndex = null
         }
+    }
+
+    // Intercept back button when practicing paragraph to return to that paragraph on the map
+    BackHandler(enabled = (paragraph != null)) {
+        if (currentParaIndex in paragraphsList.indices) {
+            scrollToTargetIndex = currentParaIndex
+        }
+        viewModel.activeParagraph.value = null
+        viewModel.lastScore.value = null
+        viewModel.scoredWords.value = emptyList()
+        viewModel.recognizedText.value = ""
     }
 
     if (paragraph == null) {
@@ -276,7 +293,15 @@ fun ParagraphScreen(
                 TopAppBar(
                     title = { Text("Paragraph Fluency") },
                     navigationIcon = {
-                        IconButton(onClick = { viewModel.activeParagraph.value = null }) {
+                        IconButton(onClick = {
+                            if (currentParaIndex in paragraphsList.indices) {
+                                scrollToTargetIndex = currentParaIndex
+                            }
+                            viewModel.activeParagraph.value = null
+                            viewModel.lastScore.value = null
+                            viewModel.scoredWords.value = emptyList()
+                            viewModel.recognizedText.value = ""
+                        }) {
                             Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
                         }
                     },
@@ -412,7 +437,12 @@ fun ParagraphScreen(
                                         text = "$score%",
                                         style = MaterialTheme.typography.titleLarge.copy(
                                             fontWeight = FontWeight.Bold,
-                                            color = if (score >= 90) Color(0xFF2ECC71) else StreakGold
+                                            color = when {
+                                                score >= 90 -> Color(0xFF2ECC71)
+                                                score >= 70 -> StreakGold
+                                                score >= 50 -> Color(0xFFFF9800)
+                                                else -> Color(0xFFFF5252)
+                                            }
                                         )
                                     )
                                 }
@@ -473,6 +503,9 @@ fun ParagraphScreen(
                                         }
                                         Button(
                                             onClick = {
+                                                if (currentParaIndex in paragraphsList.indices) {
+                                                    scrollToTargetIndex = currentParaIndex
+                                                }
                                                 viewModel.activeParagraph.value = null
                                                 viewModel.lastScore.value = null
                                                 viewModel.scoredWords.value = emptyList()
@@ -487,7 +520,15 @@ fun ParagraphScreen(
                                     }
                                 } else {
                                     Button(
-                                        onClick = { viewModel.activeParagraph.value = null },
+                                        onClick = {
+                                            if (currentParaIndex in paragraphsList.indices) {
+                                                scrollToTargetIndex = currentParaIndex
+                                            }
+                                            viewModel.activeParagraph.value = null
+                                            viewModel.lastScore.value = null
+                                            viewModel.scoredWords.value = emptyList()
+                                            viewModel.recognizedText.value = ""
+                                        },
                                         colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
                                         modifier = Modifier.fillMaxWidth(),
                                         shape = RoundedCornerShape(12.dp)
