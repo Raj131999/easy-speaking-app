@@ -105,6 +105,7 @@ class EnglishViewModel(
     private val voiceRecorder = VoiceRecorder(application)
     private val recordedAudioStream = java.io.ByteArrayOutputStream()
     val isRecording = MutableStateFlow(false)
+    val isProcessingSpeech = MutableStateFlow(false)
     val isPlayingBack = MutableStateFlow(false)
     val lastScore = MutableStateFlow<Int?>(null)
     val scoredWords = MutableStateFlow<List<Pair<String, WordScoreType>>>(emptyList())
@@ -255,7 +256,13 @@ class EnglishViewModel(
                     } catch (e: Exception) {
                         // ignore
                     }
-                    speechRecognizer = SpeechRecognizer.createSpeechRecognizer(getApplication())
+                    if (Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(getApplication())) {
+                        Log.d("SPEECH_DEBUG", "initSpeechRecognizer: Creating On-Device SpeechRecognizer")
+                        speechRecognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(getApplication())
+                    } else {
+                        Log.d("SPEECH_DEBUG", "initSpeechRecognizer: Creating System SpeechRecognizer")
+                        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(getApplication())
+                    }
                     Log.d("SPEECH_DEBUG", "initSpeechRecognizer: SpeechRecognizer created successfully: $speechRecognizer")
                     speechRecognizer?.setRecognitionListener(object : RecognitionListener {
                         override fun onReadyForSpeech(params: Bundle?) {
@@ -315,9 +322,11 @@ class EnglishViewModel(
                         override fun onResults(results: Bundle?) {
                             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                             Log.d("SPEECH_DEBUG", "RecognitionListener: onResults matches = $matches")
-                            if (!matches.isNullOrEmpty()) {
+                            if (!matches.isNullOrEmpty() && matches[0].isNotBlank()) {
                                 recognizedText.value = matches[0]
                                 Log.d("SPEECH_DEBUG", "RecognitionListener: final recognizedText set to '${matches[0]}'")
+                            } else {
+                                Log.d("SPEECH_DEBUG", "RecognitionListener: onResults matches was empty/null. Preserving existing recognizedText = '${recognizedText.value}'")
                             }
 
                             try {
@@ -350,9 +359,12 @@ class EnglishViewModel(
                         override fun onPartialResults(partialResults: Bundle?) {
                             val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                             Log.d("SPEECH_DEBUG", "RecognitionListener: onPartialResults matches = $matches")
-                            if (!matches.isNullOrEmpty()) {
-                                recognizedText.value = matches[0]
-                                Log.d("SPEECH_DEBUG", "RecognitionListener: partial recognizedText set to '${matches[0]}'")
+                            if (!matches.isNullOrEmpty() && matches[0].isNotBlank()) {
+                                val newText = matches[0]
+                                if (newText.length >= recognizedText.value.length || recognizedText.value.isBlank()) {
+                                    recognizedText.value = newText
+                                    Log.d("SPEECH_DEBUG", "RecognitionListener: partial recognizedText set to '$newText'")
+                                }
                             }
                         }
                         override fun onEvent(eventType: Int, params: Bundle?) {
@@ -743,9 +755,13 @@ class EnglishViewModel(
             val pcmFile = voiceRecorder.getPcmFile()
             Log.d("SPEECH_DEBUG", "stopRecording: Record duration = ${recordDurationMs}ms. PCM file = ${pcmFile?.absolutePath} (${pcmFile?.length()} bytes)")
 
-            // Reset recognizedText and prepare deferred result BEFORE starting PCM transcription
+            // Set background processing state
+            isProcessingSpeech.value = true
             recognizedText.value = ""
             speechResultDeferred = kotlinx.coroutines.CompletableDeferred()
+
+            // Calculate dynamic timeout based on recording duration (Min 6s, Max 60s for 2-minute speech)
+            val dynamicTimeoutMs = (recordDurationMs * 1.5).toLong().coerceIn(6000L, 60000L)
 
             // Transcribe speech using the pure PCM 16kHz audio file
             if (pcmFile != null && pcmFile.length() > 0) {
@@ -754,14 +770,16 @@ class EnglishViewModel(
                 startListeningOffline()
             }
 
-            // Wait up to 3500ms for SpeechRecognizer's final transcription results to complete
+            // Wait for SpeechRecognizer's final transcription results to complete
             try {
-                kotlinx.coroutines.withTimeout(3500) {
+                kotlinx.coroutines.withTimeout(dynamicTimeoutMs) {
                     speechResultDeferred?.await()
                 }
                 Log.d("SPEECH_DEBUG", "stopRecording: Transcription completed! Final recognizedText = '${recognizedText.value}'")
             } catch (e: Exception) {
-                Log.e("SPEECH_DEBUG", "stopRecording: Timed out waiting for speech recognition result! Latest recognizedText = '${recognizedText.value}'", e)
+                Log.e("SPEECH_DEBUG", "stopRecording: Timed out waiting for speech recognition result after ${dynamicTimeoutMs}ms! Latest recognizedText = '${recognizedText.value}'", e)
+            } finally {
+                isProcessingSpeech.value = false
             }
 
             val cleanTarget = targetText.replace(Regex("[^a-zA-Z\\s]"), "")
