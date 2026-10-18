@@ -410,36 +410,87 @@ class EnglishViewModel(
         }
     }
 
-    private suspend fun transcribePcmFile(pcmFile: File) {
-        try {
-            Log.d("SPEECH_DEBUG", "transcribePcmFile: starting for PCM file ${pcmFile.absolutePath} (${pcmFile.length()} bytes)")
-            try {
-                speechRecognizer?.cancel()
-            } catch (e: Exception) {}
+    private suspend fun transcribePcmChunks(pcmFile: File): String {
+        val totalBytes = pcmFile.length()
+        val bytesPerSec = 16000 * 2 // 32,000 bytes/sec
+        val chunkSize = 15 * bytesPerSec // 480,000 bytes (~15 seconds per chunk)
 
-            if (speechRecognizer == null) {
-                initSpeechRecognizer()
-                delay(150)
+        if (totalBytes <= chunkSize * 4 / 3) {
+            // Short audio (<=20 seconds): Single pass
+            return transcribeSinglePcmFile(pcmFile)
+        }
+
+        // Long audio (>20 seconds / up to 2 minutes): Split into 15-second chunks
+        Log.d("SPEECH_DEBUG", "transcribePcmChunks: Splitting ${totalBytes} bytes into ~15s chunks")
+        val pcmBytes = pcmFile.readBytes()
+        val fullTextBuilder = StringBuilder()
+
+        var offset = 0
+        var chunkIndex = 0
+        while (offset < pcmBytes.size) {
+            val length = Math.min(chunkSize, pcmBytes.size - offset)
+            val chunkBytes = pcmBytes.copyOfRange(offset, offset + length)
+            val tempChunkFile = File(getApplication<Application>().cacheDir, "temp_chunk_$chunkIndex.raw")
+            tempChunkFile.writeBytes(chunkBytes)
+
+            Log.d("SPEECH_DEBUG", "transcribePcmChunks: Transcribing chunk #$chunkIndex (${tempChunkFile.length()} bytes)")
+            val chunkText = transcribeSinglePcmFile(tempChunkFile)
+            try { tempChunkFile.delete() } catch (e: Exception) {}
+
+            if (chunkText.isNotBlank()) {
+                if (fullTextBuilder.isNotEmpty()) fullTextBuilder.append(" ")
+                fullTextBuilder.append(chunkText)
             }
-            val langTag = Locale.US.toLanguageTag()
-            val pfd = ParcelFileDescriptor.open(pcmFile, ParcelFileDescriptor.MODE_READ_ONLY)
-            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, langTag)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, langTag)
-                putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getApplication<Application>().packageName)
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                putExtra("android.speech.extra.AUDIO_SOURCE", pfd)
-                putExtra("android.speech.extra.AUDIO_SOURCE_ENCODING", 2)
-                putExtra("android.speech.extra.AUDIO_SOURCE_SAMPLING_RATE", 16000)
-                putExtra("android.speech.extra.AUDIO_SOURCE_CHANNELS", 1)
+
+            offset += length
+            chunkIndex++
+        }
+
+        val result = fullTextBuilder.toString().trim()
+        Log.d("SPEECH_DEBUG", "transcribePcmChunks: Final concatenated recognized text (${result.length} chars) = '$result'")
+        return result
+    }
+
+    private suspend fun transcribeSinglePcmFile(pcmFile: File): String {
+        val deferred = kotlinx.coroutines.CompletableDeferred<String>()
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+            try {
+                try { speechRecognizer?.cancel() } catch (e: Exception) {}
+                if (speechRecognizer == null) {
+                    initSpeechRecognizer()
+                    delay(150)
+                }
+                speechResultDeferred = deferred
+                recognizedText.value = ""
+
+                val langTag = Locale.US.toLanguageTag()
+                val pfd = ParcelFileDescriptor.open(pcmFile, ParcelFileDescriptor.MODE_READ_ONLY)
+                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, langTag)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, langTag)
+                    putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getApplication<Application>().packageName)
+                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                    putExtra("android.speech.extra.AUDIO_SOURCE", pfd)
+                    putExtra("android.speech.extra.AUDIO_SOURCE_ENCODING", 2)
+                    putExtra("android.speech.extra.AUDIO_SOURCE_SAMPLING_RATE", 16000)
+                    putExtra("android.speech.extra.AUDIO_SOURCE_CHANNELS", 1)
+                }
+                speechRecognizer?.startListening(intent)
+            } catch (e: Exception) {
+                Log.e("SPEECH_DEBUG", "transcribeSinglePcmFile error", e)
+                deferred.complete("")
             }
-            speechRecognizer?.startListening(intent)
-            Log.d("SPEECH_DEBUG", "transcribePcmFile: startListening intent sent with pfd: $pfd")
+        }
+
+        return try {
+            kotlinx.coroutines.withTimeout(15000L) {
+                deferred.await()
+            }
         } catch (e: Exception) {
-            Log.e("SPEECH_DEBUG", "transcribePcmFile error", e)
-            speechResultDeferred?.complete("")
+            Log.e("SPEECH_DEBUG", "transcribeSinglePcmFile timeout", e)
+            ""
         }
     }
 
@@ -463,67 +514,93 @@ class EnglishViewModel(
             return Pair(0, analysis)
         }
 
+        val cleanRecognizedList = recognizedWords.map { it.lowercase(Locale.getDefault()).trim() }
+        val usedRecognizedIndices = mutableSetOf<Int>()
+
         val analysis = mutableListOf<Pair<String, WordScoreType>>()
         var correctCount = 0
         var hesitantCount = 0
-        var lastFoundIndex = -1
-        
-        for (targetWord in targetWords) {
+        var lastMatchedIdx = -1
+
+        for (targetIdx in targetWords.indices) {
+            val targetWord = targetWords[targetIdx]
             val cleanTarget = targetWord.lowercase(Locale.getDefault()).trim()
-            val startIndex = (lastFoundIndex + 1).coerceAtLeast(0)
-            val endIndex = (startIndex + 3).coerceAtMost(recognizedWords.size - 1)
-            
-            var foundIndex = -1
-            for (i in startIndex..endIndex) {
-                val cleanRec = recognizedWords[i].lowercase(Locale.getDefault()).trim()
-                if (cleanTarget == cleanRec) {
-                    foundIndex = i
-                    break
-                }
-            }
-            
-            if (foundIndex == -1) {
-                for (i in (lastFoundIndex + 1).coerceAtLeast(0) until recognizedWords.size) {
-                    val cleanRec = recognizedWords[i].lowercase(Locale.getDefault()).trim()
+
+            // Calculate expected relative position in recognizedWords
+            val expectedPos = if (targetWords.isNotEmpty()) {
+                ((targetIdx.toDouble() / targetWords.size) * cleanRecognizedList.size).toInt()
+            } else 0
+
+            // Define sliding search window around expected position and last matched index
+            val searchStart = (if (lastMatchedIdx >= 0) Math.min(expectedPos - 12, lastMatchedIdx + 1) else expectedPos - 12)
+                .coerceIn(0, cleanRecognizedList.size - 1)
+            val searchEnd = (Math.max(expectedPos + 18, searchStart + 25))
+                .coerceIn(searchStart, cleanRecognizedList.size - 1)
+
+            var matchedIdx = -1
+            var matchType = WordScoreType.Incorrect
+
+            // 1. Exact match in sliding window
+            for (i in searchStart..searchEnd) {
+                if (i !in usedRecognizedIndices) {
+                    val cleanRec = cleanRecognizedList[i]
                     if (cleanTarget == cleanRec) {
-                        foundIndex = i
+                        matchedIdx = i
+                        matchType = WordScoreType.Correct
                         break
                     }
                 }
             }
 
-            if (foundIndex != -1) {
-                correctCount++
-                analysis.add(Pair(targetWord, WordScoreType.Correct))
-                lastFoundIndex = foundIndex
-            } else {
-                var partialIndex = -1
-                for (i in (lastFoundIndex + 1).coerceAtLeast(0) until (lastFoundIndex + 4).coerceAtMost(recognizedWords.size)) {
-                    val cleanRec = recognizedWords[i].lowercase(Locale.getDefault()).trim()
-                    if (getLevenshteinDistance(cleanTarget, cleanRec) <= 2) {
-                        partialIndex = i
-                        break
+            // 2. Near match (Levenshtein distance <= 1 or singular/plural stem) in sliding window
+            if (matchedIdx == -1) {
+                for (i in searchStart..searchEnd) {
+                    if (i !in usedRecognizedIndices) {
+                        val cleanRec = cleanRecognizedList[i]
+                        val dist = getLevenshteinDistance(cleanTarget, cleanRec)
+                        if (dist <= 1 || (cleanTarget.length > 3 && cleanRec.length > 3 && (cleanTarget.startsWith(cleanRec) || cleanRec.startsWith(cleanTarget)))) {
+                            matchedIdx = i
+                            matchType = WordScoreType.Hesitant
+                            break
+                        }
                     }
                 }
-                
-                if (partialIndex != -1) {
-                    hesitantCount++
-                    analysis.add(Pair(targetWord, WordScoreType.Hesitant))
-                    lastFoundIndex = partialIndex
-                } else {
-                    analysis.add(Pair(targetWord, WordScoreType.Incorrect))
+            }
+
+            // 3. Fallback search in entire recognized list if not found in local window
+            if (matchedIdx == -1) {
+                val fallbackStart = (lastMatchedIdx + 1).coerceIn(0, cleanRecognizedList.size - 1)
+                for (i in fallbackStart until cleanRecognizedList.size) {
+                    if (i !in usedRecognizedIndices) {
+                        val cleanRec = cleanRecognizedList[i]
+                        if (cleanTarget == cleanRec) {
+                            matchedIdx = i
+                            matchType = WordScoreType.Correct
+                            break
+                        }
+                    }
                 }
+            }
+
+            if (matchedIdx != -1) {
+                usedRecognizedIndices.add(matchedIdx)
+                lastMatchedIdx = Math.max(lastMatchedIdx, matchedIdx)
+                if (matchType == WordScoreType.Correct) {
+                    correctCount++
+                } else {
+                    hesitantCount++
+                }
+                analysis.add(Pair(targetWord, matchType))
+            } else {
+                analysis.add(Pair(targetWord, WordScoreType.Incorrect))
             }
         }
 
         val totalWords = targetWords.size
-        val rawScore = if (totalWords > 0) {
-            ((correctCount.toFloat() + hesitantCount.toFloat() * 0.5f) / totalWords.toFloat() * 100f).toInt()
-        } else {
-            0
-        }
+        if (totalWords == 0) return Pair(0, emptyList())
 
-        return Pair(rawScore.coerceIn(0, 100), analysis)
+        val score = (((correctCount * 1.0) + (hesitantCount * 0.5)) / totalWords * 100).toInt()
+        return Pair(score.coerceIn(0, 100), analysis)
     }
 
     private fun getLevenshteinDistance(s1: String, s2: String): Int {
@@ -758,29 +835,24 @@ class EnglishViewModel(
             // Set background processing state
             isProcessingSpeech.value = true
             recognizedText.value = ""
-            speechResultDeferred = kotlinx.coroutines.CompletableDeferred()
 
-            // Calculate dynamic timeout based on recording duration (Min 6s, Max 60s for 2-minute speech)
-            val dynamicTimeoutMs = (recordDurationMs * 1.5).toLong().coerceIn(6000L, 60000L)
-
-            // Transcribe speech using the pure PCM 16kHz audio file
-            if (pcmFile != null && pcmFile.length() > 0) {
-                transcribePcmFile(pcmFile)
-            } else {
-                startListeningOffline()
-            }
-
-            // Wait for SpeechRecognizer's final transcription results to complete
+            // Transcribe speech using chunked PCM audio processing for full 1-2 minute paragraph coverage
             try {
-                kotlinx.coroutines.withTimeout(dynamicTimeoutMs) {
-                    speechResultDeferred?.await()
+                if (pcmFile != null && pcmFile.length() > 0) {
+                    val fullText = transcribePcmChunks(pcmFile)
+                    if (fullText.isNotBlank()) {
+                        recognizedText.value = fullText
+                    }
+                } else {
+                    startListeningOffline()
                 }
-                Log.d("SPEECH_DEBUG", "stopRecording: Transcription completed! Final recognizedText = '${recognizedText.value}'")
             } catch (e: Exception) {
-                Log.e("SPEECH_DEBUG", "stopRecording: Timed out waiting for speech recognition result after ${dynamicTimeoutMs}ms! Latest recognizedText = '${recognizedText.value}'", e)
+                Log.e("SPEECH_DEBUG", "stopRecording: Error during chunked PCM transcription", e)
             } finally {
                 isProcessingSpeech.value = false
             }
+
+            Log.d("SPEECH_DEBUG", "stopRecording: Transcription completed! Final recognizedText = '${recognizedText.value}'")
 
             val cleanTarget = targetText.replace(Regex("[^a-zA-Z\\s]"), "")
             val words = cleanTarget.split(" ").filter { it.isNotEmpty() }
@@ -850,7 +922,8 @@ class EnglishViewModel(
                     "paragraph" -> {
                         activeParagraph.value?.let { para ->
                             val currentMax = if (finalScore > para.maxAccuracy) finalScore else para.maxAccuracy
-                            repository.updateParagraph(para.copy(isCompleted = true, maxAccuracy = currentMax))
+                            val isPassed = para.isCompleted || (finalScore >= 60)
+                            repository.updateParagraph(para.copy(isCompleted = isPassed, maxAccuracy = currentMax))
                         }
                     }
                     "tongue_twister" -> {
