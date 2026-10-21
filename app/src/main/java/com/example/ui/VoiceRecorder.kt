@@ -21,6 +21,9 @@ class VoiceRecorder(private val context: Context) {
     private var isRecordingInternal = false
     private var recordingThread: Thread? = null
 
+    val isRecording: Boolean
+        get() = isRecordingInternal
+
     @Volatile
     private var currentMaxAmplitude = 0
 
@@ -43,7 +46,7 @@ class VoiceRecorder(private val context: Context) {
             val bufferSize = Math.max(minBufferSize, 2048)
 
             val recorder = AudioRecord(
-                MediaRecorder.AudioSource.VOICE_RECOGNITION,
+                MediaRecorder.AudioSource.MIC,
                 sampleRate,
                 channelConfig,
                 audioFormat,
@@ -171,6 +174,43 @@ class VoiceRecorder(private val context: Context) {
 
     fun getRecordedFile(): File? {
         return if (wavFile.exists() && wavFile.length() > 44) wavFile else null
+    }
+
+    fun getPcmFile(): File? {
+        return if (pcmFile.exists() && pcmFile.length() > 0) pcmFile else null
+    }
+
+    fun clearRecordedFile() {
+        try {
+            if (pcmFile.exists()) pcmFile.delete()
+            if (wavFile.exists()) wavFile.delete()
+            Log.d("SPEECH_DEBUG", "VoiceRecorder: Cleared old recording files")
+        } catch (e: Exception) {
+            Log.e("SPEECH_DEBUG", "VoiceRecorder: Error clearing old recording files", e)
+        }
+    }
+
+    fun saveRawPcmToWav(bytes: ByteArray) {
+        try {
+            pcmFile.writeBytes(bytes)
+            convertPcmToWav(pcmFile, wavFile, 16000, 1, 16)
+            Log.d("SPEECH_DEBUG", "VoiceRecorder: Saved raw PCM bytes to WAV (${wavFile.length()} bytes)")
+        } catch (e: Exception) {
+            Log.e("SPEECH_DEBUG", "VoiceRecorder: Error saving raw PCM bytes to WAV", e)
+        }
+    }
+
+    fun copyUriToWav(context: Context, uri: android.net.Uri) {
+        try {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                FileOutputStream(wavFile).use { output ->
+                    input.copyTo(output)
+                }
+            }
+            Log.d("SPEECH_DEBUG", "VoiceRecorder: Copied audio URI to WAV (${wavFile.length()} bytes)")
+        } catch (e: Exception) {
+            Log.e("SPEECH_DEBUG", "VoiceRecorder: Error copying audio URI to WAV", e)
+        }
     }
 
     private fun convertPcmToWav(
