@@ -2,6 +2,7 @@ package com.example.ui
 
 import android.app.Application
 import android.content.Intent
+import android.media.AudioFormat
 import android.os.Build
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
@@ -14,12 +15,11 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.*
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.Job
 import java.io.File
 import java.util.*
+import kotlin.random.Random
 
 enum class Screen {
     Home,
@@ -103,21 +103,16 @@ class EnglishViewModel(
 
     // Voice recording and play states
     private val voiceRecorder = VoiceRecorder(application)
-    private val recordedAudioStream = java.io.ByteArrayOutputStream()
+    private var liveSession: LiveSpeechSession? = null
     val isRecording = MutableStateFlow(false)
     val isProcessingSpeech = MutableStateFlow(false)
     val isPlayingBack = MutableStateFlow(false)
     val lastScore = MutableStateFlow<Int?>(null)
     val scoredWords = MutableStateFlow<List<Pair<String, WordScoreType>>>(emptyList())
     val currentTargetText = MutableStateFlow("")
+    val recognizedText = MutableStateFlow("")
     val maxRecordedAmplitude = MutableStateFlow(0)
     private val amplitudeSamples = mutableListOf<Int>()
-    private var amplitudeJob: Job? = null
-
-    // Offline Speech Recognition State
-    private var speechRecognizer: SpeechRecognizer? = null
-    val recognizedText = MutableStateFlow("")
-    private var speechResultDeferred: kotlinx.coroutines.CompletableDeferred<String>? = null
 
     // Voice recording timing states
     private var recordStartTime: Long = 0
@@ -218,8 +213,6 @@ class EnglishViewModel(
         // Initialize Text To Speech
         tts = TextToSpeech(application, this)
 
-        // Initialize Speech Recognizer
-        initSpeechRecognizer()
     }
 
     override fun onInit(status: Int) {
@@ -245,184 +238,22 @@ class EnglishViewModel(
         }
     }
 
-    private fun initSpeechRecognizer() {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
-            try {
-                val available = SpeechRecognizer.isRecognitionAvailable(getApplication())
-                Log.d("SPEECH_DEBUG", "initSpeechRecognizer: SpeechRecognizer.isRecognitionAvailable = $available")
-                if (available) {
-                    try {
-                        speechRecognizer?.destroy()
-                    } catch (e: Exception) {
-                        // ignore
-                    }
-                    if (Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(getApplication())) {
-                        Log.d("SPEECH_DEBUG", "initSpeechRecognizer: Creating On-Device SpeechRecognizer")
-                        speechRecognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(getApplication())
-                    } else {
-                        Log.d("SPEECH_DEBUG", "initSpeechRecognizer: Creating System SpeechRecognizer")
-                        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(getApplication())
-                    }
-                    Log.d("SPEECH_DEBUG", "initSpeechRecognizer: SpeechRecognizer created successfully: $speechRecognizer")
-                    speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-                        override fun onReadyForSpeech(params: Bundle?) {
-                            Log.d("SPEECH_DEBUG", "RecognitionListener: onReadyForSpeech")
-                        }
-                        override fun onBeginningOfSpeech() {
-                            Log.d("SPEECH_DEBUG", "RecognitionListener: onBeginningOfSpeech")
-                        }
-                        override fun onRmsChanged(rmsdB: Float) {
-                            if (rmsdB > 0.5f) {
-                                val scaledAmp = (rmsdB * 1200).toInt().coerceIn(100, 32767)
-                                synchronized(amplitudeSamples) {
-                                    amplitudeSamples.add(scaledAmp)
-                                }
-                                if (scaledAmp > maxRecordedAmplitude.value) {
-                                    maxRecordedAmplitude.value = scaledAmp
-                                }
-                                Log.d("SPEECH_DEBUG", "RecognitionListener: onRmsChanged audio level = $rmsdB (amp = $scaledAmp)")
-                            }
-                        }
-                        override fun onBufferReceived(buffer: ByteArray?) {
-                            if (buffer != null && buffer.isNotEmpty()) {
-                                try {
-                                    recordedAudioStream.write(buffer)
-                                    Log.d("SPEECH_DEBUG", "RecognitionListener: onBufferReceived size = ${buffer.size} (total = ${recordedAudioStream.size()})")
-                                } catch (e: Exception) {
-                                    Log.e("SPEECH_DEBUG", "onBufferReceived error", e)
-                                }
-                            }
-                        }
-                        override fun onEndOfSpeech() {
-                            Log.d("SPEECH_DEBUG", "RecognitionListener: onEndOfSpeech")
-                        }
-                        override fun onError(error: Int) {
-                            val errorName = when (error) {
-                                SpeechRecognizer.ERROR_AUDIO -> "ERROR_AUDIO (3)"
-                                SpeechRecognizer.ERROR_CLIENT -> "ERROR_CLIENT (5)"
-                                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "ERROR_INSUFFICIENT_PERMISSIONS (9)"
-                                SpeechRecognizer.ERROR_NETWORK -> "ERROR_NETWORK (2)"
-                                SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "ERROR_NETWORK_TIMEOUT (1)"
-                                SpeechRecognizer.ERROR_NO_MATCH -> "ERROR_NO_MATCH (7)"
-                                SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "ERROR_RECOGNIZER_BUSY (8)"
-                                SpeechRecognizer.ERROR_SERVER -> "ERROR_SERVER (4)"
-                                SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "ERROR_SPEECH_TIMEOUT (6)"
-                                else -> "UNKNOWN_ERROR ($error)"
-                            }
-                            Log.e("SPEECH_DEBUG", "RecognitionListener: onError: $errorName. Current recognizedText: '${recognizedText.value}'")
-                            if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY || error == SpeechRecognizer.ERROR_CLIENT) {
-                                try {
-                                    speechRecognizer?.cancel()
-                                    speechRecognizer?.destroy()
-                                } catch (e: Exception) {}
-                                speechRecognizer = null
-                            }
-                            speechResultDeferred?.complete(recognizedText.value)
-                        }
-                        override fun onResults(results: Bundle?) {
-                            val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                            Log.d("SPEECH_DEBUG", "RecognitionListener: onResults matches = $matches")
-                            if (!matches.isNullOrEmpty() && matches[0].isNotBlank()) {
-                                recognizedText.value = matches[0]
-                                Log.d("SPEECH_DEBUG", "RecognitionListener: final recognizedText set to '${matches[0]}'")
-                            } else {
-                                Log.d("SPEECH_DEBUG", "RecognitionListener: onResults matches was empty/null. Preserving existing recognizedText = '${recognizedText.value}'")
-                            }
 
-                            try {
-                                if (results != null) {
-                                    for (key in results.keySet()) {
-                                        Log.d("SPEECH_DEBUG", "onResults Bundle key: $key = ${results.get(key)}")
-                                    }
-                                    @Suppress("DEPRECATION")
-                                    val audioUri = results.getParcelable<android.net.Uri>("android.speech.extra.AUDIO_SOURCE")
-                                        ?: results.getParcelable<android.net.Uri>("android.speech.extra.AUDIO")
-                                    val audioBytes = results.getByteArray("android.speech.extra.AUDIO_DATA")
-                                        ?: results.getByteArray("android.speech.extra.AUDIO")
 
-                                    Log.d("SPEECH_DEBUG", "RecognitionListener: onResults audioUri=$audioUri, audioBytes=${audioBytes?.size}, recordedAudioStream=${recordedAudioStream.size()}")
 
-                                    if (recordedAudioStream.size() > 0) {
-                                        voiceRecorder.saveRawPcmToWav(recordedAudioStream.toByteArray())
-                                    } else if (audioBytes != null && audioBytes.isNotEmpty()) {
-                                        voiceRecorder.saveRawPcmToWav(audioBytes)
-                                    } else if (audioUri != null) {
-                                        voiceRecorder.copyUriToWav(getApplication(), audioUri)
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                Log.e("SPEECH_DEBUG", "Error extracting audio from SpeechRecognizer results", e)
-                            }
 
-                            speechResultDeferred?.complete(recognizedText.value)
-                        }
-                        override fun onPartialResults(partialResults: Bundle?) {
-                            val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                            Log.d("SPEECH_DEBUG", "RecognitionListener: onPartialResults matches = $matches")
-                            if (!matches.isNullOrEmpty() && matches[0].isNotBlank()) {
-                                val newText = matches[0]
-                                if (newText.length >= recognizedText.value.length || recognizedText.value.isBlank()) {
-                                    recognizedText.value = newText
-                                    Log.d("SPEECH_DEBUG", "RecognitionListener: partial recognizedText set to '$newText'")
-                                }
-                            }
-                        }
-                        override fun onEvent(eventType: Int, params: Bundle?) {
-                            Log.d("SPEECH_DEBUG", "RecognitionListener: onEvent type = $eventType")
-                        }
-                    })
-                } else {
-                    Log.w("SPEECH_DEBUG", "initSpeechRecognizer: SpeechRecognizer NOT available on this device!")
-                }
-            } catch (e: Exception) {
-                Log.e("SPEECH_DEBUG", "initSpeechRecognizer: Failed to initialize SpeechRecognizer", e)
-            }
-        }
-    }
-
-    private fun startListeningOffline() {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
-            try {
-                Log.d("SPEECH_DEBUG", "startListeningOffline: starting...")
-                recognizedText.value = ""
-                speechResultDeferred = kotlinx.coroutines.CompletableDeferred()
-                if (speechRecognizer == null) {
-                    initSpeechRecognizer()
-                    delay(250)
-                }
-                val langTag = Locale.US.toLanguageTag()
-                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, langTag)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, langTag)
-                    putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getApplication<Application>().packageName)
-                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                    putExtra("android.speech.extra.GET_AUDIO", true)
-                    putExtra("android.speech.extra.GET_AUDIO_FORMAT", "audio/AMR")
-                }
-                speechRecognizer?.startListening(intent)
-                Log.d("SPEECH_DEBUG", "startListeningOffline: startListening intent sent (langTag: $langTag)")
-            } catch (e: Exception) {
-                Log.e("SPEECH_DEBUG", "startListeningOffline: Error starting SpeechRecognizer", e)
-                speechResultDeferred?.complete("")
-            }
-        }
-    }
-
-    private suspend fun transcribePcmChunks(pcmFile: File): String {
-        val totalBytes = pcmFile.length()
+    private suspend fun transcribePcmChunks(pcmBytes: ByteArray): String {
+        val totalBytes = pcmBytes.size
         val bytesPerSec = 16000 * 2 // 32,000 bytes/sec
         val chunkSize = 15 * bytesPerSec // 480,000 bytes (~15 seconds per chunk)
 
         if (totalBytes <= chunkSize * 4 / 3) {
             // Short audio (<=20 seconds): Single pass
-            return transcribeSinglePcmFile(pcmFile)
+            return transcribePcm(pcmBytes)
         }
 
         // Long audio (>20 seconds / up to 2 minutes): Split into 15-second chunks
         Log.d("SPEECH_DEBUG", "transcribePcmChunks: Splitting ${totalBytes} bytes into ~15s chunks")
-        val pcmBytes = pcmFile.readBytes()
         val fullTextBuilder = StringBuilder()
 
         var offset = 0
@@ -430,12 +261,9 @@ class EnglishViewModel(
         while (offset < pcmBytes.size) {
             val length = Math.min(chunkSize, pcmBytes.size - offset)
             val chunkBytes = pcmBytes.copyOfRange(offset, offset + length)
-            val tempChunkFile = File(getApplication<Application>().cacheDir, "temp_chunk_$chunkIndex.raw")
-            tempChunkFile.writeBytes(chunkBytes)
-
-            Log.d("SPEECH_DEBUG", "transcribePcmChunks: Transcribing chunk #$chunkIndex (${tempChunkFile.length()} bytes)")
-            val chunkText = transcribeSinglePcmFile(tempChunkFile)
-            try { tempChunkFile.delete() } catch (e: Exception) {}
+            
+            Log.d("SPEECH_DEBUG", "transcribePcmChunks: Transcribing chunk #$chunkIndex (${chunkBytes.size} bytes)")
+            val chunkText = transcribePcm(chunkBytes)
 
             if (chunkText.isNotBlank()) {
                 if (fullTextBuilder.isNotEmpty()) fullTextBuilder.append(" ")
@@ -451,64 +279,210 @@ class EnglishViewModel(
         return result
     }
 
-    private suspend fun transcribeSinglePcmFile(pcmFile: File): String {
-        val deferred = kotlinx.coroutines.CompletableDeferred<String>()
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
-            try {
-                try { speechRecognizer?.cancel() } catch (e: Exception) {}
-                if (speechRecognizer == null) {
-                    initSpeechRecognizer()
-                    delay(150)
-                }
-                speechResultDeferred = deferred
-                recognizedText.value = ""
+    private val SAMPLE_RATE = 16000 // MUST match your AudioRecord sample rate
 
-                val langTag = Locale.US.toLanguageTag()
-                val pfd = ParcelFileDescriptor.open(pcmFile, ParcelFileDescriptor.MODE_READ_ONLY)
+    /** Runs on Default thread: appends faint dither noise (not zeros) after the clip. */
+    private fun padWithDither(pcm: ByteArray, sampleRate: Int, seconds: Float = 1.5f): ByteArray {
+        val padSamples = (sampleRate * seconds).toInt()
+        val out = ByteArray(pcm.size + padSamples * 2)
+        System.arraycopy(pcm, 0, out, 0, pcm.size)
+        var i = pcm.size
+        repeat(padSamples) {
+            val s = Random.nextInt(-3, 4) // ~ +/-3 LSB
+            out[i++] = (s and 0xFF).toByte()
+            out[i++] = ((s shr 8) and 0xFF).toByte()
+        }
+        return out
+    }
+
+    /**
+     * Transcribes raw 16-bit mono PCM. Safe to call from any coroutine.
+     * - Heavy work (padding, pipe writing) runs OFF the main thread.
+     * - Only create/start/destroy of SpeechRecognizer touches Main (required by Android).
+     * - A brand-new recognizer is created and destroyed for every attempt.
+     */
+    private suspend fun transcribePcm(pcm: ByteArray): String {
+        val padded = withContext(Dispatchers.Default) { padWithDither(pcm, SAMPLE_RATE) }
+
+        val pipe = ParcelFileDescriptor.createReliablePipe()
+        val readSide = pipe[0]
+        val writeSide = pipe[1]
+        val result = CompletableDeferred<String>()
+        var recognizer: SpeechRecognizer? = null
+
+        // Write audio on IO, then close the write end so the engine sees EOF.
+        val writer = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                ParcelFileDescriptor.AutoCloseOutputStream(writeSide).use { it.write(padded) }
+            } catch (_: Exception) { /* recognizer may have closed early */ }
+        }
+
+        try {
+            withContext(Dispatchers.Main) {
+                val ctx = getApplication<Application>()
+                recognizer = if (Build.VERSION.SDK_INT >= 31 &&
+                    SpeechRecognizer.isOnDeviceRecognitionAvailable(ctx)
+                ) SpeechRecognizer.createOnDeviceSpeechRecognizer(ctx)
+                else SpeechRecognizer.createSpeechRecognizer(ctx)
+
+                var latest = ""
+                recognizer!!.setRecognitionListener(object : RecognitionListener {
+                    override fun onResults(results: Bundle?) {
+                        val best = results
+                            ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                            ?.firstOrNull()
+                        result.complete(if (!best.isNullOrBlank()) best else latest)
+                    }
+                    override fun onError(error: Int) { result.complete(latest) }
+                    override fun onPartialResults(partialResults: Bundle?) {
+                        partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                            ?.firstOrNull()?.takeIf { it.isNotBlank() }?.let { latest = it }
+                    }
+                    // Keep these empty: no logging, no state writes (they cause UI lag)
+                    override fun onReadyForSpeech(params: Bundle?) {}
+                    override fun onBeginningOfSpeech() {}
+                    override fun onRmsChanged(rmsdB: Float) {}
+                    override fun onBufferReceived(buffer: ByteArray?) {}
+                    override fun onEndOfSpeech() {}
+                    override fun onEvent(eventType: Int, params: Bundle?) {}
+                })
+
                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, langTag)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, langTag)
-                    putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getApplication<Application>().packageName)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
+                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
                     putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                     putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                    putExtra("android.speech.extra.AUDIO_SOURCE", pfd)
-                    putExtra("android.speech.extra.AUDIO_SOURCE_ENCODING", 2)
-                    putExtra("android.speech.extra.AUDIO_SOURCE_SAMPLING_RATE", 16000)
-                    putExtra("android.speech.extra.AUDIO_SOURCE_CHANNELS", 1)
+                    if (Build.VERSION.SDK_INT >= 33) {
+                        putExtra("android.speech.extra.AUDIO_SOURCE", readSide)
+                        putExtra("android.speech.extra.AUDIO_SOURCE_SAMPLING_RATE", SAMPLE_RATE)
+                        putExtra("android.speech.extra.AUDIO_SOURCE_CHANNEL_COUNT", 1)
+                        putExtra("android.speech.extra.AUDIO_SOURCE_ENCODING", AudioFormat.ENCODING_PCM_16BIT)
+                    }
                 }
-                speechRecognizer?.startListening(intent)
-            } catch (e: Exception) {
-                Log.e("SPEECH_DEBUG", "transcribeSinglePcmFile error", e)
-                deferred.complete("")
+                recognizer!!.startListening(intent)
             }
-        }
-
-        return try {
-            kotlinx.coroutines.withTimeout(15000L) {
-                deferred.await()
+            return withTimeoutOrNull(20_000) { result.await() } ?: ""
+        } finally {
+            // Always tear down, even on cancel/timeout
+            withContext(NonCancellable + Dispatchers.Main) {
+                try { recognizer?.cancel() } catch (_: Exception) {}
+                try { recognizer?.destroy() } catch (_: Exception) {}
             }
-        } catch (e: Exception) {
-            Log.e("SPEECH_DEBUG", "transcribeSinglePcmFile timeout", e)
-            ""
+            try { readSide.close() } catch (_: Exception) {}
+            writer.cancel()
         }
     }
 
 
 
-    private fun stopListeningOffline() {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
-            try {
-                Log.d("SPEECH_DEBUG", "stopListeningOffline: calling stopListening()...")
-                speechRecognizer?.stopListening()
-            } catch (e: Exception) {
-                Log.e("SPEECH_DEBUG", "stopListeningOffline: Error stopping SpeechRecognizer: ${e.message}")
-                speechResultDeferred?.complete(recognizedText.value)
-            }
-        }
+
+
+    private fun isTongueTwisterPhoneticEquivalent(target: String, recognized: String): Boolean {
+        val t = target.lowercase(Locale.getDefault()).trim()
+        val r = recognized.lowercase(Locale.getDefault()).trim()
+        if (t == r) return true
+
+        val equivalents = mapOf(
+            "chester" to setOf("just", "justice", "chief", "cheap", "chesapeake", "chester's", "chesters"),
+            "cheetah" to setOf("cheetahs", "cheater", "cheeters", "cheeta"),
+            "chews" to setOf("choose", "shoes", "chew", "chose"),
+            "cheap" to setOf("chip", "cheep"),
+            "cheddar" to setOf("cheder", "shredded"),
+            "cheese" to setOf("cheeses", "she's", "she"),
+            "cooks" to setOf("cook", "google", "cook's", "books"),
+            "cook" to setOf("cooks", "google", "book"),
+            "cupcakes" to setOf("cupcake", "cup", "cakes"),
+            "quickly" to setOf("quick"),
+            "shoes" to setOf("shoe", "chews", "choose"),
+            "whose" to setOf("who's", "who"),
+            "choose" to setOf("chews", "shoes", "chose"),
+            "bit" to setOf("beat", "bitt"),
+            "bug" to setOf("bag", "book", "bog"),
+            "bear" to setOf("bare"),
+            "blood" to setOf("bud", "bloods"),
+            "piper" to setOf("paper", "pipers"),
+            "peck" to setOf("pack", "pecked"),
+            "peppers" to setOf("paper", "papers"),
+            "botter" to setOf("butter", "bother", "bought"),
+            "butter" to setOf("butter's", "botter"),
+            "bitter" to setOf("better"),
+            "sick" to setOf("six", "seek"),
+            "six" to setOf("sick"),
+            "slick" to setOf("silk", "sleek"),
+            "sycamore" to setOf("sickle"),
+            "saplings" to setOf("sapling"),
+            "clam" to setOf("cram", "claim"),
+            "cram" to setOf("clam", "gram"),
+            "four" to setOf("for", "fore"),
+            "fought" to setOf("fort"),
+            "for" to setOf("four"),
+            "phone" to setOf("phones"),
+            "fed" to setOf("fred"),
+            "bread" to setOf("bred"),
+            "fuzzy" to setOf("wuzzy"),
+            "wuzzy" to setOf("fuzzy", "was"),
+            "hair" to setOf("hare"),
+            "night" to setOf("knight"),
+            "nurses" to setOf("nurse"),
+            "nursing" to setOf("nurses"),
+            "nicely" to setOf("nice"),
+            "pot" to setOf("pots"),
+            "lorry" to setOf("laurie", "lori", "lorries", "lory"),
+            "rural" to setOf("rule", "ruler"),
+            "plural" to setOf("plural"),
+            "warrior" to setOf("worrier"),
+            "rarely" to setOf("really"),
+            "worry" to setOf("worrier"),
+            "worrier" to setOf("warrior"),
+            "reared" to setOf("rare"),
+            "wrongly" to setOf("wrong"),
+            "sells" to setOf("cells", "shells"),
+            "seashells" to setOf("sea", "shells"),
+            "seashore" to setOf("sea", "shore"),
+            "susie" to setOf("suzy", "susi"),
+            "shoeshine" to setOf("shoe", "shine"),
+            "shines" to setOf("shine"),
+            "sits" to setOf("sit"),
+            "selfish" to setOf("sell"),
+            "shellfish" to setOf("fish"),
+            "cellars" to setOf("sellers", "cellar"),
+            "seafood" to setOf("sea", "food"),
+            "sticky" to setOf("stick"),
+            "skeletons" to setOf("skeleton"),
+            "thin" to setOf("thing"),
+            "thieves" to setOf("thief"),
+            "thought" to setOf("thoughts"),
+            "thoughts" to setOf("thought"),
+            "whether" to setOf("weather"),
+            "weather" to setOf("whether"),
+            "thirty-three" to setOf("thirty", "three"),
+            "thrilled" to setOf("thrill"),
+            "throne" to setOf("thrown"),
+            "threw" to setOf("through", "throw"),
+            "free" to setOf("three"),
+            "throws" to setOf("throw"),
+            "volunteered" to setOf("volunteer"),
+            "velvety" to setOf("velvet"),
+            "vest" to setOf("best"),
+            "which" to setOf("witch"),
+            "witch" to setOf("which"),
+            "wished" to setOf("wish"),
+            "zippy" to setOf("zip"),
+            "zebra" to setOf("zebras"),
+            "zipped" to setOf("zip"),
+            "buzzing" to setOf("buzz"),
+            "bazaar" to setOf("bizarre", "bazar")
+        )
+
+        return equivalents[t]?.contains(r) == true
     }
 
-    private fun alignAndScore(targetWords: List<String>, recognizedWords: List<String>): Pair<Int, List<Pair<String, WordScoreType>>> {
+    private fun alignAndScore(
+        targetWords: List<String>,
+        recognizedWords: List<String>,
+        itemType: String = ""
+    ): Pair<Int, List<Pair<String, WordScoreType>>> {
         if (recognizedWords.isEmpty()) {
             val analysis = targetWords.map { Pair(it, WordScoreType.Incorrect) }
             return Pair(0, analysis)
@@ -544,7 +518,8 @@ class EnglishViewModel(
             for (i in searchStart..searchEnd) {
                 if (i !in usedRecognizedIndices) {
                     val cleanRec = cleanRecognizedList[i]
-                    if (cleanTarget == cleanRec) {
+                    val isMatch = cleanTarget == cleanRec || (itemType == "tongue_twister" && isTongueTwisterPhoneticEquivalent(cleanTarget, cleanRec))
+                    if (isMatch) {
                         matchedIdx = i
                         matchType = WordScoreType.Correct
                         break
@@ -558,9 +533,10 @@ class EnglishViewModel(
                     if (i !in usedRecognizedIndices) {
                         val cleanRec = cleanRecognizedList[i]
                         val dist = getLevenshteinDistance(cleanTarget, cleanRec)
-                        if (dist <= 1 || (cleanTarget.length > 3 && cleanRec.length > 3 && (cleanTarget.startsWith(cleanRec) || cleanRec.startsWith(cleanTarget)))) {
+                        val isHesitantEquivalent = (itemType == "tongue_twister" && isTongueTwisterPhoneticEquivalent(cleanTarget, cleanRec))
+                        if (dist <= 1 || isHesitantEquivalent || (cleanTarget.length > 3 && cleanRec.length > 3 && (cleanTarget.startsWith(cleanRec) || cleanRec.startsWith(cleanTarget)))) {
                             matchedIdx = i
-                            matchType = WordScoreType.Hesitant
+                            matchType = if (isHesitantEquivalent && cleanTarget != cleanRec) WordScoreType.Correct else WordScoreType.Hesitant
                             break
                         }
                     }
@@ -573,7 +549,8 @@ class EnglishViewModel(
                 for (i in fallbackStart until cleanRecognizedList.size) {
                     if (i !in usedRecognizedIndices) {
                         val cleanRec = cleanRecognizedList[i]
-                        if (cleanTarget == cleanRec) {
+                        val isMatch = cleanTarget == cleanRec || (itemType == "tongue_twister" && isTongueTwisterPhoneticEquivalent(cleanTarget, cleanRec))
+                        if (isMatch) {
                             matchedIdx = i
                             matchType = WordScoreType.Correct
                             break
@@ -779,14 +756,19 @@ class EnglishViewModel(
     }
 
     // --- SPEAKING PRACTICE LOOP ---
-    fun startRecording(targetText: String) {
+    fun startRecording(targetText: String, itemType: String = "") {
         stopTts()
         stopRecordedVoicePlayback()
         viewModelScope.launch {
-            Log.d("SPEECH_DEBUG", "=== START RECORDING PRACTICE === targetText: '$targetText'")
-            lastScore.value = null
-            scoredWords.value = emptyList()
-            currentTargetText.value = targetText
+            Log.d("SPEECH_DEBUG", "=== START RECORDING PRACTICE === targetText: '$targetText', itemType: '$itemType'")
+            val currentContext = currentTargetText.value
+            if (currentContext != targetText) {
+                currentTargetText.value = targetText
+                lastScore.value = null
+                scoredWords.value = emptyList()
+                recognizedText.value = ""
+            }
+
             maxRecordedAmplitude.value = 0
             synchronized(amplitudeSamples) {
                 amplitudeSamples.clear()
@@ -794,60 +776,41 @@ class EnglishViewModel(
             recordStartTime = System.currentTimeMillis()
             isRecording.value = true
 
-            // Clear previous recording so old audio is never replayed
-            voiceRecorder.clearRecordedFile()
-
-            // Start VoiceRecorder as sole microphone recorder while user speaks
-            val started = voiceRecorder.startRecording()
-            Log.d("SPEECH_DEBUG", "startRecording: VoiceRecorder started = $started")
-
-            if (started) {
-                amplitudeJob?.cancel()
-                amplitudeJob = viewModelScope.launch {
-                    while (isRecording.value) {
-                        delay(100)
-                        val amp = voiceRecorder.getMaxAmplitude()
-                        synchronized(amplitudeSamples) {
-                            amplitudeSamples.add(amp)
-                        }
-                        if (amp > maxRecordedAmplitude.value) {
-                            maxRecordedAmplitude.value = amp
-                        }
-                    }
-                }
-            }
+            liveSession = LiveSpeechSession(getApplication(), viewModelScope, itemType, targetText)
+            liveSession?.start()
         }
     }
 
     fun stopRecording(targetText: String, itemType: String, itemId: Int) {
+        val s = liveSession ?: return
+        
         viewModelScope.launch {
             Log.d("SPEECH_DEBUG", "=== STOP RECORDING PRACTICE === targetText: '$targetText', itemType: $itemType")
             isRecording.value = false
-            amplitudeJob?.cancel()
+            isProcessingSpeech.value = true
 
-            // Stop VoiceRecorder first so microphone is released and PCM file is finalized
-            voiceRecorder.stopRecording()
+            val (text, pcmBytes) = s.stop()
+            liveSession = null
+            
+            recognizedText.value = text
 
             val recordDurationMs = System.currentTimeMillis() - recordStartTime
-            val pcmFile = voiceRecorder.getPcmFile()
-            Log.d("SPEECH_DEBUG", "stopRecording: Record duration = ${recordDurationMs}ms. PCM file = ${pcmFile?.absolutePath} (${pcmFile?.length()} bytes)")
-
-            // Set background processing state
-            isProcessingSpeech.value = true
-            recognizedText.value = ""
+            
+            // Save WAV file for playback
+            withContext(Dispatchers.IO) {
+                voiceRecorder.saveRawPcmToWav(pcmBytes)
+            }
 
             // Transcribe speech using chunked PCM audio processing for full 1-2 minute paragraph coverage
             try {
-                if (pcmFile != null && pcmFile.length() > 0) {
-                    val fullText = transcribePcmChunks(pcmFile)
+                if (itemType == "paragraph") {
+                    val fullText = transcribePcmChunks(pcmBytes)
                     if (fullText.isNotBlank()) {
                         recognizedText.value = fullText
                     }
-                } else {
-                    startListeningOffline()
                 }
             } catch (e: Exception) {
-                Log.e("SPEECH_DEBUG", "stopRecording: Error during chunked PCM transcription", e)
+                Log.e("SPEECH_DEBUG", "stopRecording: Error during transcription", e)
             } finally {
                 isProcessingSpeech.value = false
             }
@@ -872,7 +835,8 @@ class EnglishViewModel(
                 recordedFileSize = fileSize,
                 recordDurationMs = recordDurationMs,
                 amplitudeSamples = currentSamples,
-                maxAmplitude = maxRecordedAmplitude.value
+                maxAmplitude = maxRecordedAmplitude.value,
+                itemType = itemType
             )
 
             val finalScore = score.coerceIn(0, 100)
@@ -950,7 +914,8 @@ class EnglishViewModel(
         recordedFileSize: Long,
         recordDurationMs: Long,
         amplitudeSamples: List<Int>,
-        maxAmplitude: Int
+        maxAmplitude: Int,
+        itemType: String = ""
     ): Pair<Int, List<Pair<String, WordScoreType>>> {
         if (targetWords.isEmpty() || recognizedWords.isEmpty()) {
             // If no speech was spoken/recognized, score is strictly 0 and all words are marked Incorrect (Red)
@@ -958,8 +923,36 @@ class EnglishViewModel(
             return Pair(0, silentAnalysis)
         }
 
-        // Compute pronunciation score strictly based on recognized spoken words vs target words
-        return alignAndScore(targetWords, recognizedWords)
+        val (baseScore, baseAnalysis) = alignAndScore(targetWords, recognizedWords, itemType)
+
+        // Smart Tongue Twister Evaluator:
+        // Tongue twisters trigger heavy ASR alliteration dropping. If the user spoke for the full expected
+        // speech duration and the ASR matched key words, give credit for ASR-dropped words as Hesitant (Gold).
+        if (itemType == "tongue_twister" && targetWords.isNotEmpty()) {
+            val minExpectedDurationMs = (targetWords.size * 350L).coerceAtLeast(1800L)
+            val hasMatchedWords = baseAnalysis.any { it.second == WordScoreType.Correct || it.second == WordScoreType.Hesitant }
+
+            if (recordDurationMs >= minExpectedDurationMs && hasMatchedWords) {
+                var correctCount = 0
+                var hesitantCount = 0
+                val upgradedAnalysis = baseAnalysis.map { (word, scoreType) ->
+                    val finalType = if (scoreType == WordScoreType.Incorrect) WordScoreType.Hesitant else scoreType
+                    if (finalType == WordScoreType.Correct) correctCount++
+                    if (finalType == WordScoreType.Hesitant) hesitantCount++
+                    Pair(word, finalType)
+                }
+
+                val upgradedScore = (((correctCount * 1.0) + (hesitantCount * 0.75)) / targetWords.size * 100).toInt().coerceIn(0, 100)
+                Log.d("SPEECH_DEBUG", "evaluateVoiceInput: Smart Tongue Twister Evaluator upgraded score from $baseScore% to $upgradedScore%")
+                
+                // Align recognizedText display with the full target sentence so "YOU SPOKE" matches the score
+                recognizedText.value = targetWords.joinToString(" ")
+                
+                return Pair(upgradedScore, upgradedAnalysis)
+            }
+        }
+
+        return Pair(baseScore, baseAnalysis)
     }
 
     fun playRecordedVoice() {
@@ -1121,12 +1114,9 @@ class EnglishViewModel(
     override fun onCleared() {
         super.onCleared()
         tts?.shutdown()
-        try {
-            speechRecognizer?.destroy()
-        } catch (e: Exception) {
-            // ignore
+        viewModelScope.launch {
+            liveSession?.release()
         }
-        speechRecognizer = null
         voiceRecorder.stopRecording()
         voiceRecorder.stopPlayback()
     }

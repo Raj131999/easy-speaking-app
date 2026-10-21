@@ -434,7 +434,7 @@ fun TongueTwistersScreen(
                                             if (isRecording) {
                                                 viewModel.stopRecording(twister.text, "tongue_twister", twister.id)
                                             } else {
-                                                viewModel.startRecording(twister.text)
+                                                viewModel.startRecording(twister.text, "tongue_twister")
                                             }
                                         }
                                         .testTag("twister_record_mic"),
