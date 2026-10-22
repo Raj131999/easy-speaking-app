@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -50,6 +51,7 @@ fun GrammarScreen(
     val lastScore by viewModel.lastScore.collectAsState()
     val scoredWords by viewModel.scoredWords.collectAsState()
     val recognizedText by viewModel.recognizedText.collectAsState()
+    val isProcessingSpeech by viewModel.isProcessingSpeech.collectAsState()
 
     val scrollState = rememberScrollState()
 
@@ -995,13 +997,17 @@ fun GrammarScreen(
 
                                     // Large Mic Button
                                     Box(contentAlignment = Alignment.Center) {
-                                        val micColor = if (isRecording) Color(0xFFFF5252) else TealPrimary
+                                        val micColor = when {
+                                            isProcessingSpeech -> StreakGold
+                                            isRecording -> Color(0xFFFF5252)
+                                            else -> TealPrimary
+                                        }
                                         Box(
                                             modifier = Modifier
                                                 .size(72.dp)
                                                 .clip(CircleShape)
                                                 .background(micColor)
-                                                .clickable {
+                                                .clickable(enabled = !isProcessingSpeech) {
                                                     if (isRecording) {
                                                         viewModel.stopRecording(item.speechPrompt, "grammar", item.id)
                                                     } else {
@@ -1011,23 +1017,83 @@ fun GrammarScreen(
                                                 .testTag("record_mic_button"),
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            Icon(
-                                                imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                                                contentDescription = if (isRecording) "Stop Recording" else "Record Speaking",
-                                                tint = Color.Black,
-                                                modifier = Modifier.size(32.dp)
-                                            )
+                                            if (isProcessingSpeech) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(30.dp),
+                                                    color = Color.Black,
+                                                    strokeWidth = 3.dp
+                                                )
+                                            } else {
+                                                Icon(
+                                                    imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
+                                                    contentDescription = if (isRecording) "Stop Recording" else "Record Speaking",
+                                                    tint = Color.Black,
+                                                    modifier = Modifier.size(32.dp)
+                                                )
+                                            }
                                         }
                                     }
 
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Text(
-                                        text = if (isRecording) "Recording... Tap to stop" else "Tap to Record & Compare",
+                                        text = when {
+                                            isProcessingSpeech -> "Analyzing your speech... Please wait"
+                                            isRecording -> "Recording... Tap to stop"
+                                            lastScore != null -> "Tap to Record & Compare Again"
+                                            else -> "Tap to Record & Compare"
+                                        },
                                         style = MaterialTheme.typography.bodyMedium.copy(
-                                            color = if (isRecording) Color(0xFFFF5252) else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            fontWeight = if (isRecording) FontWeight.Bold else FontWeight.Normal
+                                            color = when {
+                                                isProcessingSpeech -> StreakGold
+                                                isRecording -> Color(0xFFFF5252)
+                                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                            fontWeight = if (isRecording || isProcessingSpeech) FontWeight.Bold else FontWeight.Normal
                                         )
                                     )
+
+                                    // Audio processing notification banner
+                                    AnimatedVisibility(
+                                        visible = isProcessingSpeech,
+                                        enter = fadeIn() + expandVertically(),
+                                        exit = fadeOut() + shrinkVertically()
+                                    ) {
+                                        Card(
+                                            shape = RoundedCornerShape(12.dp),
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = TealPrimary.copy(alpha = 0.12f)
+                                            ),
+                                            border = BorderStroke(1.dp, TealPrimary.copy(alpha = 0.7f)),
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(24.dp),
+                                                    color = TealPrimary,
+                                                    strokeWidth = 2.5.dp
+                                                )
+                                                Spacer(modifier = Modifier.width(12.dp))
+                                                Column {
+                                                    Text(
+                                                        text = "Evaluating speech pattern...",
+                                                        style = MaterialTheme.typography.bodySmall.copy(
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = TealPrimary
+                                                        )
+                                                    )
+                                                    Text(
+                                                        text = "Analyzing pronunciation and accuracy...",
+                                                        style = MaterialTheme.typography.labelSmall.copy(
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
 
                                     // Real-time Voice to Text Display
                                     Spacer(modifier = Modifier.height(12.dp))
@@ -1039,6 +1105,7 @@ fun GrammarScreen(
 
                                     // Scoring & feedback visualization
                                     lastScore?.let { score ->
+                                        val isPassed = score >= 75
                                         Spacer(modifier = Modifier.height(20.dp))
                                         Text(
                                             text = "Pronunciation Score",
@@ -1050,12 +1117,40 @@ fun GrammarScreen(
                                                 fontWeight = FontWeight.Bold,
                                                 color = when {
                                                     score >= 90 -> Color(0xFF2ECC71)
-                                                    score >= 70 -> StreakGold
-                                                    score >= 50 -> Color(0xFFFF9800)
+                                                    score >= 75 -> Color(0xFF2ECC71)
+                                                    score >= 50 -> StreakGold
                                                     else -> Color(0xFFFF5252)
                                                 }
                                             )
                                         )
+
+                                        // Lesson passing indicator
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = if (isPassed) Color(0xFF2ECC71).copy(alpha = 0.15f) else StreakGold.copy(alpha = 0.15f),
+                                            border = BorderStroke(1.dp, if (isPassed) Color(0xFF2ECC71) else StreakGold),
+                                            modifier = Modifier.padding(top = 4.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (isPassed) Icons.Default.CheckCircle else Icons.Default.Info,
+                                                    contentDescription = null,
+                                                    tint = if (isPassed) Color(0xFF2ECC71) else StreakGold,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = if (isPassed) "Lesson Passed (>= 75%)" else "Need 75% to complete lesson (Current: $score%)",
+                                                    style = MaterialTheme.typography.bodySmall.copy(
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (isPassed) Color(0xFF2ECC71) else StreakGold
+                                                    )
+                                                )
+                                            }
+                                        }
 
                                         // Display Word-by-Word correctness
                                         Spacer(modifier = Modifier.height(12.dp))

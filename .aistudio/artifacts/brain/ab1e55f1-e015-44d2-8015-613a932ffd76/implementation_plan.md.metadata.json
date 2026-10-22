@@ -1,0 +1,6 @@
+{
+  "summary": "Implementation plan to resolve Android microphone capture conflicts between MediaRecorder and SpeechRecognizer, fix speech-to-text pronunciation scoring, and eliminate UI lag and audio hangs across all mobile devices.",
+  "updatedAt": "2026-10-17T09:08:55.867395450Z",
+  "requestFeedback": true,
+  "userFacing": true
+}

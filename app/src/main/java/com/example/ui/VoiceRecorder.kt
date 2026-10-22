@@ -1,31 +1,25 @@
 package com.example.ui
 
 import android.content.Context
-import android.media.AudioFormat
-import android.media.AudioRecord
 import android.media.MediaPlayer
 import android.media.MediaRecorder
+import android.os.Build
 import android.util.Log
 import java.io.File
-import java.io.FileInputStream
 import java.io.FileOutputStream
 
 class VoiceRecorder(private val context: Context) {
 
-    private var audioRecord: AudioRecord? = null
+    private var mediaRecorder: MediaRecorder? = null
     private var mediaPlayer: MediaPlayer? = null
-    private val pcmFile = File(context.cacheDir, "user_voice_attempt.raw")
-    private val wavFile = File(context.cacheDir, "user_voice_attempt.wav")
+    private val recordedFile = File(context.cacheDir, "user_voice_attempt.wav")
+    private val legacyRecordedFile = File(context.cacheDir, "user_voice_attempt.m4a")
 
     @Volatile
     private var isRecordingInternal = false
-    private var recordingThread: Thread? = null
 
     val isRecording: Boolean
         get() = isRecordingInternal
-
-    @Volatile
-    private var currentMaxAmplitude = 0
 
     val isPlaying: Boolean
         get() = try {
@@ -34,123 +28,171 @@ class VoiceRecorder(private val context: Context) {
             false
         }
 
-    fun startRecording(): Boolean {
-        stopRecording() // Clean up active recording
-        stopPlayback()  // Clean up active playback
-
+    fun saveRawPcmToWav(pcmData: ByteArray, sampleRate: Int = 16000, channels: Int = 1, bitsPerSample: Int = 16) {
         try {
-            val sampleRate = 16000
-            val channelConfig = AudioFormat.CHANNEL_IN_MONO
-            val audioFormat = AudioFormat.ENCODING_PCM_16BIT
-            val minBufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
-            val bufferSize = Math.max(minBufferSize, 2048)
+            clearRecordedFile()
+            val totalAudioLen = pcmData.size.toLong()
+            val totalDataLen = totalAudioLen + 36
+            val byteRate = (sampleRate * channels * bitsPerSample / 8).toLong()
 
-            val recorder = AudioRecord(
-                MediaRecorder.AudioSource.MIC,
-                sampleRate,
-                channelConfig,
-                audioFormat,
-                bufferSize
-            )
+            val header = ByteArray(44)
+            // RIFF header
+            header[0] = 'R'.code.toByte()
+            header[1] = 'I'.code.toByte()
+            header[2] = 'F'.code.toByte()
+            header[3] = 'F'.code.toByte()
+            header[4] = (totalDataLen and 0xffL).toByte()
+            header[5] = ((totalDataLen shr 8) and 0xffL).toByte()
+            header[6] = ((totalDataLen shr 16) and 0xffL).toByte()
+            header[7] = ((totalDataLen shr 24) and 0xffL).toByte()
+            header[8] = 'W'.code.toByte()
+            header[9] = 'A'.code.toByte()
+            header[10] = 'V'.code.toByte()
+            header[11] = 'E'.code.toByte()
+            // 'fmt ' chunk
+            header[12] = 'f'.code.toByte()
+            header[13] = 'm'.code.toByte()
+            header[14] = 't'.code.toByte()
+            header[15] = ' '.code.toByte()
+            header[16] = 16 // SubChunk1Size (16 for PCM)
+            header[17] = 0
+            header[18] = 0
+            header[19] = 0
+            header[20] = 1 // AudioFormat 1 = PCM
+            header[21] = 0
+            header[22] = channels.toByte()
+            header[23] = 0
+            header[24] = (sampleRate and 0xff).toByte()
+            header[25] = ((sampleRate shr 8) and 0xff).toByte()
+            header[26] = ((sampleRate shr 16) and 0xff).toByte()
+            header[27] = ((sampleRate shr 24) and 0xff).toByte()
+            header[28] = (byteRate and 0xffL).toByte()
+            header[29] = ((byteRate shr 8) and 0xffL).toByte()
+            header[30] = ((byteRate shr 16) and 0xffL).toByte()
+            header[31] = ((byteRate shr 24) and 0xffL).toByte()
+            header[32] = (channels * bitsPerSample / 8).toByte() // BlockAlign
+            header[33] = 0
+            header[34] = bitsPerSample.toByte()
+            header[35] = 0
+            // 'data' chunk
+            header[36] = 'd'.code.toByte()
+            header[37] = 'a'.code.toByte()
+            header[38] = 't'.code.toByte()
+            header[39] = 'a'.code.toByte()
+            header[40] = (totalAudioLen and 0xffL).toByte()
+            header[41] = ((totalAudioLen shr 8) and 0xffL).toByte()
+            header[42] = ((totalAudioLen shr 16) and 0xffL).toByte()
+            header[43] = ((totalAudioLen shr 24) and 0xffL).toByte()
 
-            if (recorder.state != AudioRecord.STATE_INITIALIZED) {
-                Log.e("SPEECH_DEBUG", "VoiceRecorder: AudioRecord failed to initialize")
-                recorder.release()
-                return false
+            FileOutputStream(recordedFile).use { fos ->
+                fos.write(header)
+                fos.write(pcmData)
+                fos.flush()
             }
-
-            recorder.startRecording()
-            audioRecord = recorder
-            isRecordingInternal = true
-            currentMaxAmplitude = 0
-
-            recordingThread = Thread {
-                writePcmData(recorder, bufferSize)
-            }.apply { start() }
-
-            Log.d("SPEECH_DEBUG", "VoiceRecorder: Started AudioRecord into ${wavFile.absolutePath}")
-            return true
+            Log.d("SPEECH_DEBUG", "VoiceRecorder: Saved ${pcmData.size} bytes PCM as WAV to ${recordedFile.absolutePath}")
         } catch (e: Exception) {
-            Log.e("SPEECH_DEBUG", "VoiceRecorder: Failed to start AudioRecord", e)
-            return false
+            Log.e("SPEECH_DEBUG", "VoiceRecorder: Error saving raw PCM to WAV", e)
         }
     }
 
-    private fun writePcmData(recorder: AudioRecord, bufferSize: Int) {
-        val buffer = ByteArray(bufferSize)
-        var os: FileOutputStream? = null
-        try {
-            os = FileOutputStream(pcmFile)
-            while (isRecordingInternal) {
-                val read = recorder.read(buffer, 0, bufferSize)
-                if (read > 0) {
-                    os.write(buffer, 0, read)
-                    var peak = 0
-                    for (i in 0 until read - 1 step 2) {
-                        val sample = (buffer[i].toInt() and 0xFF) or (buffer[i + 1].toInt() shl 8)
-                        val abs = Math.abs(sample.toShort().toInt())
-                        if (abs > peak) peak = abs
-                    }
-                    currentMaxAmplitude = peak
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("SPEECH_DEBUG", "VoiceRecorder: Error writing PCM data", e)
-        } finally {
+    fun startRecording(): Boolean {
+        stopRecording()
+        stopPlayback()
+        clearRecordedFile()
+
+        val sources = listOf(
+            MediaRecorder.AudioSource.VOICE_RECOGNITION,
+            MediaRecorder.AudioSource.MIC
+        )
+
+        for (source in sources) {
             try {
-                os?.close()
+                val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    MediaRecorder(context)
+                } else {
+                    @Suppress("DEPRECATION")
+                    MediaRecorder()
+                }
+
+                recorder.apply {
+                    setAudioSource(source)
+                    setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                    setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                    setAudioSamplingRate(44100)
+                    setAudioEncodingBitRate(96000)
+                    setOutputFile(legacyRecordedFile.absolutePath)
+                    prepare()
+                    start()
+                }
+                mediaRecorder = recorder
+                isRecordingInternal = true
+                Log.d("SPEECH_DEBUG", "VoiceRecorder: Started recording with source $source to ${legacyRecordedFile.absolutePath}")
+                return true
             } catch (e: Exception) {
-                // ignore
+                Log.w("SPEECH_DEBUG", "VoiceRecorder: Failed starting with source $source: ${e.message}")
+                try {
+                    mediaRecorder?.release()
+                } catch (ex: Exception) {
+                    // ignore
+                }
+                mediaRecorder = null
             }
         }
+        return false
     }
 
     fun stopRecording() {
         isRecordingInternal = false
         try {
-            audioRecord?.apply {
-                if (recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+            mediaRecorder?.apply {
+                try {
                     stop()
+                } catch (e: Exception) {
+                    Log.w("SPEECH_DEBUG", "VoiceRecorder: Exception during stop()", e)
                 }
                 release()
             }
-            recordingThread?.join(500)
-            convertPcmToWav(pcmFile, wavFile, 16000, 1, 16)
-            Log.d("SPEECH_DEBUG", "VoiceRecorder: Stopped AudioRecord and generated WAV (${wavFile.length()} bytes)")
         } catch (e: Exception) {
-            Log.e("SPEECH_DEBUG", "VoiceRecorder: Failed to stop AudioRecord", e)
+            Log.e("SPEECH_DEBUG", "VoiceRecorder: Error stopping MediaRecorder", e)
         } finally {
-            audioRecord = null
-            recordingThread = null
+            mediaRecorder = null
         }
     }
 
     fun getMaxAmplitude(): Int {
-        val amp = currentMaxAmplitude
-        currentMaxAmplitude = 0
-        return amp
+        return try {
+            mediaRecorder?.maxAmplitude ?: 0
+        } catch (e: Exception) {
+            0
+        }
     }
 
     fun startPlayback(onComplete: () -> Unit = {}) {
         stopPlayback()
 
-        if (!wavFile.exists() || wavFile.length() <= 44) {
-            Log.e("SPEECH_DEBUG", "VoiceRecorder: No recorded WAV file found to play.")
+        val fileToPlay = getRecordedFile()
+        if (fileToPlay == null || fileToPlay.length() == 0L) {
+            Log.w("SPEECH_DEBUG", "VoiceRecorder: No recorded file found to play.")
             onComplete()
             return
         }
 
         try {
             val player = MediaPlayer().apply {
-                setDataSource(wavFile.absolutePath)
+                setDataSource(fileToPlay.absolutePath)
                 prepare()
                 start()
                 setOnCompletionListener {
                     onComplete()
                 }
+                setOnErrorListener { _, what, extra ->
+                    Log.e("SPEECH_DEBUG", "VoiceRecorder: MediaPlayer error: what=$what, extra=$extra")
+                    onComplete()
+                    true
+                }
             }
             mediaPlayer = player
-            Log.d("SPEECH_DEBUG", "VoiceRecorder: Started playback of: ${wavFile.absolutePath}")
+            Log.d("SPEECH_DEBUG", "VoiceRecorder: Started playback of: ${fileToPlay.absolutePath} (${fileToPlay.length()} bytes)")
         } catch (e: Exception) {
             Log.e("SPEECH_DEBUG", "VoiceRecorder: Failed to start playback", e)
             onComplete()
@@ -173,128 +215,22 @@ class VoiceRecorder(private val context: Context) {
     }
 
     fun getRecordedFile(): File? {
-        return if (wavFile.exists() && wavFile.length() > 44) wavFile else null
-    }
-
-    fun getPcmFile(): File? {
-        return if (pcmFile.exists() && pcmFile.length() > 0) pcmFile else null
+        if (recordedFile.exists() && recordedFile.length() > 0L) return recordedFile
+        if (legacyRecordedFile.exists() && legacyRecordedFile.length() > 0L) return legacyRecordedFile
+        return null
     }
 
     fun clearRecordedFile() {
         try {
-            if (pcmFile.exists()) pcmFile.delete()
-            if (wavFile.exists()) wavFile.delete()
-            Log.d("SPEECH_DEBUG", "VoiceRecorder: Cleared old recording files")
-        } catch (e: Exception) {
-            Log.e("SPEECH_DEBUG", "VoiceRecorder: Error clearing old recording files", e)
-        }
-    }
-
-    fun saveRawPcmToWav(bytes: ByteArray) {
-        try {
-            pcmFile.writeBytes(bytes)
-            convertPcmToWav(pcmFile, wavFile, 16000, 1, 16)
-            Log.d("SPEECH_DEBUG", "VoiceRecorder: Saved raw PCM bytes to WAV (${wavFile.length()} bytes)")
-        } catch (e: Exception) {
-            Log.e("SPEECH_DEBUG", "VoiceRecorder: Error saving raw PCM bytes to WAV", e)
-        }
-    }
-
-    fun copyUriToWav(context: Context, uri: android.net.Uri) {
-        try {
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                FileOutputStream(wavFile).use { output ->
-                    input.copyTo(output)
-                }
+            if (recordedFile.exists()) {
+                recordedFile.delete()
+                Log.d("SPEECH_DEBUG", "VoiceRecorder: Deleted recorded WAV file")
             }
-            Log.d("SPEECH_DEBUG", "VoiceRecorder: Copied audio URI to WAV (${wavFile.length()} bytes)")
-        } catch (e: Exception) {
-            Log.e("SPEECH_DEBUG", "VoiceRecorder: Error copying audio URI to WAV", e)
-        }
-    }
-
-    private fun convertPcmToWav(
-        rawFile: File,
-        waveFile: File,
-        sampleRate: Long,
-        channels: Int,
-        bitsPerSample: Int
-    ) {
-        if (!rawFile.exists()) return
-
-        val byteRate = sampleRate * channels * bitsPerSample / 8
-        val totalAudioLen = rawFile.length()
-        val totalDataLen = totalAudioLen + 36
-
-        var `in`: FileInputStream? = null
-        var out: FileOutputStream? = null
-
-        try {
-            `in` = FileInputStream(rawFile)
-            out = FileOutputStream(waveFile)
-
-            val header = ByteArray(44)
-            header[0] = 'R'.code.toByte()
-            header[1] = 'I'.code.toByte()
-            header[2] = 'F'.code.toByte()
-            header[3] = 'F'.code.toByte()
-            header[4] = (totalDataLen and 0xff).toByte()
-            header[5] = (totalDataLen shr 8 and 0xff).toByte()
-            header[6] = (totalDataLen shr 16 and 0xff).toByte()
-            header[7] = (totalDataLen shr 24 and 0xff).toByte()
-            header[8] = 'W'.code.toByte()
-            header[9] = 'A'.code.toByte()
-            header[10] = 'V'.code.toByte()
-            header[11] = 'E'.code.toByte()
-            header[12] = 'f'.code.toByte()
-            header[13] = 'm'.code.toByte()
-            header[14] = 't'.code.toByte()
-            header[15] = ' '.code.toByte()
-            header[16] = 16 // 4 bytes: size of 'fmt ' chunk
-            header[17] = 0
-            header[18] = 0
-            header[19] = 0
-            header[20] = 1 // Format = 1 (PCM)
-            header[21] = 0
-            header[22] = channels.toByte()
-            header[23] = 0
-            header[24] = (sampleRate and 0xff).toByte()
-            header[25] = (sampleRate shr 8 and 0xff).toByte()
-            header[26] = (sampleRate shr 16 and 0xff).toByte()
-            header[27] = (sampleRate shr 24 and 0xff).toByte()
-            header[28] = (byteRate and 0xff).toByte()
-            header[29] = (byteRate shr 8 and 0xff).toByte()
-            header[30] = (byteRate shr 16 and 0xff).toByte()
-            header[31] = (byteRate shr 24 and 0xff).toByte()
-            header[32] = (channels * bitsPerSample / 8).toByte() // block align
-            header[33] = 0
-            header[34] = bitsPerSample.toByte()
-            header[35] = 0
-            header[36] = 'd'.code.toByte()
-            header[37] = 'a'.code.toByte()
-            header[38] = 't'.code.toByte()
-            header[39] = 'a'.code.toByte()
-            header[40] = (totalAudioLen and 0xff).toByte()
-            header[41] = (totalAudioLen shr 8 and 0xff).toByte()
-            header[42] = (totalAudioLen shr 16 and 0xff).toByte()
-            header[43] = (totalAudioLen shr 24 and 0xff).toByte()
-
-            out.write(header, 0, 44)
-
-            val buffer = ByteArray(2048)
-            var bytesRead: Int
-            while (`in`.read(buffer).also { bytesRead = it } != -1) {
-                out.write(buffer, 0, bytesRead)
+            if (legacyRecordedFile.exists()) {
+                legacyRecordedFile.delete()
             }
         } catch (e: Exception) {
-            Log.e("SPEECH_DEBUG", "VoiceRecorder: Error writing WAV header/data", e)
-        } finally {
-            try {
-                `in`?.close()
-                out?.close()
-            } catch (e: Exception) {
-                // ignore
-            }
+            Log.e("SPEECH_DEBUG", "VoiceRecorder: Error clearing old recording file", e)
         }
     }
 }

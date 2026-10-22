@@ -54,6 +54,7 @@ fun DailySentencesScreen(
     val lastScore by viewModel.lastScore.collectAsState()
     val scoredWords by viewModel.scoredWords.collectAsState()
     val recognizedText by viewModel.recognizedText.collectAsState()
+    val isProcessingSpeech by viewModel.isProcessingSpeech.collectAsState()
 
     val currentList = if (isReviewSession) reviewList else sentences
     val effectiveIndex = if (isReviewSession) {
@@ -67,11 +68,11 @@ fun DailySentencesScreen(
     val mapListState = rememberLazyListState()
     var scrollToTargetIndex by remember { mutableStateOf<Int?>(null) }
 
-    val completedCount = remember(sentences) { sentences.count { it.timesPracticed > 0 } }
+    val completedCount = remember(sentences) { sentences.count { it.isCompleted || it.lastAccuracy >= 75 } }
 
     LaunchedEffect(activeSentence == null, isReviewSession, completedCount, scrollToTargetIndex) {
         if (!isReviewSession && activeSentence == null && sentences.isNotEmpty()) {
-            val targetIdx = scrollToTargetIndex ?: sentences.indexOfFirst { it.timesPracticed == 0 }.takeIf { it >= 0 } ?: (sentences.size - 1)
+            val targetIdx = scrollToTargetIndex ?: sentences.indexOfFirst { !it.isCompleted && it.lastAccuracy < 75 }.takeIf { it >= 0 } ?: (sentences.size - 1)
             if (targetIdx in sentences.indices) {
                 mapListState.animateScrollToItem(targetIdx)
             }
@@ -165,10 +166,10 @@ fun DailySentencesScreen(
                     contentPadding = PaddingValues(top = 16.dp, bottom = 48.dp, start = 16.dp, end = 16.dp)
                 ) {
                     itemsIndexed(sentences) { index, sentence ->
-                        val isCompleted = sentence.timesPracticed > 0
+                        val isCompleted = sentence.isCompleted || sentence.lastAccuracy >= 75
                         // The first uncompleted item or the current selected one is active
-                        val isFirstUncompleted = sentences.indexOfFirst { it.timesPracticed == 0 } == index
-                        val isActive = isFirstUncompleted || (sentences.all { it.timesPracticed > 0 } && index == 0)
+                        val isFirstUncompleted = sentences.indexOfFirst { !it.isCompleted && it.lastAccuracy < 75 } == index
+                        val isActive = isFirstUncompleted || (sentences.all { it.isCompleted || it.lastAccuracy >= 75 } && index == 0)
 
                         // Alternate left & right detail cards around the center line
                         val isLeft = index % 2 == 0
@@ -442,8 +443,15 @@ fun DailySentencesScreen(
                                         modifier = Modifier
                                             .size(76.dp)
                                             .clip(CircleShape)
-                                            .background(if (isRecording) Color(0xFFFF5252) else if (isReviewSession) PolishTeal else TealPrimary)
-                                            .clickable {
+                                            .background(
+                                                when {
+                                                    isProcessingSpeech -> StreakGold
+                                                    isRecording -> Color(0xFFFF5252)
+                                                    isReviewSession -> PolishTeal
+                                                    else -> TealPrimary
+                                                }
+                                            )
+                                            .clickable(enabled = !isProcessingSpeech) {
                                                 if (isRecording) {
                                                     viewModel.stopRecording(sentence.text, "daily_sentence", sentence.id)
                                                 } else {
@@ -453,12 +461,20 @@ fun DailySentencesScreen(
                                             .testTag("sentence_record_mic"),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(
-                                            imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                                            contentDescription = "Record",
-                                            tint = Color.Black,
-                                            modifier = Modifier.size(32.dp)
-                                        )
+                                        if (isProcessingSpeech) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(32.dp),
+                                                color = Color.Black,
+                                                strokeWidth = 3.dp
+                                            )
+                                        } else {
+                                            Icon(
+                                                imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
+                                                contentDescription = "Record",
+                                                tint = Color.Black,
+                                                modifier = Modifier.size(32.dp)
+                                            )
+                                        }
                                     }
                                 }
 
@@ -469,8 +485,9 @@ fun DailySentencesScreen(
                                     onClick = {
                                         viewModel.lastScore.value = null
                                         viewModel.scoredWords.value = emptyList()
+                                        viewModel.recognizedText.value = ""
                                     },
-                                    enabled = lastScore != null,
+                                    enabled = lastScore != null && !isProcessingSpeech,
                                     modifier = Modifier
                                         .size(48.dp)
                                         .background(MaterialTheme.colorScheme.secondary.copy(alpha = if (lastScore != null) 0.5f else 0.15f), CircleShape)
@@ -484,11 +501,120 @@ fun DailySentencesScreen(
                             }
 
                             Text(
-                                text = if (isRecording) "Recording... Speak clearly now" else "Tap microphone to record yourself",
+                                text = when {
+                                    isProcessingSpeech -> "Analyzing your audio... Please wait"
+                                    isRecording -> "Recording... Speak clearly now"
+                                    lastScore != null -> "Tap microphone to try again"
+                                    else -> "Tap microphone to record yourself"
+                                },
                                 style = MaterialTheme.typography.bodySmall.copy(
-                                    color = if (isRecording) Color(0xFFFF5252) else MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = when {
+                                        isProcessingSpeech -> StreakGold
+                                        isRecording -> Color(0xFFFF5252)
+                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    fontWeight = if (isProcessingSpeech || isRecording) FontWeight.Bold else FontWeight.Normal
                                 )
                             )
+
+                            // Action buttons right under mic after speaking
+                            if (lastScore != null) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 4.dp)
+                                ) {
+                                    val hasNext = if (isReviewSession) reviewIndex < reviewList.size - 1 else effectiveIndex < sentences.size - 1
+                                    if (hasNext) {
+                                        Button(
+                                            onClick = {
+                                                if (isReviewSession) {
+                                                    val nextIdx = reviewIndex + 1
+                                                    viewModel.currentReviewIndex.value = nextIdx
+                                                    viewModel.activeDailySentence.value = reviewList[nextIdx]
+                                                } else {
+                                                    viewModel.activeDailySentence.value = sentences[effectiveIndex + 1]
+                                                }
+                                                viewModel.lastScore.value = null
+                                                viewModel.scoredWords.value = emptyList()
+                                                viewModel.recognizedText.value = ""
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = if (isReviewSession) PolishTeal else TealPrimary),
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
+                                            Text(if (isReviewSession) "Next Review" else "Next Lesson", color = Color.Black, fontWeight = FontWeight.Bold)
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Icon(imageVector = Icons.Default.ArrowForward, contentDescription = "Next Lesson", tint = Color.Black)
+                                        }
+                                    }
+                                    Button(
+                                        onClick = {
+                                            if (isReviewSession) {
+                                                viewModel.endReviewSession()
+                                                viewModel.navigateTo(Screen.Home)
+                                            } else {
+                                                if (effectiveIndex in sentences.indices) {
+                                                    scrollToTargetIndex = effectiveIndex
+                                                }
+                                                viewModel.activeDailySentence.value = null
+                                            }
+                                            viewModel.lastScore.value = null
+                                            viewModel.scoredWords.value = emptyList()
+                                            viewModel.recognizedText.value = ""
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Text("Finish (Map)", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+                            }
+
+                            // Audio processing notification banner
+                            AnimatedVisibility(
+                                visible = isProcessingSpeech,
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically()
+                            ) {
+                                Card(
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = TealPrimary.copy(alpha = 0.12f)
+                                    ),
+                                    border = BorderStroke(1.dp, TealPrimary.copy(alpha = 0.7f)),
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(24.dp),
+                                            color = TealPrimary,
+                                            strokeWidth = 2.5.dp
+                                        )
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Column {
+                                            Text(
+                                                text = "Analyzing your speech...",
+                                                style = MaterialTheme.typography.bodySmall.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = TealPrimary
+                                                )
+                                            )
+                                            Text(
+                                                text = "Evaluating pronunciation and fluency...",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            }
 
                             // Real-time Voice to Text Display
                             SpokenVoiceToTextCard(
@@ -499,6 +625,7 @@ fun DailySentencesScreen(
 
                             // Accuracy Score and Feedback
                             lastScore?.let { score ->
+                                val isPassed = score >= 75
                                 HorizontalDivider()
 
                                 Row(
@@ -506,21 +633,30 @@ fun DailySentencesScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        text = "PRONUNCIATION SCORE:",
-                                        style = MaterialTheme.typography.labelMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    Column {
+                                        Text(
+                                            text = "PRONUNCIATION SCORE:",
+                                            style = MaterialTheme.typography.labelMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
                                         )
-                                    )
+                                        Text(
+                                            text = if (isPassed) "Lesson Passed (>= 75%)" else "Need 75% to Complete",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isPassed) Color(0xFF2ECC71) else StreakGold
+                                            )
+                                        )
+                                    }
                                     Text(
                                         text = "$score%",
                                         style = MaterialTheme.typography.titleLarge.copy(
                                             fontWeight = FontWeight.Bold,
                                             color = when {
                                                 score >= 90 -> Color(0xFF2ECC71)
-                                                score >= 70 -> StreakGold
-                                                score >= 50 -> Color(0xFFFF9800)
+                                                score >= 75 -> Color(0xFF2ECC71)
+                                                score >= 50 -> StreakGold
                                                 else -> Color(0xFFFF5252)
                                             }
                                         )
@@ -553,62 +689,6 @@ fun DailySentencesScreen(
                                             )
                                         }
                                     }
-                                }
-
-                                Spacer(modifier = Modifier.height(4.dp))
-
-                                // Next navigation button
-                                Button(
-                                    onClick = {
-                                        if (isReviewSession) {
-                                            if (reviewIndex < reviewList.size - 1) {
-                                                val nextIdx = reviewIndex + 1
-                                                viewModel.currentReviewIndex.value = nextIdx
-                                                viewModel.activeDailySentence.value = reviewList[nextIdx]
-                                                viewModel.lastScore.value = null
-                                                viewModel.scoredWords.value = emptyList()
-                                                viewModel.recognizedText.value = ""
-                                            } else {
-                                                // Completed review session! Return cleanly to home
-                                                viewModel.endReviewSession()
-                                                viewModel.navigateTo(Screen.Home)
-                                            }
-                                        } else {
-                                            if (effectiveIndex < sentences.size - 1) {
-                                                // Advance to next card
-                                                viewModel.activeDailySentence.value = sentences[effectiveIndex + 1]
-                                                viewModel.lastScore.value = null
-                                                viewModel.scoredWords.value = emptyList()
-                                            } else {
-                                                // Completed workout! Go back to Map
-                                                if (effectiveIndex in sentences.indices) {
-                                                    scrollToTargetIndex = effectiveIndex
-                                                }
-                                                viewModel.activeDailySentence.value = null
-                                                viewModel.lastScore.value = null
-                                                viewModel.scoredWords.value = emptyList()
-                                                viewModel.recognizedText.value = ""
-                                            }
-                                        }
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = if (isReviewSession) PolishTeal else TealPrimary),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(
-                                        text = if (isReviewSession) {
-                                            if (reviewIndex < reviewList.size - 1) "Next Review Item" else "Finish Review Session"
-                                        } else {
-                                            if (effectiveIndex < sentences.size - 1) "Next Sentence" else "Back to Map"
-                                        },
-                                        color = Color.Black,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Icon(
-                                        imageVector = if (isReviewSession && reviewIndex == reviewList.size - 1) Icons.Default.CheckCircle else Icons.Default.ArrowForward,
-                                        contentDescription = "Next",
-                                        tint = Color.Black
-                                    )
                                 }
                             }
                         }

@@ -53,6 +53,7 @@ fun TongueTwistersScreen(
     val lastScore by viewModel.lastScore.collectAsState()
     val scoredWords by viewModel.scoredWords.collectAsState()
     val recognizedText by viewModel.recognizedText.collectAsState()
+    val isProcessingSpeech by viewModel.isProcessingSpeech.collectAsState()
 
     val scrollState = rememberScrollState()
     val mapListState = rememberLazyListState()
@@ -63,12 +64,12 @@ fun TongueTwistersScreen(
     }
 
     var scrollToTargetIndex by remember { mutableStateOf<Int?>(null) }
-    val twistersCompletedCount = remember(twisters) { twisters.count { it.isCompleted } }
+    val twistersCompletedCount = remember(twisters) { twisters.count { it.isCompleted || it.maxAccuracy >= 75 } }
 
     // Auto-scroll map to next uncompleted tongue twister or explicit target
     LaunchedEffect(activeTwister == null, twistersCompletedCount, scrollToTargetIndex) {
         if (activeTwister == null && twisters.isNotEmpty()) {
-            val targetIdx = scrollToTargetIndex ?: twisters.indexOfFirst { !it.isCompleted }.takeIf { it >= 0 } ?: (twisters.size - 1)
+            val targetIdx = scrollToTargetIndex ?: twisters.indexOfFirst { !it.isCompleted && it.maxAccuracy < 75 }.takeIf { it >= 0 } ?: (twisters.size - 1)
             if (targetIdx in twisters.indices) {
                 mapListState.animateScrollToItem(targetIdx)
             }
@@ -163,9 +164,9 @@ fun TongueTwistersScreen(
                     contentPadding = PaddingValues(top = 16.dp, bottom = 48.dp, start = 16.dp, end = 16.dp)
                 ) {
                     itemsIndexed(twisters) { index, twister ->
-                        val isCompleted = twister.isCompleted
-                        val isFirstUncompleted = twisters.indexOfFirst { !it.isCompleted } == index
-                        val isActive = isFirstUncompleted || (twisters.all { it.isCompleted } && index == 0)
+                        val isCompleted = twister.isCompleted || twister.maxAccuracy >= 75
+                        val isFirstUncompleted = twisters.indexOfFirst { !it.isCompleted && it.maxAccuracy < 75 } == index
+                        val isActive = isFirstUncompleted || (twisters.all { it.isCompleted || it.maxAccuracy >= 75 } && index == 0)
 
                         val isLeft = index % 2 == 0
 
@@ -429,8 +430,14 @@ fun TongueTwistersScreen(
                                     modifier = Modifier
                                         .size(68.dp)
                                         .clip(CircleShape)
-                                        .background(if (isRecording) Color(0xFFFF5252) else TealPrimary)
-                                        .clickable {
+                                        .background(
+                                            when {
+                                                isProcessingSpeech -> StreakGold
+                                                isRecording -> Color(0xFFFF5252)
+                                                else -> TealPrimary
+                                            }
+                                        )
+                                        .clickable(enabled = !isProcessingSpeech) {
                                             if (isRecording) {
                                                 viewModel.stopRecording(twister.text, "tongue_twister", twister.id)
                                             } else {
@@ -440,12 +447,20 @@ fun TongueTwistersScreen(
                                         .testTag("twister_record_mic"),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(
-                                        imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                                        contentDescription = "Mic",
-                                        tint = Color.Black,
-                                        modifier = Modifier.size(28.dp)
-                                    )
+                                    if (isProcessingSpeech) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(28.dp),
+                                            color = Color.Black,
+                                            strokeWidth = 3.dp
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
+                                            contentDescription = "Mic",
+                                            tint = Color.Black,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                    }
                                 }
                             }
 
@@ -456,8 +471,9 @@ fun TongueTwistersScreen(
                                 onClick = {
                                     viewModel.lastScore.value = null
                                     viewModel.scoredWords.value = emptyList()
+                                    viewModel.recognizedText.value = ""
                                 },
-                                enabled = lastScore != null,
+                                enabled = lastScore != null && !isProcessingSpeech,
                                 modifier = Modifier
                                     .size(44.dp)
                                     .background(MaterialTheme.colorScheme.secondary.copy(alpha = if (lastScore != null) 0.5f else 0.15f), CircleShape)
@@ -471,11 +487,108 @@ fun TongueTwistersScreen(
                         }
 
                         Text(
-                            text = if (isRecording) "Recording... Speed read now!" else "Press Mic and read the tongue twister fast",
+                            text = when {
+                                isProcessingSpeech -> "Analyzing your audio... Please wait"
+                                isRecording -> "Recording... Speed read now!"
+                                lastScore != null -> "Tap Mic to try again"
+                                else -> "Press Mic and read the tongue twister fast"
+                            },
                             style = MaterialTheme.typography.bodySmall.copy(
-                                color = if (isRecording) Color(0xFFFF5252) else MaterialTheme.colorScheme.onSurfaceVariant
+                                color = when {
+                                    isProcessingSpeech -> StreakGold
+                                    isRecording -> Color(0xFFFF5252)
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                fontWeight = if (isProcessingSpeech || isRecording) FontWeight.Bold else FontWeight.Normal
                             )
                         )
+
+                        // Action buttons right under mic after speaking
+                        if (lastScore != null) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp)
+                            ) {
+                                if (currentIndex < twisters.size - 1) {
+                                    Button(
+                                        onClick = {
+                                            viewModel.activeTongueTwister.value = twisters[currentIndex + 1]
+                                            viewModel.lastScore.value = null
+                                            viewModel.scoredWords.value = emptyList()
+                                            viewModel.recognizedText.value = ""
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Text("Next Lesson", color = Color.Black, fontWeight = FontWeight.Bold)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Icon(imageVector = Icons.Default.ArrowForward, contentDescription = "Next Lesson", tint = Color.Black)
+                                    }
+                                }
+                                Button(
+                                    onClick = {
+                                        if (currentIndex in twisters.indices) {
+                                            scrollToTargetIndex = currentIndex
+                                        }
+                                        viewModel.activeTongueTwister.value = null
+                                        viewModel.lastScore.value = null
+                                        viewModel.scoredWords.value = emptyList()
+                                        viewModel.recognizedText.value = ""
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text("Finish (Map)", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                        }
+
+                        // Audio processing notification banner
+                        AnimatedVisibility(
+                            visible = isProcessingSpeech,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically()
+                        ) {
+                            Card(
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = TealPrimary.copy(alpha = 0.12f)
+                                ),
+                                border = BorderStroke(1.dp, TealPrimary.copy(alpha = 0.7f)),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        color = TealPrimary,
+                                        strokeWidth = 2.5.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(
+                                            text = "Analyzing speed drill...",
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = TealPrimary
+                                            )
+                                        )
+                                        Text(
+                                            text = "Evaluating pronunciation and phonetics...",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+                        }
 
                         // Real-time Voice to Text Display
                         SpokenVoiceToTextCard(
@@ -485,6 +598,7 @@ fun TongueTwistersScreen(
                         )
 
                         lastScore?.let { score ->
+                            val isPassed = score >= 75
                             HorizontalDivider()
 
                             Row(
@@ -492,18 +606,27 @@ fun TongueTwistersScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = "PRONUNCIATION SCORE:",
-                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                )
+                                Column {
+                                    Text(
+                                        text = "PRONUNCIATION SCORE:",
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    )
+                                    Text(
+                                        text = if (isPassed) "Drill Passed (>= 75%)" else "Need 75% to Complete",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isPassed) Color(0xFF2ECC71) else StreakGold
+                                        )
+                                    )
+                                }
                                 Text(
                                     text = "$score%",
                                     style = MaterialTheme.typography.titleLarge.copy(
                                         fontWeight = FontWeight.Bold,
                                         color = when {
                                             score >= 90 -> Color(0xFF2ECC71)
-                                            score >= 70 -> StreakGold
-                                            score >= 50 -> Color(0xFFFF9800)
+                                            score >= 75 -> Color(0xFF2ECC71)
+                                            score >= 50 -> StreakGold
                                             else -> Color(0xFFFF5252)
                                         }
                                     )
@@ -537,34 +660,6 @@ fun TongueTwistersScreen(
                                     }
                                 }
                             }
-                        }
-
-                        // Navigation indicators
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(
-                            onClick = {
-                                if (currentIndex < twisters.size - 1) {
-                                    viewModel.activeTongueTwister.value = twisters[currentIndex + 1]
-                                } else {
-                                    if (currentIndex in twisters.indices) {
-                                        scrollToTargetIndex = currentIndex
-                                    }
-                                    viewModel.activeTongueTwister.value = null
-                                    viewModel.lastScore.value = null
-                                    viewModel.scoredWords.value = emptyList()
-                                    viewModel.recognizedText.value = ""
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = if (currentIndex < twisters.size - 1) "Next Tongue Twister" else "Complete Sound Drill",
-                                color = Color.Black,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Icon(imageVector = Icons.Default.ArrowForward, contentDescription = "Next", tint = Color.Black)
                         }
                     }
                 }

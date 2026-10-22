@@ -789,7 +789,9 @@ class EnglishViewModel(
             isRecording.value = false
             isProcessingSpeech.value = true
 
-            val (text, pcmBytes) = s.stop()
+            val speechResult: Pair<String, ByteArray> = s.stop()
+            val text: String = speechResult.first
+            val pcmBytes: ByteArray = speechResult.second
             liveSession = null
             
             recognizedText.value = text
@@ -801,109 +803,122 @@ class EnglishViewModel(
                 voiceRecorder.saveRawPcmToWav(pcmBytes)
             }
 
-            // Transcribe speech using chunked PCM audio processing for full 1-2 minute paragraph coverage
             try {
+                // Transcribe speech using chunked PCM audio processing for full 1-2 minute paragraph coverage
                 if (itemType == "paragraph") {
                     val fullText = transcribePcmChunks(pcmBytes)
                     if (fullText.isNotBlank()) {
                         recognizedText.value = fullText
                     }
                 }
-            } catch (e: Exception) {
-                Log.e("SPEECH_DEBUG", "stopRecording: Error during transcription", e)
-            } finally {
-                isProcessingSpeech.value = false
-            }
 
-            Log.d("SPEECH_DEBUG", "stopRecording: Transcription completed! Final recognizedText = '${recognizedText.value}'")
+                Log.d("SPEECH_DEBUG", "stopRecording: Transcription completed! Final recognizedText = '${recognizedText.value}'")
 
-            val cleanTarget = targetText.replace(Regex("[^a-zA-Z\\s]"), "")
-            val words = cleanTarget.split(" ").filter { it.isNotEmpty() }
+                val cleanTarget = targetText.replace(Regex("[^a-zA-Z\\s]"), "")
+                val words = cleanTarget.split(" ").filter { it.isNotEmpty() }
 
-            val cleanRecognized = recognizedText.value.replace(Regex("[^a-zA-Z\\s]"), "").trim()
-            val recognizedWords = cleanRecognized.split(" ").filter { it.isNotEmpty() }
+                val cleanRecognized = recognizedText.value.replace(Regex("[^a-zA-Z\\s]"), "").trim()
+                val recognizedWords = cleanRecognized.split(" ").filter { it.isNotEmpty() }
 
-            Log.d("SPEECH_DEBUG", "stopRecording: Evaluation targetWords=$words, recognizedWords=$recognizedWords")
+                Log.d("SPEECH_DEBUG", "stopRecording: Evaluation targetWords=$words, recognizedWords=$recognizedWords")
 
-            val recordedFile = voiceRecorder.getRecordedFile()
-            val fileSize = recordedFile?.length() ?: 0L
-            val currentSamples = synchronized(amplitudeSamples) { amplitudeSamples.toList() }
+                val recordedFile = voiceRecorder.getRecordedFile()
+                val fileSize = recordedFile?.length() ?: 0L
+                val currentSamples = synchronized(amplitudeSamples) { amplitudeSamples.toList() }
 
-            val (score, analysis) = evaluateVoiceInput(
-                targetWords = words,
-                recognizedWords = recognizedWords,
-                recordedFileSize = fileSize,
-                recordDurationMs = recordDurationMs,
-                amplitudeSamples = currentSamples,
-                maxAmplitude = maxRecordedAmplitude.value,
-                itemType = itemType
-            )
+                val (score, analysis) = evaluateVoiceInput(
+                    targetWords = words,
+                    recognizedWords = recognizedWords,
+                    recordedFileSize = fileSize,
+                    recordDurationMs = recordDurationMs,
+                    amplitudeSamples = currentSamples,
+                    maxAmplitude = maxRecordedAmplitude.value,
+                    itemType = itemType
+                )
 
-            val finalScore = score.coerceIn(0, 100)
-            Log.d("SPEECH_DEBUG", "stopRecording: Evaluation finalScore=$finalScore, analysis=$analysis")
-            lastScore.value = finalScore
-            scoredWords.value = analysis
+                val finalScore = score.coerceIn(0, 100)
+                Log.d("SPEECH_DEBUG", "stopRecording: Evaluation finalScore=$finalScore, analysis=$analysis")
+                lastScore.value = finalScore
+                scoredWords.value = analysis
 
-            // Track user XP progression (Max once per lesson/exercise per calendar day)
-            // Conversations only award XP upon completing all sentences in a level, not per sentence
-            val xpAwarded = if (finalScore > 0 && itemType != "conversation") {
-                when {
-                    finalScore >= 90 -> 15
-                    finalScore >= 80 -> 10
-                    else -> 5
+                // Track user XP progression (Max once per lesson/exercise per calendar day)
+                // Conversations only award XP upon completing all sentences in a level, not per sentence.
+                // Critical: Only award XP if the user meets or exceeds the lesson's passing threshold!
+                // (60% for long paragraphs, 75% for daily sentences, tongue twisters, and grammar drills)
+                val passingThreshold = if (itemType == "paragraph") 60 else 75
+                val isPassed = finalScore >= passingThreshold
+
+                val xpAwarded = if (isPassed && itemType != "conversation") {
+                    when {
+                        finalScore >= 90 -> 15
+                        finalScore >= 80 -> 10
+                        else -> 5 // Passing score (>= 75% for regular drills, >= 60% for paragraph)
+                    }
+                } else {
+                    0
                 }
-            } else {
-                0
-            }
 
-            if (xpAwarded > 0) {
-                val itemKey = if (itemId > 0) "${itemType}_${itemId}" else "${itemType}_${targetText.trim().hashCode()}"
-                val xpClaimed = repository.awardLessonXp(itemKey, xpAwarded)
-                if (xpClaimed) {
-                    showRewardOverlay.value = xpAwarded
+                if (xpAwarded > 0) {
+                    val itemKey = if (itemId > 0) "${itemType}_${itemId}" else "${itemType}_${targetText.trim().hashCode()}"
+                    val xpClaimed = repository.awardLessonXp(itemKey, xpAwarded)
+                    if (xpClaimed) {
+                        showRewardOverlay.value = xpAwarded
+                    } else {
+                        showRewardOverlay.value = null
+                    }
                 } else {
                     showRewardOverlay.value = null
                 }
-            } else {
-                showRewardOverlay.value = null
-            }
 
-            // Persistent progress update based on module type
-            if (finalScore > 0) {
-                when (itemType) {
-                    "grammar" -> {
-                        activeGrammarLesson.value?.let { lesson ->
-                            repository.updateGrammarLesson(lesson.copy(isCompleted = true))
+                // Persistent progress update based on module type
+                // Except paragraph reading (which passes at 60%), all lessons require at least 75% to complete!
+                if (finalScore > 0) {
+                    when (itemType) {
+                        "grammar" -> {
+                            activeGrammarLesson.value?.let { lesson ->
+                                val isPassed = lesson.isCompleted || (finalScore >= 75)
+                                repository.updateGrammarLesson(lesson.copy(isCompleted = isPassed))
+                            }
                         }
-                    }
-                    "daily_sentence" -> {
-                        activeDailySentence.value?.let { sentence ->
-                            val isCorrect = finalScore >= 85
-                            repository.updateDailySentence(sentence.copy(isCompleted = true))
-                            repository.scheduleSpacedRepetition(sentence.id, isCorrect, finalScore)
+                        "daily_sentence" -> {
+                            activeDailySentence.value?.let { sentence ->
+                                val isPassed = sentence.isCompleted || (finalScore >= 75)
+                                val isCorrect = finalScore >= 75
+                                repository.updateDailySentence(sentence.copy(
+                                    isCompleted = isPassed,
+                                    timesPracticed = sentence.timesPracticed + 1,
+                                    lastAccuracy = finalScore
+                                ))
+                                repository.scheduleSpacedRepetition(sentence.id, isCorrect, finalScore)
+                            }
                         }
-                    }
-                    "paragraph" -> {
-                        activeParagraph.value?.let { para ->
-                            val currentMax = if (finalScore > para.maxAccuracy) finalScore else para.maxAccuracy
-                            val isPassed = para.isCompleted || (finalScore >= 60)
-                            repository.updateParagraph(para.copy(isCompleted = isPassed, maxAccuracy = currentMax))
+                        "paragraph" -> {
+                            activeParagraph.value?.let { para ->
+                                val currentMax = if (finalScore > para.maxAccuracy) finalScore else para.maxAccuracy
+                                val isPassed = para.isCompleted || (finalScore >= 60)
+                                repository.updateParagraph(para.copy(isCompleted = isPassed, maxAccuracy = currentMax))
+                            }
                         }
-                    }
-                    "tongue_twister" -> {
-                        activeTongueTwister.value?.let { twister ->
-                            val currentMax = if (finalScore > twister.maxAccuracy) finalScore else twister.maxAccuracy
-                            repository.updateTongueTwister(twister.copy(
-                                isCompleted = true,
-                                maxAccuracy = currentMax,
-                                practiceCount = twister.practiceCount + 1
-                            ))
+                        "tongue_twister" -> {
+                            activeTongueTwister.value?.let { twister ->
+                                val currentMax = if (finalScore > twister.maxAccuracy) finalScore else twister.maxAccuracy
+                                val isPassed = twister.isCompleted || (finalScore >= 75)
+                                repository.updateTongueTwister(twister.copy(
+                                    isCompleted = isPassed,
+                                    maxAccuracy = currentMax,
+                                    practiceCount = twister.practiceCount + 1
+                                ))
+                            }
                         }
-                    }
-                    "conversation" -> {
-                        // Advance conversation roleplay line upon scoring
+                        "conversation" -> {
+                            // Advance conversation roleplay line upon scoring
+                        }
                     }
                 }
+            } catch (e: Exception) {
+                Log.e("SPEECH_DEBUG", "stopRecording: Error during transcription/evaluation", e)
+            } finally {
+                isProcessingSpeech.value = false
             }
         }
     }

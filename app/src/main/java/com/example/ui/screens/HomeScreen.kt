@@ -57,7 +57,7 @@ fun HomeScreen(
     val convTotal = convs.size.takeIf { it > 0 } ?: 1
     val convComp = convDone.toFloat() / convTotal
 
-    val sentenceDone = sentences.count { it.isCompleted || it.timesPracticed > 0 }
+    val sentenceDone = sentences.count { it.isCompleted || it.lastAccuracy >= 75 }
     val sentenceTotal = sentences.size.takeIf { it > 0 } ?: 1
     val sentenceComp = sentenceDone.toFloat() / sentenceTotal
 
@@ -65,16 +65,16 @@ fun HomeScreen(
     val paraTotal = paragraphs.size.takeIf { it > 0 } ?: 1
     val paraComp = paraDone.toFloat() / paraTotal
 
-    val twisterDone = twisters.count { it.isCompleted }
+    val twisterDone = twisters.count { it.isCompleted || it.maxAccuracy >= 75 }
     val twisterTotal = twisters.size.takeIf { it > 0 } ?: 1
     val twisterComp = twisterDone.toFloat() / twisterTotal
 
-    // Filter weak points (accuracy < 85 and not dismissed)
+    // Filter focus points (only items that haven't passed the 75% threshold, and not dismissed)
     val weakSentences = sentences.filter {
-        it.timesPracticed > 0 && it.lastAccuracy < 85 && !dismissedKeys.contains("sentence_${it.id}")
+        it.timesPracticed > 0 && it.lastAccuracy < 75 && !dismissedKeys.contains("sentence_${it.id}")
     }
     val weakTwisters = twisters.filter {
-        it.practiceCount > 0 && it.maxAccuracy < 85 && !dismissedKeys.contains("twister_${it.id}")
+        it.practiceCount > 0 && it.maxAccuracy < 75 && !dismissedKeys.contains("twister_${it.id}")
     }
 
     LazyColumn(
@@ -155,7 +155,7 @@ fun HomeScreen(
             )
         }
 
-        // --- WEAK POINTS (SPACED REPETITION) ---
+        // --- TARGETED PRONUNCIATION FOCUS DRILLS ---
         if (!isStruggledSectionDismissed && (weakSentences.isNotEmpty() || weakTwisters.isNotEmpty())) {
             item {
                 Row(
@@ -165,27 +165,34 @@ fun HomeScreen(
                         .padding(top = 16.dp, bottom = 8.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Warning,
-                        contentDescription = "Weak Areas",
-                        tint = Color(0xFFFF4D4D),
+                        imageVector = Icons.Default.Tune,
+                        contentDescription = "Pronunciation Focus",
+                        tint = PolishTeal,
                         modifier = Modifier.size(24.dp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Struggled Sounds & Phrases",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onBackground
-                        ),
-                        modifier = Modifier.weight(1f)
-                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Pronunciation Focus Drills",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                        )
+                        Text(
+                            text = "Targeted drills to reach the 75% passing mark",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        )
+                    }
                     IconButton(
                         onClick = { viewModel.dismissStruggledSection() },
                         modifier = Modifier.size(36.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Close Struggled Sounds & Phrases",
+                            contentDescription = "Hide Pronunciation Focus",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
@@ -194,7 +201,7 @@ fun HomeScreen(
             }
 
             items(weakSentences.take(3)) { item ->
-                WeakItemCard(
+                FocusPracticeCard(
                     title = "Daily Sentence",
                     subtext = item.text,
                     accuracy = item.lastAccuracy,
@@ -209,7 +216,7 @@ fun HomeScreen(
             }
 
             items(weakTwisters.take(3)) { item ->
-                WeakItemCard(
+                FocusPracticeCard(
                     title = "Tongue Twister",
                     subtext = item.text,
                     accuracy = item.maxAccuracy,
@@ -677,7 +684,7 @@ fun SkillTreeConnector() {
 }
 
 @Composable
-fun WeakItemCard(
+fun FocusPracticeCard(
     title: String,
     subtext: String,
     accuracy: Int,
@@ -686,27 +693,19 @@ fun WeakItemCard(
     onDismiss: (() -> Unit)? = null
 ) {
     Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Red50),
-        border = BorderStroke(1.dp, Red100),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
             .padding(vertical = 4.dp)
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(Red500)
-            )
-
-            Spacer(modifier = Modifier.width(10.dp))
-
             Column(modifier = Modifier.weight(1f)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -715,7 +714,7 @@ fun WeakItemCard(
                     Text(
                         text = title.uppercase(),
                         style = MaterialTheme.typography.labelSmall.copy(
-                            color = Red900,
+                            color = PolishTeal,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 0.5.sp
                         )
@@ -723,42 +722,62 @@ fun WeakItemCard(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .background(Red100)
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                            .background(PolishTeal.copy(alpha = 0.12f))
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
                     ) {
                         Text(
                             text = "Sound: $focus",
                             style = MaterialTheme.typography.labelSmall.copy(
-                                color = Red900,
+                                color = PolishTeal,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 10.sp
+                                fontSize = 11.sp
                             )
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = subtext,
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        color = Red700,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Medium
                     ),
                     maxLines = 1
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Current: $accuracy% · Goal: 75% to pass",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = StreakGold,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 11.sp
+                    )
                 )
             }
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            Text(
-                text = "$accuracy%",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = Red900
+            // Action button to retry drill
+            FilledTonalButton(
+                onClick = onClick,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = PolishTeal.copy(alpha = 0.15f),
+                    contentColor = PolishTeal
+                ),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = "Practice drill",
+                    modifier = Modifier.size(16.dp)
                 )
-            )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Retry", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+            }
 
             if (onDismiss != null) {
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(4.dp))
                 IconButton(
                     onClick = onDismiss,
                     modifier = Modifier.size(32.dp)
@@ -766,11 +785,23 @@ fun WeakItemCard(
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "Dismiss item",
-                        tint = Red700,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp)
                     )
                 }
             }
         }
     }
+}
+
+@Composable
+fun WeakItemCard(
+    title: String,
+    subtext: String,
+    accuracy: Int,
+    focus: String,
+    onClick: () -> Unit,
+    onDismiss: (() -> Unit)? = null
+) {
+    FocusPracticeCard(title, subtext, accuracy, focus, onClick, onDismiss)
 }

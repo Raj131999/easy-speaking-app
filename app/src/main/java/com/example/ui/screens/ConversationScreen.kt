@@ -3,11 +3,14 @@ package com.example.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -59,6 +62,7 @@ fun ConversationScreen(
     val lastScore by viewModel.lastScore.collectAsState()
     val scoredWords by viewModel.scoredWords.collectAsState()
     val recognizedText by viewModel.recognizedText.collectAsState()
+    val isProcessingSpeech by viewModel.isProcessingSpeech.collectAsState()
 
     val listState = rememberLazyListState()
     val mapListState = rememberLazyListState()
@@ -107,13 +111,19 @@ fun ConversationScreen(
 
     // Intercept back button when practicing conversation to return to that conversation on the map
     BackHandler(enabled = (conv != null)) {
-        if (currentConvIndex >= 0) {
-            scrollToTargetIndex = currentConvIndex
+        if (showQuiz) {
+            showQuiz = false
+            showQuizFeedback = false
+            selectedQuizAnswer = null
+        } else {
+            if (currentConvIndex >= 0) {
+                scrollToTargetIndex = currentConvIndex
+            }
+            viewModel.activeConversation.value = null
+            viewModel.lastScore.value = null
+            viewModel.scoredWords.value = emptyList()
+            viewModel.recognizedText.value = ""
         }
-        viewModel.activeConversation.value = null
-        viewModel.lastScore.value = null
-        viewModel.scoredWords.value = emptyList()
-        viewModel.recognizedText.value = ""
     }
 
     // Auto-scroll list when the active index changes
@@ -284,13 +294,19 @@ fun ConversationScreen(
                     title = { Text("Roleplay Dialogue") },
                     navigationIcon = {
                         IconButton(onClick = {
-                            if (currentConvIndex >= 0) {
-                                scrollToTargetIndex = currentConvIndex
+                            if (showQuiz) {
+                                showQuiz = false
+                                showQuizFeedback = false
+                                selectedQuizAnswer = null
+                            } else {
+                                if (currentConvIndex >= 0) {
+                                    scrollToTargetIndex = currentConvIndex
+                                }
+                                viewModel.activeConversation.value = null
+                                viewModel.lastScore.value = null
+                                viewModel.scoredWords.value = emptyList()
+                                viewModel.recognizedText.value = ""
                             }
-                            viewModel.activeConversation.value = null
-                            viewModel.lastScore.value = null
-                            viewModel.scoredWords.value = emptyList()
-                            viewModel.recognizedText.value = ""
                         }) {
                             Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
                         }
@@ -581,17 +597,33 @@ fun ConversationScreen(
                                                     viewModel.startRecording(activeLine.text)
                                                 }
                                             },
+                                            enabled = !isProcessingSpeech,
                                             modifier = Modifier
                                                 .size(64.dp)
-                                                .background(if (isRecording) Color(0xFFFF5252) else TealPrimary, CircleShape)
+                                                .background(
+                                                    when {
+                                                        isProcessingSpeech -> StreakGold
+                                                        isRecording -> Color(0xFFFF5252)
+                                                        else -> TealPrimary
+                                                    },
+                                                    CircleShape
+                                                )
                                                 .testTag("conversation_record_mic")
                                         ) {
-                                            Icon(
-                                                imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                                                contentDescription = if (isRecording) "Stop" else "Record",
-                                                tint = Color.Black,
-                                                modifier = Modifier.size(28.dp)
-                                            )
+                                            if (isProcessingSpeech) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(28.dp),
+                                                    color = Color.Black,
+                                                    strokeWidth = 3.dp
+                                                )
+                                            } else {
+                                                Icon(
+                                                    imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
+                                                    contentDescription = if (isRecording) "Stop" else "Record",
+                                                    tint = Color.Black,
+                                                    modifier = Modifier.size(28.dp)
+                                                )
+                                            }
                                         }
 
                                         Spacer(modifier = Modifier.width(20.dp))
@@ -599,7 +631,7 @@ fun ConversationScreen(
                                         // Hear user voice
                                         IconButton(
                                             onClick = { viewModel.playRecordedVoice() },
-                                            enabled = lastScore != null,
+                                            enabled = lastScore != null && !isProcessingSpeech,
                                             modifier = Modifier
                                                 .size(44.dp)
                                                 .background(
@@ -617,11 +649,64 @@ fun ConversationScreen(
 
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Text(
-                                        text = if (isRecording) "Listening... Tap to end" else "Tap Mic to record your line",
+                                        text = when {
+                                            isProcessingSpeech -> "Analyzing your line... Please wait"
+                                            isRecording -> "Listening... Tap to end"
+                                            lastScore != null -> "Tap Mic to try again"
+                                            else -> "Tap Mic to record your line"
+                                        },
                                         style = MaterialTheme.typography.bodySmall.copy(
-                                            color = if (isRecording) Color(0xFFFF5252) else MaterialTheme.colorScheme.onSurfaceVariant
+                                            color = when {
+                                                isProcessingSpeech -> StreakGold
+                                                isRecording -> Color(0xFFFF5252)
+                                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                            fontWeight = if (isProcessingSpeech || isRecording) FontWeight.Bold else FontWeight.Normal
                                         )
                                     )
+
+                                    // Audio processing notification banner
+                                    AnimatedVisibility(
+                                        visible = isProcessingSpeech,
+                                        enter = fadeIn() + expandVertically(),
+                                        exit = fadeOut() + shrinkVertically()
+                                    ) {
+                                        Card(
+                                            shape = RoundedCornerShape(12.dp),
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = TealPrimary.copy(alpha = 0.12f)
+                                            ),
+                                            border = BorderStroke(1.dp, TealPrimary.copy(alpha = 0.7f)),
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(24.dp),
+                                                    color = TealPrimary,
+                                                    strokeWidth = 2.5.dp
+                                                )
+                                                Spacer(modifier = Modifier.width(12.dp))
+                                                Column {
+                                                    Text(
+                                                        text = "Evaluating dialogue line...",
+                                                        style = MaterialTheme.typography.bodySmall.copy(
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = TealPrimary
+                                                        )
+                                                    )
+                                                    Text(
+                                                        text = "Checking pronunciation and phrasing...",
+                                                        style = MaterialTheme.typography.labelSmall.copy(
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
 
                                     // Real-time Voice to Text Display
                                     Spacer(modifier = Modifier.height(8.dp))
@@ -633,20 +718,34 @@ fun ConversationScreen(
 
                                     // Display score feedback
                                     lastScore?.let { score ->
+                                        val isPassed = score >= 75
                                         Spacer(modifier = Modifier.height(12.dp))
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(
-                                                text = "Pronunciation score: ",
-                                                style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                            )
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column {
+                                                Text(
+                                                    text = "Pronunciation score: ",
+                                                    style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                )
+                                                Text(
+                                                    text = if (isPassed) "Line Passed (>= 75%)" else "Need 75% to pass line",
+                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (isPassed) Color(0xFF2ECC71) else StreakGold
+                                                    )
+                                                )
+                                            }
                                             Text(
                                                 text = "$score%",
                                                 style = MaterialTheme.typography.bodyMedium.copy(
                                                     fontWeight = FontWeight.Bold,
                                                     color = when {
                                                         score >= 90 -> Color(0xFF2ECC71)
-                                                        score >= 70 -> StreakGold
-                                                        score >= 50 -> Color(0xFFFF9800)
+                                                        score >= 75 -> Color(0xFF2ECC71)
+                                                        score >= 50 -> StreakGold
                                                         else -> Color(0xFFFF5252)
                                                     }
                                                 )
@@ -773,93 +872,144 @@ fun ConversationScreen(
                     ) {
                         Column(
                             modifier = Modifier
-                                .padding(24.dp)
-                                .fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                                .fillMaxSize()
+                                .padding(16.dp)
                         ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
+                            // Scrollable question, star, and options container
+                            Column(
                                 modifier = Modifier
-                                    .size(64.dp)
-                                    .clip(CircleShape)
-                                    .background(StreakGold.copy(alpha = 0.2f))
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                                    .verticalScroll(rememberScrollState()),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Icon(imageVector = Icons.Default.Grade, contentDescription = "Success", tint = StreakGold, modifier = Modifier.size(32.dp))
-                            }
-
-                            Text(
-                                text = "Comprehension Check",
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-                            )
-
-                            Text(
-                                text = item.comprehensionQuestion,
-                                style = MaterialTheme.typography.bodyLarge.copy(
-                                    fontWeight = FontWeight.Medium,
-                                    textAlign = TextAlign.Center
-                                ),
-                                modifier = Modifier.padding(bottom = 8.dp)
-                            )
-
-                            item.comprehensionOptions.split(",").forEach { option ->
-                                val isSelected = selectedQuizAnswer == option
-                                val isCorrect = option == item.comprehensionAnswer
-
-                                val cardColor = when {
-                                    showQuizFeedback && isCorrect -> Color(0xFF2ECC71).copy(alpha = 0.15f)
-                                    showQuizFeedback && isSelected && !isCorrect -> Color(0xFFE74C3C).copy(alpha = 0.15f)
-                                    isSelected -> TealPrimary.copy(alpha = 0.1f)
-                                    else -> MaterialTheme.colorScheme.background
-                                }
-
-                                val borderColor = when {
-                                    showQuizFeedback && isCorrect -> Color(0xFF2ECC71)
-                                    showQuizFeedback && isSelected && !isCorrect -> Color(0xFFE74C3C)
-                                    isSelected -> TealPrimary
-                                    else -> Color.Transparent
-                                }
-
                                 Box(
+                                    contentAlignment = Alignment.Center,
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(cardColor)
-                                        .clickable {
-                                            if (!showQuizFeedback) {
-                                                selectedQuizAnswer = option
-                                            }
-                                        }
-                                        .padding(16.dp)
+                                        .size(52.dp)
+                                        .clip(CircleShape)
+                                        .background(StreakGold.copy(alpha = 0.2f))
                                 ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        RadioButton(
-                                            selected = isSelected,
-                                            onClick = {
+                                    Icon(
+                                        imageVector = Icons.Default.Grade,
+                                        contentDescription = "Quiz",
+                                        tint = StreakGold,
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                }
+
+                                Text(
+                                    text = "Comprehension Check",
+                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                                )
+
+                                Text(
+                                    text = item.comprehensionQuestion,
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontWeight = FontWeight.Medium,
+                                        textAlign = TextAlign.Center
+                                    ),
+                                    modifier = Modifier.padding(bottom = 4.dp)
+                                )
+
+                                val parsedOptions = remember(item.comprehensionOptions) {
+                                    item.comprehensionOptions.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                                }
+
+                                parsedOptions.forEach { option ->
+                                    val isSelected = selectedQuizAnswer == option
+                                    val isCorrect = option.equals(item.comprehensionAnswer.trim(), ignoreCase = true)
+
+                                    val cardColor = when {
+                                        showQuizFeedback && isCorrect -> Color(0xFF2ECC71).copy(alpha = 0.15f)
+                                        showQuizFeedback && isSelected && !isCorrect -> Color(0xFFE74C3C).copy(alpha = 0.15f)
+                                        isSelected -> TealPrimary.copy(alpha = 0.12f)
+                                        else -> MaterialTheme.colorScheme.background
+                                    }
+
+                                    val borderColor = when {
+                                        showQuizFeedback && isCorrect -> Color(0xFF2ECC71)
+                                        showQuizFeedback && isSelected && !isCorrect -> Color(0xFFE74C3C)
+                                        isSelected -> TealPrimary
+                                        else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(cardColor)
+                                            .border(1.dp, borderColor, RoundedCornerShape(12.dp))
+                                            .clickable {
                                                 if (!showQuizFeedback) {
                                                     selectedQuizAnswer = option
                                                 }
                                             }
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = option,
-                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
-                                        )
-                                        Spacer(modifier = Modifier.weight(1f))
-                                        if (showQuizFeedback) {
-                                            if (isCorrect) {
-                                                Icon(imageVector = Icons.Default.CheckCircle, contentDescription = "Correct", tint = Color(0xFF2ECC71))
-                                            } else if (isSelected) {
-                                                Icon(imageVector = Icons.Default.Cancel, contentDescription = "Incorrect", tint = Color(0xFFE74C3C))
+                                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            RadioButton(
+                                                selected = isSelected,
+                                                onClick = {
+                                                    if (!showQuizFeedback) {
+                                                        selectedQuizAnswer = option
+                                                    }
+                                                }
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = option,
+                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Spacer(modifier = Modifier.weight(1f))
+                                            if (showQuizFeedback) {
+                                                if (isCorrect) {
+                                                    Icon(imageVector = Icons.Default.CheckCircle, contentDescription = "Correct", tint = Color(0xFF2ECC71))
+                                                } else if (isSelected) {
+                                                    Icon(imageVector = Icons.Default.Cancel, contentDescription = "Incorrect", tint = Color(0xFFE74C3C))
+                                                }
                                             }
+                                        }
+                                    }
+                                }
+
+                                if (showQuizFeedback) {
+                                    val userWasCorrect = selectedQuizAnswer?.equals(item.comprehensionAnswer.trim(), ignoreCase = true) == true
+                                    Card(
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = if (userWasCorrect) Color(0xFF2ECC71).copy(alpha = 0.12f) else Color(0xFFFF9800).copy(alpha = 0.12f)
+                                        ),
+                                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = if (userWasCorrect) Icons.Default.CheckCircle else Icons.Default.Info,
+                                                contentDescription = null,
+                                                tint = if (userWasCorrect) Color(0xFF2ECC71) else Color(0xFFFF9800),
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = if (userWasCorrect) "Excellent! Correct answer." else "Correct answer: ${item.comprehensionAnswer.trim()}",
+                                                style = MaterialTheme.typography.bodyMedium.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (userWasCorrect) Color(0xFF2ECC71) else Color(0xFFFF9800)
+                                                )
+                                            )
                                         }
                                     }
                                 }
                             }
 
-                            Spacer(modifier = Modifier.weight(1f))
+                            Spacer(modifier = Modifier.height(10.dp))
 
+                            // Fixed Docked Action Button Bar (ALWAYS visible!)
                             val expectedXp = when (selectedLevel) {
                                 "Basic" -> 20
                                 "Intermediate" -> 25
@@ -869,31 +1019,91 @@ fun ConversationScreen(
 
                             if (!showQuizFeedback) {
                                 Button(
-                                    onClick = { showQuizFeedback = true },
+                                    onClick = {
+                                        if (selectedQuizAnswer != null) {
+                                            showQuizFeedback = true
+                                        }
+                                    },
                                     enabled = selectedQuizAnswer != null,
                                     colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(50.dp)
+                                        .height(48.dp),
+                                    shape = RoundedCornerShape(12.dp)
                                 ) {
-                                    Text("Check Answer", color = Color.Black, fontWeight = FontWeight.Bold)
+                                    Text(
+                                        text = if (selectedQuizAnswer != null) "Check Answer & Continue" else "Select an Answer",
+                                        color = Color.Black,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    if (selectedQuizAnswer != null) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Icon(imageVector = Icons.Default.ArrowForward, contentDescription = "Submit", tint = Color.Black)
+                                    }
                                 }
                             } else {
-                                Button(
-                                    onClick = {
-                                        viewModel.completeConversationLevel(item.id, selectedLevel) { _, xp ->
-                                            completedLevelName = selectedLevel
-                                            completedLevelXp = xp
-                                            showLevelCompleteDialog = true
-                                        }
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(50.dp)
+                                val userWasCorrect = selectedQuizAnswer?.equals(item.comprehensionAnswer.trim(), ignoreCase = true) == true
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    Text("Complete $selectedLevel Level (+$expectedXp XP)", color = Color.Black, fontWeight = FontWeight.Bold)
+                                    if (!userWasCorrect) {
+                                        OutlinedButton(
+                                            onClick = {
+                                                showQuizFeedback = false
+                                                selectedQuizAnswer = null
+                                            },
+                                            modifier = Modifier.weight(1f).height(48.dp),
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
+                                            Text("Try Again")
+                                        }
+                                    }
+                                    Button(
+                                        onClick = {
+                                            viewModel.completeConversationLevel(item.id, selectedLevel) { _, xp ->
+                                                completedLevelName = selectedLevel
+                                                completedLevelXp = xp
+                                                showLevelCompleteDialog = true
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
+                                        modifier = Modifier.weight(if (!userWasCorrect) 1.5f else 1f).height(48.dp),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Text(
+                                            text = "Complete Level (+$expectedXp XP)",
+                                            color = Color.Black,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Icon(imageVector = Icons.Default.ArrowForward, contentDescription = "Finish", tint = Color.Black)
+                                    }
                                 }
+                            }
+
+                            // Secondary button: Return to dialogue
+                            TextButton(
+                                onClick = {
+                                    showQuiz = false
+                                    showQuizFeedback = false
+                                    selectedQuizAnswer = null
+                                },
+                                modifier = Modifier
+                                    .align(Alignment.CenterHorizontally)
+                                    .padding(top = 2.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ArrowBack,
+                                    contentDescription = "Review",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Review Conversation Dialogue",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                )
                             }
                         }
                     }

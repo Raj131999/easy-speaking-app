@@ -1,8 +1,11 @@
 package com.example.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -15,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
@@ -24,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,7 +48,6 @@ fun SpokenVoiceToTextCard(
     hasEvaluated: Boolean,
     modifier: Modifier = Modifier
 ) {
-    // Show during active recording if anything is recognized, or after evaluation has completed
     val isSpokenEmpty = recognizedText.trim().isEmpty()
 
     if (isRecording || hasEvaluated) {
@@ -75,7 +79,7 @@ fun SpokenVoiceToTextCard(
         ) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -84,7 +88,7 @@ fun SpokenVoiceToTextCard(
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Icon(
                             imageVector = if (isSpokenEmpty && !isRecording) {
@@ -103,7 +107,7 @@ fun SpokenVoiceToTextCard(
                             modifier = Modifier.size(18.dp)
                         )
                         Text(
-                            text = if (isRecording) "LIVE SPEECH CONVERSION:" else "YOU SPOKE:",
+                            text = if (isRecording) "LIVE SPEECH CAPTURE:" else "YOU SPOKE:",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 1.sp,
@@ -119,25 +123,20 @@ fun SpokenVoiceToTextCard(
                     }
 
                     if (isRecording) {
-                        Text(
-                            text = "Listening...",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = Color(0xFFFF5252),
-                                fontStyle = FontStyle.Italic
-                            )
-                        )
+                        // Live Audio Wave Bars indicator
+                        AnimatedWaveformBars()
                     }
                 }
 
                 if (isSpokenEmpty) {
                     Text(
                         text = if (isRecording) {
-                            "Listening to your voice..."
+                            "Listening to your voice... Speak clearly now."
                         } else {
-                            "Nothing is spoken"
+                            "No speech detected. Hold device closer to mic and speak clearly."
                         },
                         style = MaterialTheme.typography.bodyMedium.copy(
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
                             fontStyle = FontStyle.Italic
                         )
                     )
@@ -152,6 +151,64 @@ fun SpokenVoiceToTextCard(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun AnimatedWaveformBars() {
+    val transition = rememberInfiniteTransition(label = "waveform_anim")
+    
+    val height1 by transition.animateFloat(
+        initialValue = 6f,
+        targetValue = 18f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "bar1"
+    )
+    val height2 by transition.animateFloat(
+        initialValue = 16f,
+        targetValue = 6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(350, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "bar2"
+    )
+    val height3 by transition.animateFloat(
+        initialValue = 8f,
+        targetValue = 22f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "bar3"
+    )
+    val height4 by transition.animateFloat(
+        initialValue = 18f,
+        targetValue = 8f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(380, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "bar4"
+    )
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        modifier = Modifier.height(24.dp)
+    ) {
+        listOf(height1, height2, height3, height4).forEach { heightVal ->
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .height(heightVal.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFFF5252))
+            )
         }
     }
 }
