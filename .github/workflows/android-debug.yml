@@ -7,6 +7,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -27,13 +30,45 @@ jobs:
       - name: Build Debug APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew clean assembleDebug --stacktrace
+
+      - name: Verify APK
+        run: |
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+
+          if [ ! -f "$APK" ]; then
+            echo "ERROR: APK file not found!"
+            exit 1
+          fi
+
+          if [ ! -s "$APK" ]; then
+            echo "ERROR: APK file is empty!"
+            exit 1
+          fi
+
+          echo "Checking APK integrity..."
+          unzip -t "$APK"
+
+          echo "APK verification successful!"
+
+      - name: Prepare APK artifact
+        run: |
+          mkdir -p artifacts
+
+          cp app/build/outputs/apk/debug/app-debug.apk \
+            artifacts/Easy-Speaking-Debug.apk
+
+          cd artifacts
+          sha256sum Easy-Speaking-Debug.apk > SHA256SUMS.txt
+
+          ls -lh
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Easy-Speaking-Debug-APK
-          path: app/build/outputs/apk/debug/*.apk
+          path: artifacts/
           if-no-files-found: error
           retention-days: 7
+          compression-level: 0
           
