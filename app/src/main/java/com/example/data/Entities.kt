@@ -98,3 +98,30 @@ data class DailyXpClaim(
     @PrimaryKey val itemKey: String, // e.g. "grammar_1", "daily_sentence_5", "paragraph_2", "tongue_twister_3", "conversation_4"
     val dateStr: String // e.g. "2026-08-14"
 )
+
+@Entity(tableName = "practice_attempts")
+data class PracticeAttemptLog(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val itemType: String,
+    val itemId: Int,
+    val targetText: String,
+    val recognizedText: String,
+    val score: Int,
+    val missedWords: String,     // Comma-separated missed words
+    val unclearWords: String,    // Comma-separated low-confidence words
+    val extraWords: String,      // Comma-separated extra spoken words
+    val wavFilePath: String,     // Persisted WAV recording path
+    val wordTimingsJson: String, // JSON list of per-word timestamps & status
+    val timestampMs: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "missed_word_reviews")
+data class MissedWordReview(
+    @PrimaryKey val word: String,
+    val missCount: Int = 1,
+    val consecutiveCorrect: Int = 0,
+    val nextReviewTimeMs: Long = 0L,
+    val lastPracticedMs: Long = 0L,
+    val sourceItemType: String = "",
+    val sourceItemId: Int = 0
+)

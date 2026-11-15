@@ -118,5 +118,28 @@ interface EnglishDao {
 
     @Query("DELETE FROM daily_xp_claims")
     suspend fun deleteAllXpClaims()
+
+    // --- Practice Attempt Logs (Score, Missed Words, WAV Path, Word Timings) ---
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPracticeAttempt(attempt: PracticeAttemptLog)
+
+    @Query("SELECT * FROM practice_attempts ORDER BY timestampMs DESC LIMIT 50")
+    fun getRecentPracticeAttempts(): Flow<List<PracticeAttemptLog>>
+
+    @Query("DELETE FROM practice_attempts")
+    suspend fun deleteAllPracticeAttempts()
+
+    // --- Missed Word Spaced Repetition ---
+    @Query("SELECT * FROM missed_word_reviews WHERE word = :word LIMIT 1")
+    suspend fun getMissedWordReview(word: String): MissedWordReview?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertMissedWordReview(review: MissedWordReview)
+
+    @Query("SELECT * FROM missed_word_reviews ORDER BY nextReviewTimeMs ASC")
+    fun getAllMissedWordReviewsFlow(): Flow<List<MissedWordReview>>
+
+    @Query("DELETE FROM missed_word_reviews")
+    suspend fun deleteAllMissedWordReviews()
 }
 

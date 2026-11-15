@@ -15,6 +15,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -31,6 +35,9 @@ import androidx.compose.ui.unit.sp
 import com.example.data.*
 import com.example.ui.EnglishViewModel
 import com.example.ui.Screen
+import com.example.ui.components.HolographicCard
+import com.example.ui.components.PhoneticMouthGuideDialog
+import com.example.ui.components.SpeechBubblePopDialog
 import com.example.ui.theme.*
 
 @Composable
@@ -45,8 +52,12 @@ fun HomeScreen(
     val sentences by viewModel.dailySentences.collectAsState()
     val paragraphs by viewModel.paragraphs.collectAsState()
     val twisters by viewModel.tongueTwisters.collectAsState()
+    val missedWordReviews by viewModel.missedWordReviews.collectAsState()
     val dismissedKeys by viewModel.dismissedWeakItemKeys.collectAsState()
     val isStruggledSectionDismissed by viewModel.isStruggledSectionDismissed.collectAsState()
+
+    var showMouthGuideDialog by remember { mutableStateOf(false) }
+    var showBubblePopDialog by remember { mutableStateOf(false) }
 
     // Calculate module completions and counts
     val grammarDone = grammar.count { it.isCompleted }
@@ -80,14 +91,22 @@ fun HomeScreen(
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(PolishBg)
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(top = 16.dp, bottom = 32.dp)
+        contentPadding = PaddingValues(top = 12.dp, bottom = 32.dp)
     ) {
-        // --- STREAK HERO HEADER ---
+        // --- STREAK HERO HEADER (3D Holographic Card) ---
         item {
             StreakHeaderCard(progress = progress)
+        }
+
+        // --- VOICE STUDIO BENTO TOOLS ROW ---
+        item {
+            VoiceStudioToolsRow(
+                onOpenMouthGuide = { showMouthGuideDialog = true },
+                onOpenWarmupGame = { showBubblePopDialog = true }
+            )
         }
 
         // --- WEEKLY WORKOUT PRACTICE SUMMARY ---
@@ -100,6 +119,18 @@ fun HomeScreen(
             ReviewHubCard(sentences = sentences, onReviewClick = {
                 viewModel.startReviewSession()
             })
+        }
+
+        // --- MISSED WORDS SPACED REVIEW CARD ---
+        val activeMissedWords = missedWordReviews.filter { it.consecutiveCorrect < 2 }
+        if (activeMissedWords.isNotEmpty()) {
+            item {
+                MissedWordsSpacedReviewCard(
+                    words = activeMissedWords.take(10),
+                    onWordTap = { word -> viewModel.speak(word) },
+                    onPracticeClick = { viewModel.startReviewSession() }
+                )
+            }
         }
 
         // --- COURSE MAP / SKILL TREE TITLE ---
@@ -232,6 +263,116 @@ fun HomeScreen(
             }
         }
     }
+
+    if (showMouthGuideDialog) {
+        PhoneticMouthGuideDialog(
+            initialSound = "TH",
+            onDismiss = { showMouthGuideDialog = false },
+            onSpeakWord = { word -> viewModel.speak(word) }
+        )
+    }
+
+    if (showBubblePopDialog) {
+        SpeechBubblePopDialog(
+            onSpeakWord = { word -> viewModel.speak(word) },
+            onClose = { showBubblePopDialog = false }
+        )
+    }
+}
+
+@Composable
+fun VoiceStudioToolsRow(
+    onOpenMouthGuide: () -> Unit,
+    onOpenWarmupGame: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Card(
+            shape = RoundedCornerShape(22.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            border = BorderStroke(1.dp, Slate100),
+            modifier = Modifier
+                .weight(1f)
+                .clickable { onOpenMouthGuide() }
+                .testTag("open_mouth_guide_card")
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(PolishIndigoBg)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.RecordVoiceOver,
+                        contentDescription = "Phonetics Mouth Guide",
+                        tint = PolishIndigoText,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Text(
+                    text = "Mouth Guide",
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = PolishNavy
+                    )
+                )
+                Text(
+                    text = "Visual tongue & lip cues",
+                    style = MaterialTheme.typography.bodySmall.copy(color = Slate500),
+                    maxLines = 1
+                )
+            }
+        }
+
+        Card(
+            shape = RoundedCornerShape(22.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            border = BorderStroke(1.dp, Slate100),
+            modifier = Modifier
+                .weight(1f)
+                .clickable { onOpenWarmupGame() }
+                .testTag("open_warmup_game_card")
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(PolishTealBg)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = "Speech Bubble Warmup",
+                        tint = PolishTeal,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Text(
+                    text = "Bubble Warmup",
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = PolishNavy
+                    )
+                )
+                Text(
+                    text = "Interactive sound pop",
+                    style = MaterialTheme.typography.bodySmall.copy(color = Slate500),
+                    maxLines = 1
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -242,88 +383,96 @@ fun StreakHeaderCard(progress: UserProgress?) {
     val totalXp = progress?.totalXP ?: 0
     val progressFraction = (todayXp.toFloat() / targetXp).coerceIn(0f, 1f)
 
-    Card(
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = PolishTealLight
-        ),
-        border = BorderStroke(1.dp, PolishTealLightBorder),
+    HolographicCard(
+        maxTiltAngle = 8f,
+        cornerRadius = 26.dp,
+        containerColor = PolishNavy,
         modifier = Modifier
             .fillMaxWidth()
             .testTag("streak_header_card")
     ) {
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(
+                            PolishNavy,
+                            Color(0xFF134E4A)
+                        )
+                    )
+                )
+                .padding(20.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "TODAY'S WORKOUT",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = PolishTeal,
-                        letterSpacing = 1.2.sp
-                    )
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = if (streak > 0) "$streak Day Streak! ($totalXp XP)" else "Start Today's Lesson!",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = PolishNavy
-                    )
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Daily Goal: $todayXp/$targetXp XP",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontWeight = FontWeight.Medium,
-                            color = PolishTeal
-                        )
-                    )
-                    Text(
-                        text = "${(progressFraction * 100).toInt()}%",
-                        style = MaterialTheme.typography.bodySmall.copy(
+                        text = "TODAY'S WORKOUT",
+                        style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Bold,
-                            color = PolishTeal
+                            color = Color(0xFF5EEAD4),
+                            letterSpacing = 1.2.sp
                         )
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = if (streak > 0) "$streak Day Streak · $totalXp XP" else "Start Today's Session",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Daily Goal: $todayXp / $targetXp XP",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFFCCFBF1)
+                            )
+                        )
+                        Text(
+                            text = "${(progressFraction * 100).toInt()}%",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF5EEAD4)
+                            )
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    LinearProgressIndicator(
+                        progress = { progressFraction },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(RoundedCornerShape(4.dp)),
+                        color = Color(0xFF2DD4BF),
+                        trackColor = Color.White.copy(alpha = 0.18f),
                     )
                 }
-                Spacer(modifier = Modifier.height(6.dp))
-                LinearProgressIndicator(
-                    progress = { progressFraction },
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                Box(
+                    contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(8.dp)
-                        .clip(RoundedCornerShape(4.dp)),
-                    color = PolishTeal,
-                    trackColor = Color.White.copy(alpha = 0.5f),
-                )
-            }
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            // White elegant card container for the flame / active workout badge
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(54.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color.White)
-                    .border(1.dp, PolishTealLightBorder, RoundedCornerShape(16.dp))
-            ) {
-                Icon(
-                    imageVector = Icons.Default.LocalFireDepartment,
-                    contentDescription = "Streak Flame",
-                    tint = Orange600,
-                    modifier = Modifier.size(28.dp)
-                )
+                        .size(54.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.White.copy(alpha = 0.14f))
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LocalFireDepartment,
+                        contentDescription = "Streak Flame",
+                        tint = Color(0xFFFB923C),
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
             }
         }
     }
@@ -474,7 +623,7 @@ fun ReviewHubCard(
                 )
             }
             Icon(
-                imageVector = Icons.Default.ArrowForwardIos,
+                imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
                 contentDescription = "Go",
                 tint = Slate400,
                 modifier = Modifier.size(16.dp)
@@ -509,7 +658,7 @@ fun SkillTreePath(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 12.dp),
+            .padding(vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         SkillTreeNode(
@@ -518,8 +667,8 @@ fun SkillTreePath(
             doneCount = grammarDone,
             totalCount = grammarTotal,
             progress = grammarComp,
-            icon = Icons.Default.MenuBook,
-            color = PolishTeal,
+            icon = Icons.AutoMirrored.Filled.MenuBook,
+            color = PolishIndigoText,
             onClick = onGrammarTap
         )
 
@@ -532,7 +681,7 @@ fun SkillTreePath(
             totalCount = convTotal,
             progress = convComp,
             icon = Icons.Default.RecordVoiceOver,
-            color = Color(0xFF6C5CE7),
+            color = PolishTeal,
             onClick = onConversationTap
         )
 
@@ -544,7 +693,7 @@ fun SkillTreePath(
             doneCount = sentenceDone,
             totalCount = sentenceTotal,
             progress = sentenceComp,
-            icon = Icons.Default.DirectionsRun,
+            icon = Icons.Default.Bolt,
             color = Orange600,
             onClick = onSentencesTap
         )
@@ -557,8 +706,8 @@ fun SkillTreePath(
             doneCount = paraDone,
             totalCount = paraTotal,
             progress = paraComp,
-            icon = Icons.Default.TextFields,
-            color = Color(0xFFFD79A8),
+            icon = Icons.Default.Article,
+            color = Rose500,
             onClick = onParagraphTap
         )
 
@@ -570,8 +719,8 @@ fun SkillTreePath(
             doneCount = twisterDone,
             totalCount = twisterTotal,
             progress = twisterComp,
-            icon = Icons.Default.MusicNote,
-            color = Color(0xFF00CEC9),
+            icon = Icons.Default.GraphicEq,
+            color = Violet600,
             onClick = onTwisterTap
         )
     }
@@ -588,20 +737,20 @@ fun SkillTreeNode(
     color: Color,
     onClick: () -> Unit
 ) {
-    val (nodeBgColor, nodeIconBgColor, nodeTextColor) = when (color) {
-        PolishTeal -> Triple(Color.White, PolishIndigoBg, PolishIndigoText)
-        Color(0xFF6C5CE7) -> Triple(Color.White, PolishTealBg, PolishTealText)
-        Orange600 -> Triple(Color.White, PolishAmberBg, PolishAmberText)
-        Color(0xFFFD79A8) -> Triple(Color.White, PolishIndigoBg, PolishIndigoText)
-        else -> Triple(Color.White, PolishTealBg, PolishTealText)
+    val (nodeIconBgColor, nodeTextColor) = when (color) {
+        PolishIndigoText -> PolishIndigoBg to PolishIndigoText
+        PolishTeal -> PolishTealBg to PolishTealText
+        Orange600 -> PolishAmberBg to PolishAmberText
+        Rose500 -> Rose50 to Rose500
+        else -> Violet50 to Violet600
     }
 
     Card(
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = nodeBgColor),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
         border = BorderStroke(1.dp, Slate100),
         modifier = Modifier
-            .fillMaxWidth(0.92f)
+            .fillMaxWidth()
             .clickable { onClick() }
     ) {
         Row(
@@ -616,7 +765,7 @@ fun SkillTreeNode(
                     progress = { progress },
                     modifier = Modifier.fillMaxSize(),
                     color = nodeTextColor,
-                    trackColor = nodeTextColor.copy(alpha = 0.1f),
+                    trackColor = nodeTextColor.copy(alpha = 0.12f),
                     strokeWidth = 3.5.dp
                 )
                 Box(
@@ -662,13 +811,24 @@ fun SkillTreeNode(
                 )
             }
 
-            Text(
-                text = "${(progress * 100).toInt()}%",
-                style = MaterialTheme.typography.titleSmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = nodeTextColor
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "${(progress * 100).toInt()}%",
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = nodeTextColor
+                    )
                 )
-            )
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = Slate400,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
     }
 }
@@ -804,4 +964,85 @@ fun WeakItemCard(
     onDismiss: (() -> Unit)? = null
 ) {
     FocusPracticeCard(title, subtext, accuracy, focus, onClick, onDismiss)
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun MissedWordsSpacedReviewCard(
+    words: List<MissedWordReview>,
+    onWordTap: (String) -> Unit,
+    onPracticeClick: () -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.dp, Slate100),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("missed_words_review_card")
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "FOCUS WORDS FOR REVIEW",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = PolishTeal,
+                            letterSpacing = 1.sp
+                        )
+                    )
+                    Text(
+                        text = "Tap any word to hear it clearly",
+                        style = MaterialTheme.typography.bodySmall.copy(color = Slate500)
+                    )
+                }
+                TextButton(onClick = onPracticeClick) {
+                    Text("Practice", color = PolishTeal, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                words.forEach { entry ->
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Orange50,
+                        border = BorderStroke(1.dp, Orange100),
+                        modifier = Modifier.clickable { onWordTap(entry.word) }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                                contentDescription = "Hear ${entry.word}",
+                                tint = Orange600,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = entry.word,
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = PolishNavy
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

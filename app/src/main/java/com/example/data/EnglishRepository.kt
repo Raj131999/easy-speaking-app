@@ -16,6 +16,8 @@ class EnglishRepository(private val englishDao: EnglishDao) {
     val dailySentences: Flow<List<DailySentence>> = englishDao.getAllDailySentences()
     val paragraphs: Flow<List<ParagraphSet>> = englishDao.getAllParagraphs()
     val tongueTwisters: Flow<List<TongueTwister>> = englishDao.getAllTongueTwisters()
+    val recentPracticeAttempts: Flow<List<PracticeAttemptLog>> = englishDao.getRecentPracticeAttempts()
+    val missedWordReviews: Flow<List<MissedWordReview>> = englishDao.getAllMissedWordReviewsFlow()
 
     suspend fun recordAppOpen() {
         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -323,5 +325,114 @@ class EnglishRepository(private val englishDao: EnglishDao) {
 
     suspend fun deleteAllDailyXpClaims() {
         englishDao.deleteAllXpClaims()
+    }
+
+    suspend fun savePracticeAttemptAndFeedSpacedRepetition(
+        itemType: String,
+        itemId: Int,
+        targetText: String,
+        recognizedText: String,
+        score: Int,
+        missedWords: List<String>,
+        unclearWords: List<String>,
+        extraWords: List<String>,
+        correctWords: List<String>,
+        wavFilePath: String,
+        wordTimingsJson: String
+    ) {
+        val now = System.currentTimeMillis()
+        englishDao.insertPracticeAttempt(
+            PracticeAttemptLog(
+                itemType = itemType,
+                itemId = itemId,
+                targetText = targetText,
+                recognizedText = recognizedText,
+                score = score,
+                missedWords = missedWords.joinToString(", "),
+                unclearWords = unclearWords.joinToString(", "),
+                extraWords = extraWords.joinToString(", "),
+                wavFilePath = wavFilePath,
+                wordTimingsJson = wordTimingsJson,
+                timestampMs = now
+            )
+        )
+
+        // Feed missed & unclear words into the spaced-repetition scheduler
+        val wordsToReview = (missedWords + unclearWords)
+            .map { it.lowercase(Locale.US).replace(Regex("[^a-z0-9']"), "").trim('\'') }
+            .filter { it.length >= 2 }
+            .distinct()
+
+        for (word in wordsToReview) {
+            val existing = englishDao.getMissedWordReview(word)
+            val updated = if (existing != null) {
+                existing.copy(
+                    missCount = existing.missCount + 1,
+                    consecutiveCorrect = 0,
+                    nextReviewTimeMs = now + 60_000L, // Review in 1 minute
+                    lastPracticedMs = now,
+                    sourceItemType = itemType,
+                    sourceItemId = itemId
+                )
+            } else {
+                MissedWordReview(
+                    word = word,
+                    missCount = 1,
+                    consecutiveCorrect = 0,
+                    nextReviewTimeMs = now + 60_000L,
+                    lastPracticedMs = now,
+                    sourceItemType = itemType,
+                    sourceItemId = itemId
+                )
+            }
+            englishDao.upsertMissedWordReview(updated)
+        }
+
+        // Advance spaced-repetition schedule for previously missed words that were spoken accurately
+        val cleanCorrect = correctWords
+            .map { it.lowercase(Locale.US).replace(Regex("[^a-z0-9']"), "").trim('\'') }
+            .filter { it.isNotBlank() }
+            .toSet()
+
+        for (word in cleanCorrect) {
+            val existing = englishDao.getMissedWordReview(word) ?: continue
+            val newStreak = existing.consecutiveCorrect + 1
+            val intervalMs = when (newStreak) {
+                1 -> 300_000L
+                2 -> 1_800_000L
+                3 -> 86_400_000L
+                4 -> 259_200_000L
+                else -> 604_800_000L
+            }
+            englishDao.upsertMissedWordReview(
+                existing.copy(
+                    consecutiveCorrect = newStreak,
+                    nextReviewTimeMs = now + intervalMs,
+                    lastPracticedMs = now
+                )
+            )
+        }
+
+        // Also pull due DailySentences containing missed words forward for Review Mode
+        if (wordsToReview.isNotEmpty()) {
+            val allSentences = englishDao.getAllDailySentences().firstOrNull() ?: emptyList()
+            for (sentence in allSentences) {
+                if (sentence.id == itemId && itemType == "daily_sentence") continue
+                val sentenceWords = sentence.text.lowercase(Locale.US)
+                    .replace(Regex("[^a-z0-9'\\s]"), " ")
+                    .split(Regex("\\s+"))
+                    .toSet()
+                if (wordsToReview.any { it in sentenceWords } && sentence.reviewScheduledTime == 0L) {
+                    englishDao.updateDailySentence(
+                        sentence.copy(reviewScheduledTime = now + 60_000L)
+                    )
+                }
+            }
+        }
+    }
+
+    suspend fun clearPracticeLogs() {
+        englishDao.deleteAllPracticeAttempts()
+        englishDao.deleteAllMissedWordReviews()
     }
 }

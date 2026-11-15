@@ -68,6 +68,11 @@ android {
     compose = true
     buildConfig = true
   }
+  packaging {
+    jniLibs {
+      useLegacyPackaging = false
+    }
+  }
   testOptions { unitTests { isIncludeAndroidResources = true } }
 }
 
@@ -117,6 +122,16 @@ dependencies {
   implementation(libs.logging.interceptor)
   implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
+  implementation("net.java.dev.jna:jna:5.19.1@aar")
+  implementation("com.alphacephei:vosk-android:0.3.75") {
+    exclude(group = "net.java.dev.jna", module = "jna")
+  }
+  constraints {
+    implementation("androidx.graphics:graphics-path:1.1.0")
+    implementation("androidx.datastore:datastore:1.3.0")
+    implementation("androidx.datastore:datastore-core:1.3.0")
+    implementation("androidx.datastore:datastore-core-android:1.3.0")
+  }
   // implementation(libs.play.services.location)
   implementation(libs.retrofit)
   testImplementation(libs.androidx.compose.ui.test.junit4)

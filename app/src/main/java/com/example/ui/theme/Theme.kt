@@ -1,58 +1,57 @@
 package com.example.ui.theme
 
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 
-private val DarkColorScheme =
-  darkColorScheme(
+private val AppLightColorScheme = lightColorScheme(
     primary = PolishTeal,
-    secondary = Slate800,
+    onPrimary = Color.White,
+    primaryContainer = PolishTealLight,
+    onPrimaryContainer = PolishTealDark,
+    secondary = PolishIndigoText,
+    onSecondary = Color.White,
+    secondaryContainer = PolishIndigoBg,
+    onSecondaryContainer = PolishIndigoText,
     tertiary = Orange600,
-    background = Slate900,
-    surface = Slate800,
-    onPrimary = androidx.compose.ui.graphics.Color.White,
-    onSecondary = androidx.compose.ui.graphics.Color.White,
-    onBackground = androidx.compose.ui.graphics.Color.White,
-    onSurface = androidx.compose.ui.graphics.Color.White
-  )
-
-private val LightColorScheme =
-  lightColorScheme(
-    primary = PolishTeal,
-    secondary = Slate800,
-    tertiary = Orange600,
+    onTertiary = Color.White,
+    tertiaryContainer = Orange50,
+    onTertiaryContainer = Orange600,
     background = PolishBg,
-    surface = androidx.compose.ui.graphics.Color.White,
-    onPrimary = androidx.compose.ui.graphics.Color.White,
-    onSecondary = PolishNavy,
     onBackground = PolishNavy,
-    onSurface = PolishNavy
-  )
+    surface = Color.White,
+    onSurface = PolishNavy,
+    surfaceVariant = Slate100,
+    onSurfaceVariant = Slate500,
+    outline = Slate300,
+    outlineVariant = Slate200,
+    error = Red500,
+    onError = Color.White,
+    errorContainer = Red50,
+    onErrorContainer = Red700
+)
+
+val AppShapes = Shapes(
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(18.dp),
+    large = RoundedCornerShape(24.dp),
+    extraLarge = RoundedCornerShape(28.dp)
+)
 
 @Composable
 fun MyApplicationTheme(
-  darkTheme: Boolean = isSystemInDarkTheme(),
-  // Turn off dynamic color by default to preserve custom brand colors
-  dynamicColor: Boolean = false,
-  content: @Composable () -> Unit,
+    darkTheme: Boolean = false,
+    dynamicColor: Boolean = false,
+    content: @Composable () -> Unit
 ) {
-  val colorScheme =
-    when {
-      dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-        val context = LocalContext.current
-        if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-      }
-
-      darkTheme -> DarkColorScheme
-      else -> LightColorScheme
-    }
-
-  MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)
+    MaterialTheme(
+        colorScheme = AppLightColorScheme,
+        typography = Typography,
+        shapes = AppShapes,
+        content = content
+    )
 }

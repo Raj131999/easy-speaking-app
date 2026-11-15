@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -10,16 +11,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -28,15 +31,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.ConversationSet
-import com.example.ui.DialogueLine
 import com.example.ui.EnglishViewModel
-import com.example.ui.Screen
-import com.example.ui.WordScoreType
+import com.example.ui.components.MascotCoach
+import com.example.ui.components.MascotState
+import com.example.ui.components.PronunciationFeedbackChips
+import com.example.ui.components.SonicVoiceOrb
 import com.example.ui.components.SpokenVoiceToTextCard
-import com.example.ui.theme.CardSurfaceDark
-import com.example.ui.theme.StreakGold
-import com.example.ui.theme.TealPrimary
+import com.example.ui.components.Trophy3DBadge
+import com.example.ui.theme.*
 
 private fun cleanConversationTitle(title: String): String {
     return title
@@ -57,10 +59,16 @@ fun ConversationScreen(
     val userRole by viewModel.userConversationRole.collectAsState()
 
     val isRecording by viewModel.isRecording.collectAsState()
+    val liveAudioLevel by viewModel.liveAudioLevel.collectAsState()
     val isPlayingBack by viewModel.isPlayingBack.collectAsState()
     val isTtsSpeaking by viewModel.isTtsSpeaking.collectAsState()
     val lastScore by viewModel.lastScore.collectAsState()
     val scoredWords by viewModel.scoredWords.collectAsState()
+    val alignedWordTimings by viewModel.alignedWordTimings.collectAsState()
+    val playbackPositionSec by viewModel.playbackPositionSec.collectAsState()
+    val missedWordsSummary by viewModel.missedWordsSummary.collectAsState()
+    val unclearWordsSummary by viewModel.unclearWordsSummary.collectAsState()
+    val extraWordsSummary by viewModel.extraWordsSummary.collectAsState()
     val recognizedText by viewModel.recognizedText.collectAsState()
     val isProcessingSpeech by viewModel.isProcessingSpeech.collectAsState()
 
@@ -98,10 +106,11 @@ fun ConversationScreen(
         conversationsList.count { it.isCompleted }
     }
 
-    // Auto-scroll map to next uncompleted conversation or explicit target
     LaunchedEffect(conv == null, conversationsCompletedCount, scrollToTargetIndex) {
         if (conv == null && conversationsList.isNotEmpty()) {
-            val targetIdx = scrollToTargetIndex ?: conversationsList.indexOfFirst { !it.isCompleted }.takeIf { it >= 0 } ?: (conversationsList.size - 1)
+            val targetIdx = scrollToTargetIndex
+                ?: conversationsList.indexOfFirst { !it.isCompleted }.takeIf { it >= 0 }
+                ?: (conversationsList.size - 1)
             if (targetIdx in conversationsList.indices) {
                 mapListState.animateScrollToItem(targetIdx)
             }
@@ -109,7 +118,6 @@ fun ConversationScreen(
         }
     }
 
-    // Intercept back button when practicing conversation to return to that conversation on the map
     BackHandler(enabled = (conv != null)) {
         if (showQuiz) {
             showQuiz = false
@@ -126,14 +134,12 @@ fun ConversationScreen(
         }
     }
 
-    // Auto-scroll list when the active index changes
     LaunchedEffect(currentIndex, dialogueLines.size) {
         if (dialogueLines.isNotEmpty()) {
             listState.animateScrollToItem(currentIndex)
         }
     }
 
-    // Reset local state when the active conversation changes
     LaunchedEffect(conv) {
         showQuiz = false
         selectedQuizAnswer = null
@@ -148,14 +154,24 @@ fun ConversationScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Conversation Map") },
+                    title = {
+                        Text(
+                            text = "Conversation Map",
+                            fontWeight = FontWeight.Bold,
+                            color = PolishNavy
+                        )
+                    },
                     navigationIcon = {
                         IconButton(onClick = { viewModel.goBack() }) {
-                            Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = PolishNavy
+                            )
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background
+                        containerColor = PolishBg
                     )
                 )
             },
@@ -164,13 +180,14 @@ fun ConversationScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background)
+                    .background(PolishBg)
                     .padding(innerPadding)
             ) {
-                // Header guidance
                 Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = TealPrimary.copy(alpha = 0.08f)),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    border = BorderStroke(1.dp, Slate100),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -179,42 +196,54 @@ fun ConversationScreen(
                         modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Map,
-                            contentDescription = "Map Guidance",
-                            tint = TealPrimary,
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(46.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(PolishTealBg)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Map,
+                                contentDescription = "Map Guidance",
+                                tint = PolishTeal,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "CONVERSATIONAL DISTRICT",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
-                                    color = TealPrimary
+                                    color = PolishTeal,
+                                    letterSpacing = 0.8.sp
                                 )
                             )
                             Text(
-                                text = "Explore different real-life locations in town and practice active speaking roleplays. Complete quizzes to finish a location!",
+                                text = "Practice real-life roleplays across 3 difficulty levels and pass the comprehension check.",
                                 style = MaterialTheme.typography.bodySmall.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = Slate500
                                 )
                             )
                         }
                     }
                 }
 
-                // Map Path
                 LazyColumn(
                     state = mapListState,
                     modifier = Modifier
                         .fillMaxSize()
                         .weight(1f),
-                    contentPadding = PaddingValues(top = 16.dp, bottom = 48.dp, start = 16.dp, end = 16.dp)
+                    contentPadding = PaddingValues(top = 12.dp, bottom = 48.dp, start = 16.dp, end = 16.dp)
                 ) {
                     itemsIndexed(conversationsList) { index, conversation ->
                         val isCompleted = conversation.isCompleted
-                        val completedCount = listOf(conversation.isBasicCompleted, conversation.isIntermediateCompleted, conversation.isAdvancedCompleted).count { it }
+                        val completedCount = listOf(
+                            conversation.isBasicCompleted,
+                            conversation.isIntermediateCompleted,
+                            conversation.isAdvancedCompleted
+                        ).count { it }
                         val isFirstUncompleted = conversationsList.indexOfFirst { !it.isCompleted } == index
                         val isActive = isFirstUncompleted || (conversationsList.all { it.isCompleted } && index == 0)
                         val statusText = when {
@@ -222,7 +251,6 @@ fun ConversationScreen(
                             completedCount > 0 -> "In Progress ($completedCount/3 Levels)"
                             else -> "0/3 Levels Completed"
                         }
-
                         val isLeft = index % 2 == 0
 
                         Row(
@@ -242,29 +270,29 @@ fun ConversationScreen(
                                         score = if (isCompleted) 100 else if (completedCount > 0) (completedCount * 100 / 3) else null,
                                         isCompleted = isCompleted,
                                         isActive = isActive,
-                                        accentColor = TealPrimary,
+                                        accentColor = PolishTeal,
                                         customStatusText = statusText
                                     )
                                 }
-                                Spacer(modifier = Modifier.width(16.dp))
+                                Spacer(modifier = Modifier.width(14.dp))
                                 MapPinCircle(
                                     isCompleted = isCompleted,
                                     isActive = isActive,
-                                    accentColor = TealPrimary,
+                                    accentColor = PolishTeal,
                                     number = index + 1
                                 )
-                                Spacer(modifier = Modifier.width(16.dp))
+                                Spacer(modifier = Modifier.width(14.dp))
                                 Box(modifier = Modifier.weight(1f))
                             } else {
                                 Box(modifier = Modifier.weight(1f))
-                                Spacer(modifier = Modifier.width(16.dp))
+                                Spacer(modifier = Modifier.width(14.dp))
                                 MapPinCircle(
                                     isCompleted = isCompleted,
                                     isActive = isActive,
-                                    accentColor = TealPrimary,
+                                    accentColor = PolishTeal,
                                     number = index + 1
                                 )
-                                Spacer(modifier = Modifier.width(16.dp))
+                                Spacer(modifier = Modifier.width(14.dp))
                                 Box(modifier = Modifier.weight(1f)) {
                                     MapLocationCard(
                                         title = cleanConversationTitle(conversation.title),
@@ -272,7 +300,7 @@ fun ConversationScreen(
                                         score = if (isCompleted) 100 else if (completedCount > 0) (completedCount * 100 / 3) else null,
                                         isCompleted = isCompleted,
                                         isActive = isActive,
-                                        accentColor = TealPrimary,
+                                        accentColor = PolishTeal,
                                         customStatusText = statusText
                                     )
                                 }
@@ -291,7 +319,13 @@ fun ConversationScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Roleplay Dialogue") },
+                    title = {
+                        Text(
+                            text = "Roleplay Dialogue",
+                            fontWeight = FontWeight.Bold,
+                            color = PolishNavy
+                        )
+                    },
                     navigationIcon = {
                         IconButton(onClick = {
                             if (showQuiz) {
@@ -308,968 +342,105 @@ fun ConversationScreen(
                                 viewModel.recognizedText.value = ""
                             }
                         }) {
-                            Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = PolishNavy
+                            )
                         }
                     },
                     actions = {
-                        // Role Toggle Button
-                        TextButton(
+                        FilledTonalButton(
                             onClick = { viewModel.toggleRole() },
-                            colors = ButtonDefaults.textButtonColors(contentColor = TealPrimary)
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = PolishTealBg,
+                                contentColor = PolishTeal
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(end = 8.dp)
                         ) {
-                            Icon(imageVector = Icons.Default.Sync, contentDescription = "Switch")
+                            Icon(
+                                imageVector = Icons.Default.Sync,
+                                contentDescription = "Switch Role",
+                                modifier = Modifier.size(16.dp)
+                            )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Role: User as $userRole")
+                            Text(
+                                text = "Role: $userRole",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                            )
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background
+                        containerColor = PolishBg
                     )
                 )
             },
             modifier = modifier.fillMaxSize()
         ) { innerPadding ->
             conv?.let { item ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background)
-                    .padding(innerPadding)
-                    .padding(16.dp)
-            ) {
-                // Scenario Context Banner
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)),
-                    modifier = Modifier.fillMaxWidth()
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(PolishBg)
+                        .padding(innerPadding)
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Default.Place, contentDescription = "Scenario", tint = StreakGold, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = cleanConversationTitle(item.title).uppercase(),
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = StreakGold)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = item.scenario,
-                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Level Selector Tabs (Basic, Intermediate, Advanced)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
-                ) {
-                    listOf("Basic", "Intermediate", "Advanced").forEach { lvl ->
-                        val isLvlDone = when (lvl) {
-                            "Basic" -> item.isBasicCompleted
-                            "Intermediate" -> item.isIntermediateCompleted
-                            "Advanced" -> item.isAdvancedCompleted
-                            else -> false
-                        }
-
-                        FilterChip(
-                            selected = selectedLevel == lvl,
-                            onClick = {
-                                if (selectedLevel != lvl) {
-                                    selectedLevel = lvl
-                                    viewModel.activeConversationIndex.value = 0
-                                    showQuiz = false
-                                    selectedQuizAnswer = null
-                                    showQuizFeedback = false
-                                    viewModel.lastScore.value = null
-                                    viewModel.scoredWords.value = emptyList()
-                                    viewModel.recognizedText.value = ""
-                                    viewModel.triggerTtsForCurrentDialogue()
-                                }
-                            },
-                            leadingIcon = if (isLvlDone) {
-                                {
-                                    Icon(
-                                        imageVector = Icons.Default.CheckCircle,
-                                        contentDescription = "$lvl Completed",
-                                        tint = Color(0xFF2ECC71),
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            } else null,
-                            label = {
-                                Text(
-                                    text = lvl,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            },
-                            shape = RoundedCornerShape(20.dp),
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = TealPrimary.copy(alpha = 0.2f),
-                                selectedLabelColor = TealPrimary
-                            )
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                if (!showQuiz) {
-                    // --- DIALOGUE SCROLL VIEW ---
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        itemsIndexed(dialogueLines) { index, line ->
-                            val isActive = index == currentIndex
-                            val isPast = index < currentIndex
-                            val isFuture = index > currentIndex
-
-                            val isUserTurn = line.role == userRole
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .animateContentSize()
-                                    .alpha(if (isFuture) 0.3f else 1.0f),
-                                horizontalArrangement = if (isUserTurn) Arrangement.End else Arrangement.Start
-                            ) {
-                                if (!isUserTurn) {
-                                    // Speaker Avatar Left
-                                    Box(
-                                        contentAlignment = Alignment.Center,
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .clip(CircleShape)
-                                            .background(TealPrimary.copy(alpha = 0.2f))
-                                    ) {
-                                        Text(line.speaker.take(1), fontWeight = FontWeight.Bold, color = TealPrimary)
-                                    }
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                }
-
-                                Card(
-                                    shape = RoundedCornerShape(
-                                        topStart = 16.dp,
-                                        topEnd = 16.dp,
-                                        bottomStart = if (isUserTurn) 16.dp else 4.dp,
-                                        bottomEnd = if (isUserTurn) 4.dp else 16.dp
-                                    ),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = when {
-                                            isActive && isUserTurn -> TealPrimary.copy(alpha = 0.15f)
-                                            isActive -> MaterialTheme.colorScheme.surface
-                                            isUserTurn -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)
-                                            else -> MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
-                                        }
-                                    ),
-                                    border = if (isActive) BorderStroke(1.5.dp, TealPrimary) else null,
-                                    modifier = Modifier
-                                        .fillMaxWidth(0.8f)
-                                        .clickable {
-                                            if (!isUserTurn) {
-                                                viewModel.speak(line.text)
-                                            }
-                                        }
-                                ) {
-                                    Column(modifier = Modifier.padding(12.dp)) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Text(
-                                                text = line.speaker,
-                                                style = MaterialTheme.typography.labelMedium.copy(
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = if (isUserTurn) TealPrimary else StreakGold
-                                                )
-                                            )
-                                            if (!isUserTurn) {
-                                                Icon(
-                                                    imageVector = Icons.Default.VolumeUp,
-                                                    contentDescription = "Read",
-                                                    tint = TealPrimary,
-                                                    modifier = Modifier.size(16.dp)
-                                                )
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = line.text,
-                                            style = MaterialTheme.typography.bodyMedium.copy(
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                        )
-                                    }
-                                }
-
-                                if (isUserTurn) {
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    // User Avatar Right
-                                    Box(
-                                        contentAlignment = Alignment.Center,
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .clip(CircleShape)
-                                            .background(StreakGold.copy(alpha = 0.2f))
-                                    ) {
-                                        Text("Me", fontWeight = FontWeight.Bold, color = StreakGold)
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // --- SPEAKING PRACTICE / ADVANCE CONTROLS FOR ACTIVE INDEX ---
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    val activeLine = dialogueLines.getOrNull(currentIndex)
-                    if (activeLine != null) {
-                        val isUserTurn = activeLine.role == userRole
-
-                        Card(
-                            shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .animateContentSize()
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                if (isUserTurn) {
-                                    Text(
-                                        text = "YOUR TURN TO SPEAK ALOUD:",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            color = TealPrimary,
-                                            fontWeight = FontWeight.Bold,
-                                            letterSpacing = 1.sp
-                                        )
-                                    )
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Text(
-                                        text = activeLine.text,
-                                        style = MaterialTheme.typography.titleMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            textAlign = TextAlign.Center
-                                        )
-                                    )
-
-                                    Spacer(modifier = Modifier.height(16.dp))
-
-                                    // Record controls
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.Center,
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        // Play target example
-                                        IconButton(
-                                            onClick = { viewModel.speak(activeLine.text) },
-                                            modifier = Modifier
-                                                .size(44.dp)
-                                                .background(if (isTtsSpeaking) Color(0xFFFF5252) else MaterialTheme.colorScheme.secondary.copy(alpha = 0.4f), CircleShape)
-                                        ) {
-                                            Icon(
-                                                imageVector = if (isTtsSpeaking) Icons.Default.Stop else Icons.Default.VolumeUp,
-                                                contentDescription = if (isTtsSpeaking) "Stop" else "Hear Example",
-                                                tint = Color.White
-                                            )
-                                        }
-
-                                        Spacer(modifier = Modifier.width(20.dp))
-
-                                        // Mic button
-                                        IconButton(
-                                            onClick = {
-                                                if (isRecording) {
-                                                    viewModel.stopRecording(activeLine.text, "conversation", item.id)
-                                                } else {
-                                                    viewModel.startRecording(activeLine.text)
-                                                }
-                                            },
-                                            enabled = !isProcessingSpeech,
-                                            modifier = Modifier
-                                                .size(64.dp)
-                                                .background(
-                                                    when {
-                                                        isProcessingSpeech -> StreakGold
-                                                        isRecording -> Color(0xFFFF5252)
-                                                        else -> TealPrimary
-                                                    },
-                                                    CircleShape
-                                                )
-                                                .testTag("conversation_record_mic")
-                                        ) {
-                                            if (isProcessingSpeech) {
-                                                CircularProgressIndicator(
-                                                    modifier = Modifier.size(28.dp),
-                                                    color = Color.Black,
-                                                    strokeWidth = 3.dp
-                                                )
-                                            } else {
-                                                Icon(
-                                                    imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                                                    contentDescription = if (isRecording) "Stop" else "Record",
-                                                    tint = Color.Black,
-                                                    modifier = Modifier.size(28.dp)
-                                                )
-                                            }
-                                        }
-
-                                        Spacer(modifier = Modifier.width(20.dp))
-
-                                        // Hear user voice
-                                        IconButton(
-                                            onClick = { viewModel.playRecordedVoice() },
-                                            enabled = lastScore != null && !isProcessingSpeech,
-                                            modifier = Modifier
-                                                .size(44.dp)
-                                                .background(
-                                                    if (isPlayingBack) Color(0xFFFF5252) else MaterialTheme.colorScheme.secondary.copy(alpha = if (lastScore != null) 0.4f else 0.1f),
-                                                    CircleShape
-                                                )
-                                        ) {
-                                            Icon(
-                                                imageVector = if (isPlayingBack) Icons.Default.Stop else Icons.Default.PlayArrow,
-                                                contentDescription = "Playback",
-                                                tint = if (lastScore != null) Color.White else Color.Gray
-                                            )
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = when {
-                                            isProcessingSpeech -> "Analyzing your line... Please wait"
-                                            isRecording -> "Listening... Tap to end"
-                                            lastScore != null -> "Tap Mic to try again"
-                                            else -> "Tap Mic to record your line"
-                                        },
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            color = when {
-                                                isProcessingSpeech -> StreakGold
-                                                isRecording -> Color(0xFFFF5252)
-                                                else -> MaterialTheme.colorScheme.onSurfaceVariant
-                                            },
-                                            fontWeight = if (isProcessingSpeech || isRecording) FontWeight.Bold else FontWeight.Normal
-                                        )
-                                    )
-
-                                    // Audio processing notification banner
-                                    AnimatedVisibility(
-                                        visible = isProcessingSpeech,
-                                        enter = fadeIn() + expandVertically(),
-                                        exit = fadeOut() + shrinkVertically()
-                                    ) {
-                                        Card(
-                                            shape = RoundedCornerShape(12.dp),
-                                            colors = CardDefaults.cardColors(
-                                                containerColor = TealPrimary.copy(alpha = 0.12f)
-                                            ),
-                                            border = BorderStroke(1.dp, TealPrimary.copy(alpha = 0.7f)),
-                                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(12.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                CircularProgressIndicator(
-                                                    modifier = Modifier.size(24.dp),
-                                                    color = TealPrimary,
-                                                    strokeWidth = 2.5.dp
-                                                )
-                                                Spacer(modifier = Modifier.width(12.dp))
-                                                Column {
-                                                    Text(
-                                                        text = "Evaluating dialogue line...",
-                                                        style = MaterialTheme.typography.bodySmall.copy(
-                                                            fontWeight = FontWeight.Bold,
-                                                            color = TealPrimary
-                                                        )
-                                                    )
-                                                    Text(
-                                                        text = "Checking pronunciation and phrasing...",
-                                                        style = MaterialTheme.typography.labelSmall.copy(
-                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                        )
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    // Real-time Voice to Text Display
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    SpokenVoiceToTextCard(
-                                        isRecording = isRecording,
-                                        recognizedText = recognizedText,
-                                        hasEvaluated = lastScore != null
-                                    )
-
-                                    // Display score feedback
-                                    lastScore?.let { score ->
-                                        val isPassed = score >= 75
-                                        Spacer(modifier = Modifier.height(12.dp))
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Column {
-                                                Text(
-                                                    text = "Pronunciation score: ",
-                                                    style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                                )
-                                                Text(
-                                                    text = if (isPassed) "Line Passed (>= 75%)" else "Need 75% to pass line",
-                                                    style = MaterialTheme.typography.labelSmall.copy(
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = if (isPassed) Color(0xFF2ECC71) else StreakGold
-                                                    )
-                                                )
-                                            }
-                                            Text(
-                                                text = "$score%",
-                                                style = MaterialTheme.typography.bodyMedium.copy(
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = when {
-                                                        score >= 90 -> Color(0xFF2ECC71)
-                                                        score >= 75 -> Color(0xFF2ECC71)
-                                                        score >= 50 -> StreakGold
-                                                        else -> Color(0xFFFF5252)
-                                                    }
-                                                )
-                                            )
-                                        }
-
-                                        Spacer(modifier = Modifier.height(12.dp))
-                                        Button(
-                                            onClick = {
-                                                if (currentIndex < dialogueLines.size - 1) {
-                                                    viewModel.advanceDialogue(activeDialogueJson)
-                                                    viewModel.lastScore.value = null
-                                                    viewModel.scoredWords.value = emptyList()
-                                                    viewModel.recognizedText.value = ""
-                                                } else {
-                                                    if (item.comprehensionQuestion.isNotBlank()) {
-                                                        showQuiz = true
-                                                        viewModel.lastScore.value = null
-                                                        viewModel.scoredWords.value = emptyList()
-                                                        viewModel.recognizedText.value = ""
-                                                    } else {
-                                                        viewModel.completeConversationLevel(item.id, selectedLevel) { _, xp ->
-                                                            completedLevelName = selectedLevel
-                                                            completedLevelXp = xp
-                                                            showLevelCompleteDialog = true
-                                                            viewModel.lastScore.value = null
-                                                            viewModel.scoredWords.value = emptyList()
-                                                            viewModel.recognizedText.value = ""
-                                                        }
-                                                    }
-                                                }
-                                            },
-                                            colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Text(
-                                                text = if (currentIndex < dialogueLines.size - 1) "Perfect! Continue Conversation" else if (item.comprehensionQuestion.isNotBlank()) "Continue to Quiz" else "Complete $selectedLevel Level",
-                                                color = Color.Black,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Icon(imageVector = Icons.Default.ArrowForward, contentDescription = "Next", tint = Color.Black)
-                                        }
-                                    }
-                                } else {
-                                    // Partner's turn (A or B)
-                                    Text(
-                                        text = "${activeLine.speaker} IS SPEAKING...",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            color = StreakGold,
-                                            fontWeight = FontWeight.Bold,
-                                            letterSpacing = 1.sp
-                                        )
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = activeLine.text,
-                                        style = MaterialTheme.typography.titleMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            textAlign = TextAlign.Center
-                                        )
-                                    )
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Row {
-                                        Button(
-                                            onClick = { viewModel.speak(activeLine.text) },
-                                            colors = ButtonDefaults.buttonColors(containerColor = if (isTtsSpeaking) Color(0xFFFF5252) else MaterialTheme.colorScheme.secondary)
-                                        ) {
-                                            Icon(imageVector = if (isTtsSpeaking) Icons.Default.Stop else Icons.Default.VolumeUp, contentDescription = "Hear")
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(if (isTtsSpeaking) "Stop Voice" else "Play Voice Again")
-                                        }
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        Button(
-                                            onClick = {
-                                                if (currentIndex < dialogueLines.size - 1) {
-                                                    viewModel.advanceDialogue(activeDialogueJson)
-                                                } else {
-                                                    if (item.comprehensionQuestion.isNotBlank()) {
-                                                        showQuiz = true
-                                                    } else {
-                                                        viewModel.completeConversationLevel(item.id, selectedLevel) { _, xp ->
-                                                            completedLevelName = selectedLevel
-                                                            completedLevelXp = xp
-                                                            showLevelCompleteDialog = true
-                                                        }
-                                                    }
-                                                }
-                                            },
-                                            colors = ButtonDefaults.buttonColors(containerColor = TealPrimary)
-                                        ) {
-                                            Text(
-                                                text = if (currentIndex < dialogueLines.size - 1) "Next Line" else if (item.comprehensionQuestion.isNotBlank()) "Quiz" else "Complete",
-                                                color = Color.Black
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Icon(imageVector = Icons.Default.ArrowForward, contentDescription = "Next", tint = Color.Black)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Expander Vocab callout
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = "Vocabulary Tip: ${item.vocabularyCallout}",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            color = TealPrimary,
-                            fontWeight = FontWeight.Medium
-                        ),
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                } else {
-                    // --- COMPREHENSION QUIZ SCREEN ---
+                    // Scenario Context Banner
                     Card(
-                        shape = RoundedCornerShape(24.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        border = BorderStroke(1.dp, Slate100),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(16.dp)
-                        ) {
-                            // Scrollable question, star, and options container
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f)
-                                    .verticalScroll(rememberScrollState()),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Box(
-                                    contentAlignment = Alignment.Center,
-                                    modifier = Modifier
-                                        .size(52.dp)
-                                        .clip(CircleShape)
-                                        .background(StreakGold.copy(alpha = 0.2f))
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Grade,
-                                        contentDescription = "Quiz",
-                                        tint = StreakGold,
-                                        modifier = Modifier.size(28.dp)
-                                    )
-                                }
-
-                                Text(
-                                    text = "Comprehension Check",
-                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-                                )
-
-                                Text(
-                                    text = item.comprehensionQuestion,
-                                    style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontWeight = FontWeight.Medium,
-                                        textAlign = TextAlign.Center
-                                    ),
-                                    modifier = Modifier.padding(bottom = 4.dp)
-                                )
-
-                                val parsedOptions = remember(item.comprehensionOptions) {
-                                    item.comprehensionOptions.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-                                }
-
-                                parsedOptions.forEach { option ->
-                                    val isSelected = selectedQuizAnswer == option
-                                    val isCorrect = option.equals(item.comprehensionAnswer.trim(), ignoreCase = true)
-
-                                    val cardColor = when {
-                                        showQuizFeedback && isCorrect -> Color(0xFF2ECC71).copy(alpha = 0.15f)
-                                        showQuizFeedback && isSelected && !isCorrect -> Color(0xFFE74C3C).copy(alpha = 0.15f)
-                                        isSelected -> TealPrimary.copy(alpha = 0.12f)
-                                        else -> MaterialTheme.colorScheme.background
-                                    }
-
-                                    val borderColor = when {
-                                        showQuizFeedback && isCorrect -> Color(0xFF2ECC71)
-                                        showQuizFeedback && isSelected && !isCorrect -> Color(0xFFE74C3C)
-                                        isSelected -> TealPrimary
-                                        else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-                                    }
-
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(cardColor)
-                                            .border(1.dp, borderColor, RoundedCornerShape(12.dp))
-                                            .clickable {
-                                                if (!showQuizFeedback) {
-                                                    selectedQuizAnswer = option
-                                                }
-                                            }
-                                            .padding(horizontal = 14.dp, vertical = 10.dp)
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            RadioButton(
-                                                selected = isSelected,
-                                                onClick = {
-                                                    if (!showQuizFeedback) {
-                                                        selectedQuizAnswer = option
-                                                    }
-                                                }
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text(
-                                                text = option,
-                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                            Spacer(modifier = Modifier.weight(1f))
-                                            if (showQuizFeedback) {
-                                                if (isCorrect) {
-                                                    Icon(imageVector = Icons.Default.CheckCircle, contentDescription = "Correct", tint = Color(0xFF2ECC71))
-                                                } else if (isSelected) {
-                                                    Icon(imageVector = Icons.Default.Cancel, contentDescription = "Incorrect", tint = Color(0xFFE74C3C))
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                if (showQuizFeedback) {
-                                    val userWasCorrect = selectedQuizAnswer?.equals(item.comprehensionAnswer.trim(), ignoreCase = true) == true
-                                    Card(
-                                        shape = RoundedCornerShape(12.dp),
-                                        colors = CardDefaults.cardColors(
-                                            containerColor = if (userWasCorrect) Color(0xFF2ECC71).copy(alpha = 0.12f) else Color(0xFFFF9800).copy(alpha = 0.12f)
-                                        ),
-                                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(12.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Icon(
-                                                imageVector = if (userWasCorrect) Icons.Default.CheckCircle else Icons.Default.Info,
-                                                contentDescription = null,
-                                                tint = if (userWasCorrect) Color(0xFF2ECC71) else Color(0xFFFF9800),
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text(
-                                                text = if (userWasCorrect) "Excellent! Correct answer." else "Correct answer: ${item.comprehensionAnswer.trim()}",
-                                                style = MaterialTheme.typography.bodyMedium.copy(
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = if (userWasCorrect) Color(0xFF2ECC71) else Color(0xFFFF9800)
-                                                )
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            // Fixed Docked Action Button Bar (ALWAYS visible!)
-                            val expectedXp = when (selectedLevel) {
-                                "Basic" -> 20
-                                "Intermediate" -> 25
-                                "Advanced" -> 35
-                                else -> 20
-                            }
-
-                            if (!showQuizFeedback) {
-                                Button(
-                                    onClick = {
-                                        if (selectedQuizAnswer != null) {
-                                            showQuizFeedback = true
-                                        }
-                                    },
-                                    enabled = selectedQuizAnswer != null,
-                                    colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(48.dp),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Text(
-                                        text = if (selectedQuizAnswer != null) "Check Answer & Continue" else "Select an Answer",
-                                        color = Color.Black,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    if (selectedQuizAnswer != null) {
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Icon(imageVector = Icons.Default.ArrowForward, contentDescription = "Submit", tint = Color.Black)
-                                    }
-                                }
-                            } else {
-                                val userWasCorrect = selectedQuizAnswer?.equals(item.comprehensionAnswer.trim(), ignoreCase = true) == true
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    if (!userWasCorrect) {
-                                        OutlinedButton(
-                                            onClick = {
-                                                showQuizFeedback = false
-                                                selectedQuizAnswer = null
-                                            },
-                                            modifier = Modifier.weight(1f).height(48.dp),
-                                            shape = RoundedCornerShape(12.dp)
-                                        ) {
-                                            Text("Try Again")
-                                        }
-                                    }
-                                    Button(
-                                        onClick = {
-                                            viewModel.completeConversationLevel(item.id, selectedLevel) { _, xp ->
-                                                completedLevelName = selectedLevel
-                                                completedLevelXp = xp
-                                                showLevelCompleteDialog = true
-                                            }
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
-                                        modifier = Modifier.weight(if (!userWasCorrect) 1.5f else 1f).height(48.dp),
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
-                                        Text(
-                                            text = "Complete Level (+$expectedXp XP)",
-                                            color = Color.Black,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Icon(imageVector = Icons.Default.ArrowForward, contentDescription = "Finish", tint = Color.Black)
-                                    }
-                                }
-                            }
-
-                            // Secondary button: Return to dialogue
-                            TextButton(
-                                onClick = {
-                                    showQuiz = false
-                                    showQuizFeedback = false
-                                    selectedQuizAnswer = null
-                                },
-                                modifier = Modifier
-                                    .align(Alignment.CenterHorizontally)
-                                    .padding(top = 2.dp)
-                            ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
-                                    imageVector = Icons.Default.ArrowBack,
-                                    contentDescription = "Review",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    imageVector = Icons.Default.Place,
+                                    contentDescription = "Scenario",
+                                    tint = Orange600,
+                                    modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Review Conversation Dialogue",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    text = cleanConversationTitle(item.title).uppercase(),
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = Orange600,
+                                        letterSpacing = 0.8.sp
+                                    )
                                 )
                             }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = item.scenario,
+                                style = MaterialTheme.typography.bodySmall.copy(color = Slate500)
+                            )
                         }
                     }
-                }
-            }
 
-            // Level Completion Dialog
-            if (showLevelCompleteDialog) {
-                val currentItem = conversationsList.find { it.id == item.id } ?: item
-                val isBasicDone = currentItem.isBasicCompleted || completedLevelName == "Basic"
-                val isInterDone = currentItem.isIntermediateCompleted || completedLevelName == "Intermediate"
-                val isAdvDone = currentItem.isAdvancedCompleted || completedLevelName == "Advanced"
-                val isAllDone = isBasicDone && isInterDone && isAdvDone
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                val nextLevelToSuggest = when (completedLevelName) {
-                    "Basic" -> if (!isInterDone) "Intermediate" else if (!isAdvDone) "Advanced" else null
-                    "Intermediate" -> if (!isAdvDone) "Advanced" else if (!isBasicDone) "Basic" else null
-                    "Advanced" -> if (!isBasicDone) "Basic" else if (!isInterDone) "Intermediate" else null
-                    else -> null
-                }
-
-                AlertDialog(
-                    onDismissRequest = {
-                        showLevelCompleteDialog = false
-                        viewModel.activeConversation.value = null
-                    },
-                    shape = RoundedCornerShape(24.dp),
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    title = {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .size(64.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isAllDone) StreakGold.copy(alpha = 0.2f) else TealPrimary.copy(alpha = 0.2f))
-                            ) {
-                                Icon(
-                                    imageVector = if (isAllDone) Icons.Default.EmojiEvents else Icons.Default.CheckCircle,
-                                    contentDescription = "Complete",
-                                    tint = if (isAllDone) StreakGold else TealPrimary,
-                                    modifier = Modifier.size(36.dp)
-                                )
+                    // Level Selector Tabs (Basic, Intermediate, Advanced)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+                    ) {
+                        listOf("Basic", "Intermediate", "Advanced").forEach { lvl ->
+                            val isLvlDone = when (lvl) {
+                                "Basic" -> item.isBasicCompleted
+                                "Intermediate" -> item.isIntermediateCompleted
+                                "Advanced" -> item.isAdvancedCompleted
+                                else -> false
                             }
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                text = if (isAllDone) "Topic Mastered!" else "$completedLevelName Level Completed!",
-                                style = MaterialTheme.typography.titleLarge.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    textAlign = TextAlign.Center
-                                )
-                            )
-                        }
-                    },
-                    text = {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Card(
-                                shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(containerColor = StreakGold.copy(alpha = 0.12f)),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Star,
-                                        contentDescription = "XP",
-                                        tint = StreakGold,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "+$completedLevelXp XP Awarded",
-                                        style = MaterialTheme.typography.titleMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            color = StreakGold
-                                        )
-                                    )
-                                }
-                            }
+                            val selected = selectedLevel == lvl
 
-                            Text(
-                                text = "Topic Completion Progress:",
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
-                            )
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                listOf(
-                                    Triple("Basic", isBasicDone, 20),
-                                    Triple("Intermediate", isInterDone, 25),
-                                    Triple("Advanced", isAdvDone, 35)
-                                ).forEach { (lvl, isDone, xp) ->
-                                    Card(
-                                        modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(10.dp),
-                                        colors = CardDefaults.cardColors(
-                                            containerColor = if (isDone) Color(0xFF2ECC71).copy(alpha = 0.12f) else MaterialTheme.colorScheme.background
-                                        ),
-                                        border = if (isDone) BorderStroke(1.dp, Color(0xFF2ECC71)) else null
-                                    ) {
-                                        Column(
-                                            modifier = Modifier.padding(8.dp),
-                                            horizontalAlignment = Alignment.CenterHorizontally
-                                        ) {
-                                             Icon(
-                                                imageVector = if (isDone) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
-                                                contentDescription = lvl,
-                                                tint = if (isDone) Color(0xFF2ECC71) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                text = lvl,
-                                                style = MaterialTheme.typography.labelSmall.copy(
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontSize = 11.sp
-                                                )
-                                            )
-                                            Text(
-                                                text = if (isDone) "Done" else "${xp}XP",
-                                                style = MaterialTheme.typography.bodySmall.copy(
-                                                    fontSize = 10.sp,
-                                                    color = if (isDone) Color(0xFF2ECC71) else MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            if (isAllDone) {
-                                Text(
-                                    text = "All 3 levels completed! This conversation topic is now fully marked as completed on your map.",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                                    textAlign = TextAlign.Center
-                                )
-                            } else if (nextLevelToSuggest != null) {
-                                Text(
-                                    text = "Complete Basic, Intermediate, and Advanced levels to mark this entire topic as completed.",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                        }
-                    },
-                    confirmButton = {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            if (nextLevelToSuggest != null && !isAllDone) {
-                                Button(
-                                    onClick = {
-                                        showLevelCompleteDialog = false
-                                        selectedLevel = nextLevelToSuggest
+                            FilterChip(
+                                selected = selected,
+                                onClick = {
+                                    if (selectedLevel != lvl) {
+                                        selectedLevel = lvl
                                         viewModel.activeConversationIndex.value = 0
                                         showQuiz = false
                                         selectedQuizAnswer = null
@@ -1278,34 +449,1039 @@ fun ConversationScreen(
                                         viewModel.scoredWords.value = emptyList()
                                         viewModel.recognizedText.value = ""
                                         viewModel.triggerTtsForCurrentDialogue()
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
-                                    modifier = Modifier.fillMaxWidth()
+                                    }
+                                },
+                                leadingIcon = if (isLvlDone) {
+                                    {
+                                        Icon(
+                                            imageVector = Icons.Default.CheckCircle,
+                                            contentDescription = "$lvl Completed",
+                                            tint = if (selected) Color.White else Emerald500,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                } else null,
+                                label = {
+                                    Text(
+                                        text = lvl,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                },
+                                shape = RoundedCornerShape(20.dp),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    containerColor = Color.White,
+                                    labelColor = Slate500,
+                                    selectedContainerColor = PolishTeal,
+                                    selectedLabelColor = Color.White
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    enabled = true,
+                                    selected = selected,
+                                    borderColor = Slate200
+                                )
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    if (!showQuiz) {
+                        // --- DIALOGUE SCROLL VIEW ---
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            itemsIndexed(dialogueLines) { index, line ->
+                                val isActive = index == currentIndex
+                                val isFuture = index > currentIndex
+                                val isUserTurn = line.role == userRole
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .animateContentSize()
+                                        .alpha(if (isFuture) 0.38f else 1.0f),
+                                    horizontalArrangement = if (isUserTurn) Arrangement.End else Arrangement.Start
                                 ) {
-                                    Text("Next Level: $nextLevelToSuggest", color = Color.Black, fontWeight = FontWeight.Bold)
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Icon(imageVector = Icons.Default.ArrowForward, contentDescription = null, tint = Color.Black)
+                                    if (!isUserTurn) {
+                                        Box(
+                                            contentAlignment = Alignment.Center,
+                                            modifier = Modifier
+                                                .size(36.dp)
+                                                .clip(CircleShape)
+                                                .background(PolishTealBg)
+                                        ) {
+                                            Text(
+                                                text = line.speaker.take(1),
+                                                fontWeight = FontWeight.Bold,
+                                                color = PolishTeal
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                    }
+
+                                    Card(
+                                        shape = RoundedCornerShape(
+                                            topStart = 18.dp,
+                                            topEnd = 18.dp,
+                                            bottomStart = if (isUserTurn) 18.dp else 4.dp,
+                                            bottomEnd = if (isUserTurn) 4.dp else 18.dp
+                                        ),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = when {
+                                                isActive && isUserTurn -> PolishTealBg
+                                                isActive -> Color.White
+                                                isUserTurn -> Slate100
+                                                else -> Color.White
+                                            }
+                                        ),
+                                        border = BorderStroke(
+                                            width = if (isActive) 1.5.dp else 1.dp,
+                                            color = if (isActive) PolishTeal else Slate200
+                                        ),
+                                        modifier = Modifier
+                                            .fillMaxWidth(0.8f)
+                                            .clickable {
+                                                if (!isUserTurn) {
+                                                    viewModel.speak(line.text)
+                                                }
+                                            }
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Text(
+                                                    text = line.speaker,
+                                                    style = MaterialTheme.typography.labelMedium.copy(
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (isUserTurn) PolishTeal else Orange600
+                                                    )
+                                                )
+                                                if (!isUserTurn) {
+                                                    Icon(
+                                                        imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                                                        contentDescription = "Read",
+                                                        tint = PolishTeal,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                            }
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = line.text,
+                                                style = MaterialTheme.typography.bodyMedium.copy(
+                                                    color = PolishNavy
+                                                )
+                                            )
+                                        }
+                                    }
+
+                                    if (isUserTurn) {
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Box(
+                                            contentAlignment = Alignment.Center,
+                                            modifier = Modifier
+                                                .size(36.dp)
+                                                .clip(CircleShape)
+                                                .background(PolishIndigoBg)
+                                        ) {
+                                            Text(
+                                                text = "Me",
+                                                fontWeight = FontWeight.Bold,
+                                                color = PolishIndigoText,
+                                                fontSize = 12.sp
+                                            )
+                                        }
+                                    }
                                 }
                             }
-                            OutlinedButton(
-                                onClick = {
-                                    showLevelCompleteDialog = false
-                                    viewModel.activeConversation.value = null
-                                    viewModel.lastScore.value = null
-                                    viewModel.scoredWords.value = emptyList()
-                                    viewModel.recognizedText.value = ""
-                                },
-                                modifier = Modifier.fillMaxWidth()
+                        }
+
+                        // --- SPEAKING PRACTICE / ADVANCE CONTROLS FOR ACTIVE INDEX ---
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        val activeLine = dialogueLines.getOrNull(currentIndex)
+                        if (activeLine != null) {
+                            val isUserTurn = activeLine.role == userRole
+
+                            Card(
+                                shape = RoundedCornerShape(24.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                border = BorderStroke(1.dp, Slate100),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .animateContentSize()
                             ) {
-                                Text(if (isAllDone) "Return to Map" else "Save & Return to Map")
+                                Column(
+                                    modifier = Modifier.padding(16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    if (isUserTurn) {
+                                        Text(
+                                            text = "YOUR TURN TO SPEAK ALOUD",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                color = PolishTeal,
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = 1.sp
+                                            )
+                                        )
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text(
+                                            text = activeLine.text,
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                textAlign = TextAlign.Center,
+                                                color = PolishNavy
+                                            )
+                                        )
+
+                                        Spacer(modifier = Modifier.height(10.dp))
+
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.Center,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            // Play target example
+                                            IconButton(
+                                                onClick = { viewModel.speak(activeLine.text) },
+                                                modifier = Modifier
+                                                    .size(48.dp)
+                                                    .background(
+                                                        if (isTtsSpeaking) Red500 else PolishTealBg,
+                                                        CircleShape
+                                                    )
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (isTtsSpeaking) Icons.Default.Stop else Icons.AutoMirrored.Filled.VolumeUp,
+                                                    contentDescription = if (isTtsSpeaking) "Stop" else "Hear Example",
+                                                    tint = if (isTtsSpeaking) Color.White else PolishTeal
+                                                )
+                                            }
+
+                                            Spacer(modifier = Modifier.width(12.dp))
+
+                                            SonicVoiceOrb(
+                                                isRecording = isRecording,
+                                                audioLevel = liveAudioLevel,
+                                                isProcessing = isProcessingSpeech,
+                                                onClick = {
+                                                    if (isRecording) {
+                                                        viewModel.stopRecording(activeLine.text, "conversation", item.id)
+                                                    } else {
+                                                        viewModel.startRecording(activeLine.text)
+                                                    }
+                                                },
+                                                size = 56.dp,
+                                                coreColor = when {
+                                                    isProcessingSpeech -> Orange500
+                                                    isRecording -> Red500
+                                                    else -> PolishTeal
+                                                },
+                                                glowColor = when {
+                                                    isProcessingSpeech -> Orange100
+                                                    isRecording -> Red400
+                                                    else -> Color(0xFF2DD4BF)
+                                                },
+                                                modifier = Modifier.testTag("conversation_record_mic")
+                                            )
+
+                                            Spacer(modifier = Modifier.width(12.dp))
+
+                                            // Hear user voice
+                                            IconButton(
+                                                onClick = { viewModel.playRecordedVoice() },
+                                                enabled = lastScore != null && !isProcessingSpeech,
+                                                modifier = Modifier
+                                                    .size(48.dp)
+                                                    .background(
+                                                        when {
+                                                            isPlayingBack -> Red500
+                                                            lastScore != null -> PolishIndigoBg
+                                                            else -> Slate100
+                                                        },
+                                                        CircleShape
+                                                    )
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (isPlayingBack) Icons.Default.Stop else Icons.Default.PlayArrow,
+                                                    contentDescription = "Playback",
+                                                    tint = when {
+                                                        isPlayingBack -> Color.White
+                                                        lastScore != null -> PolishIndigoText
+                                                        else -> Slate400
+                                                    }
+                                                )
+                                            }
+                                        }
+
+                                        Text(
+                                            text = when {
+                                                isProcessingSpeech -> "Analyzing your line... Please wait"
+                                                isRecording -> "Listening... Tap the orb to finish"
+                                                lastScore != null -> "Tap the orb to try again"
+                                                else -> "Tap the orb to record your line"
+                                            },
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                color = when {
+                                                    isProcessingSpeech -> Orange600
+                                                    isRecording -> Red500
+                                                    else -> Slate500
+                                                },
+                                                fontWeight = if (isProcessingSpeech || isRecording) FontWeight.Bold else FontWeight.Medium
+                                            )
+                                        )
+
+                                        AnimatedVisibility(
+                                            visible = isProcessingSpeech,
+                                            enter = fadeIn() + expandVertically(),
+                                            exit = fadeOut() + shrinkVertically()
+                                        ) {
+                                            Card(
+                                                shape = RoundedCornerShape(12.dp),
+                                                colors = CardDefaults.cardColors(
+                                                    containerColor = PolishTealBg
+                                                ),
+                                                border = BorderStroke(1.dp, PolishTealLightBorder),
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 6.dp)
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(12.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    CircularProgressIndicator(
+                                                        modifier = Modifier.size(22.dp),
+                                                        color = PolishTeal,
+                                                        strokeWidth = 2.5.dp
+                                                    )
+                                                    Spacer(modifier = Modifier.width(12.dp))
+                                                    Column {
+                                                        Text(
+                                                            text = "Evaluating dialogue line...",
+                                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                                fontWeight = FontWeight.Bold,
+                                                                color = PolishTeal
+                                                            )
+                                                        )
+                                                        Text(
+                                                            text = "Checking pronunciation and phrasing...",
+                                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                                color = Slate500
+                                                            )
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        SpokenVoiceToTextCard(
+                                            isRecording = isRecording,
+                                            recognizedText = recognizedText,
+                                            hasEvaluated = lastScore != null
+                                        )
+
+                                        lastScore?.let { score ->
+                                            val isPassed = score >= 75
+                                            Spacer(modifier = Modifier.height(10.dp))
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Column {
+                                                    Text(
+                                                        text = "Pronunciation Score",
+                                                        style = MaterialTheme.typography.labelMedium.copy(
+                                                            color = Slate500,
+                                                            fontWeight = FontWeight.Bold
+                                                        )
+                                                    )
+                                                    Text(
+                                                        text = if (isPassed) "Line Passed (>= 75%)" else "Need 75% to pass line",
+                                                        style = MaterialTheme.typography.labelSmall.copy(
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = if (isPassed) Emerald600 else Orange600
+                                                        )
+                                                    )
+                                                }
+                                                Text(
+                                                    text = "$score%",
+                                                    style = MaterialTheme.typography.titleLarge.copy(
+                                                        fontWeight = FontWeight.ExtraBold,
+                                                        color = when {
+                                                            score >= 75 -> Emerald600
+                                                            score >= 50 -> Orange600
+                                                            else -> Red500
+                                                        }
+                                                    )
+                                                )
+                                            }
+
+                                            if (alignedWordTimings.isNotEmpty() || scoredWords.isNotEmpty()) {
+                                                Spacer(modifier = Modifier.height(8.dp))
+                                                PronunciationFeedbackChips(
+                                                    alignedTimings = alignedWordTimings,
+                                                    fallbackScoredWords = scoredWords,
+                                                    playbackPositionSec = playbackPositionSec,
+                                                    isPlayingBack = isPlayingBack,
+                                                    missedWords = missedWordsSummary,
+                                                    unclearWords = unclearWordsSummary,
+                                                    extraWords = extraWordsSummary,
+                                                    onWordClick = { word -> viewModel.speak(word) }
+                                                )
+                                            }
+
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            Button(
+                                                onClick = {
+                                                    if (currentIndex < dialogueLines.size - 1) {
+                                                        viewModel.advanceDialogue(activeDialogueJson)
+                                                        viewModel.lastScore.value = null
+                                                        viewModel.scoredWords.value = emptyList()
+                                                        viewModel.recognizedText.value = ""
+                                                    } else {
+                                                        if (item.comprehensionQuestion.isNotBlank()) {
+                                                            showQuiz = true
+                                                            viewModel.lastScore.value = null
+                                                            viewModel.scoredWords.value = emptyList()
+                                                            viewModel.recognizedText.value = ""
+                                                        } else {
+                                                            viewModel.completeConversationLevel(item.id, selectedLevel) { _, xp ->
+                                                                completedLevelName = selectedLevel
+                                                                completedLevelXp = xp
+                                                                showLevelCompleteDialog = true
+                                                                viewModel.lastScore.value = null
+                                                                viewModel.scoredWords.value = emptyList()
+                                                                viewModel.recognizedText.value = ""
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = PolishTeal,
+                                                    contentColor = Color.White
+                                                ),
+                                                shape = RoundedCornerShape(14.dp),
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(48.dp)
+                                            ) {
+                                                Text(
+                                                    text = if (currentIndex < dialogueLines.size - 1) {
+                                                        "Continue Conversation"
+                                                    } else if (item.comprehensionQuestion.isNotBlank()) {
+                                                        "Continue to Quiz"
+                                                    } else {
+                                                        "Complete $selectedLevel Level"
+                                                    },
+                                                    color = Color.White,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Icon(
+                                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                                    contentDescription = "Next",
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        // Partner's turn
+                                        Text(
+                                            text = "${activeLine.speaker.uppercase()} IS SPEAKING",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                color = Orange600,
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = 1.sp
+                                            )
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = activeLine.text,
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                textAlign = TextAlign.Center,
+                                                color = PolishNavy
+                                            )
+                                        )
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            FilledTonalButton(
+                                                onClick = { viewModel.speak(activeLine.text) },
+                                                colors = ButtonDefaults.filledTonalButtonColors(
+                                                    containerColor = if (isTtsSpeaking) Red500 else PolishIndigoBg,
+                                                    contentColor = if (isTtsSpeaking) Color.White else PolishIndigoText
+                                                ),
+                                                shape = RoundedCornerShape(14.dp),
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(48.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (isTtsSpeaking) Icons.Default.Stop else Icons.AutoMirrored.Filled.VolumeUp,
+                                                    contentDescription = "Hear",
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = if (isTtsSpeaking) "Stop Voice" else "Play Again",
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                            }
+
+                                            Button(
+                                                onClick = {
+                                                    if (currentIndex < dialogueLines.size - 1) {
+                                                        viewModel.advanceDialogue(activeDialogueJson)
+                                                    } else {
+                                                        if (item.comprehensionQuestion.isNotBlank()) {
+                                                            showQuiz = true
+                                                        } else {
+                                                            viewModel.completeConversationLevel(item.id, selectedLevel) { _, xp ->
+                                                                completedLevelName = selectedLevel
+                                                                completedLevelXp = xp
+                                                                showLevelCompleteDialog = true
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = PolishTeal,
+                                                    contentColor = Color.White
+                                                ),
+                                                shape = RoundedCornerShape(14.dp),
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(48.dp)
+                                            ) {
+                                                Text(
+                                                    text = if (currentIndex < dialogueLines.size - 1) "Next Line" else if (item.comprehensionQuestion.isNotBlank()) "Quiz" else "Complete",
+                                                    color = Color.White,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Icon(
+                                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                                    contentDescription = "Next",
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Vocabulary Tip: ${item.vocabularyCallout}",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = PolishTeal,
+                                fontWeight = FontWeight.Medium
+                            ),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        // --- COMPREHENSION QUIZ SCREEN ---
+                        Card(
+                            shape = RoundedCornerShape(24.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            border = BorderStroke(1.dp, Slate100),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(18.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f)
+                                        .verticalScroll(rememberScrollState()),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier
+                                            .size(52.dp)
+                                            .clip(CircleShape)
+                                            .background(PolishAmberBg)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Grade,
+                                            contentDescription = "Quiz",
+                                            tint = Orange600,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                    }
+
+                                    Text(
+                                        text = "Comprehension Check",
+                                        style = MaterialTheme.typography.titleLarge.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = PolishNavy
+                                        )
+                                    )
+
+                                    Text(
+                                        text = item.comprehensionQuestion,
+                                        style = MaterialTheme.typography.bodyLarge.copy(
+                                            fontWeight = FontWeight.Medium,
+                                            textAlign = TextAlign.Center,
+                                            color = PolishNavy
+                                        ),
+                                        modifier = Modifier.padding(bottom = 4.dp)
+                                    )
+
+                                    val parsedOptions = remember(item.comprehensionOptions) {
+                                        item.comprehensionOptions.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                                    }
+
+                                    parsedOptions.forEach { option ->
+                                        val isSelected = selectedQuizAnswer == option
+                                        val isCorrect = option.equals(item.comprehensionAnswer.trim(), ignoreCase = true)
+
+                                        val cardColor = when {
+                                            showQuizFeedback && isCorrect -> Emerald50
+                                            showQuizFeedback && isSelected && !isCorrect -> Red50
+                                            isSelected -> PolishTealBg
+                                            else -> PolishBg
+                                        }
+
+                                        val borderColor = when {
+                                            showQuizFeedback && isCorrect -> Emerald500
+                                            showQuizFeedback && isSelected && !isCorrect -> Red500
+                                            isSelected -> PolishTeal
+                                            else -> Slate200
+                                        }
+
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(14.dp))
+                                                .background(cardColor)
+                                                .border(
+                                                    width = if (isSelected || (showQuizFeedback && isCorrect)) 1.5.dp else 1.dp,
+                                                    color = borderColor,
+                                                    shape = RoundedCornerShape(14.dp)
+                                                )
+                                                .clickable {
+                                                    if (!showQuizFeedback) {
+                                                        selectedQuizAnswer = option
+                                                    }
+                                                }
+                                                .padding(horizontal = 14.dp, vertical = 10.dp)
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                RadioButton(
+                                                    selected = isSelected,
+                                                    onClick = {
+                                                        if (!showQuizFeedback) {
+                                                            selectedQuizAnswer = option
+                                                        }
+                                                    },
+                                                    colors = RadioButtonDefaults.colors(
+                                                        selectedColor = PolishTeal,
+                                                        unselectedColor = Slate400
+                                                    )
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = option,
+                                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                                    color = PolishNavy
+                                                )
+                                                Spacer(modifier = Modifier.weight(1f))
+                                                if (showQuizFeedback) {
+                                                    if (isCorrect) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.CheckCircle,
+                                                            contentDescription = "Correct",
+                                                            tint = Emerald500
+                                                        )
+                                                    } else if (isSelected) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Cancel,
+                                                            contentDescription = "Incorrect",
+                                                            tint = Red500
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    if (showQuizFeedback) {
+                                        val userWasCorrect = selectedQuizAnswer?.equals(item.comprehensionAnswer.trim(), ignoreCase = true) == true
+                                        Card(
+                                            shape = RoundedCornerShape(14.dp),
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = if (userWasCorrect) Emerald50 else PolishAmberBg
+                                            ),
+                                            border = BorderStroke(1.dp, if (userWasCorrect) Emerald100 else Orange100),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(top = 4.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (userWasCorrect) Icons.Default.CheckCircle else Icons.Default.Info,
+                                                    contentDescription = null,
+                                                    tint = if (userWasCorrect) Emerald600 else Orange600,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = if (userWasCorrect) "Excellent! Correct answer." else "Correct answer: ${item.comprehensionAnswer.trim()}",
+                                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (userWasCorrect) Emerald600 else Orange600
+                                                    )
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                val expectedXp = when (selectedLevel) {
+                                    "Basic" -> 20
+                                    "Intermediate" -> 25
+                                    "Advanced" -> 35
+                                    else -> 20
+                                }
+
+                                if (!showQuizFeedback) {
+                                    Button(
+                                        onClick = {
+                                            if (selectedQuizAnswer != null) {
+                                                showQuizFeedback = true
+                                            }
+                                        },
+                                        enabled = selectedQuizAnswer != null,
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = PolishTeal,
+                                            contentColor = Color.White,
+                                            disabledContainerColor = Slate200,
+                                            disabledContentColor = Slate400
+                                        ),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(48.dp),
+                                        shape = RoundedCornerShape(14.dp)
+                                    ) {
+                                        Text(
+                                            text = if (selectedQuizAnswer != null) "Check Answer & Continue" else "Select an Answer",
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        if (selectedQuizAnswer != null) {
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                                contentDescription = "Submit",
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    val userWasCorrect = selectedQuizAnswer?.equals(item.comprehensionAnswer.trim(), ignoreCase = true) == true
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        if (!userWasCorrect) {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    showQuizFeedback = false
+                                                    selectedQuizAnswer = null
+                                                },
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(48.dp),
+                                                shape = RoundedCornerShape(14.dp)
+                                            ) {
+                                                Text("Try Again")
+                                            }
+                                        }
+                                        Button(
+                                            onClick = {
+                                                viewModel.completeConversationLevel(item.id, selectedLevel) { _, xp ->
+                                                    completedLevelName = selectedLevel
+                                                    completedLevelXp = xp
+                                                    showLevelCompleteDialog = true
+                                                }
+                                            },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = PolishTeal,
+                                                contentColor = Color.White
+                                            ),
+                                            modifier = Modifier
+                                                .weight(if (!userWasCorrect) 1.5f else 1f)
+                                                .height(48.dp),
+                                            shape = RoundedCornerShape(14.dp)
+                                        ) {
+                                            Text(
+                                                text = "Complete (+$expectedXp XP)",
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                                contentDescription = "Finish",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                TextButton(
+                                    onClick = {
+                                        showQuiz = false
+                                        showQuizFeedback = false
+                                        selectedQuizAnswer = null
+                                    },
+                                    modifier = Modifier
+                                        .align(Alignment.CenterHorizontally)
+                                        .padding(top = 2.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Review",
+                                        modifier = Modifier.size(16.dp),
+                                        tint = Slate500
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Review Conversation Dialogue",
+                                        style = MaterialTheme.typography.bodySmall.copy(color = Slate500)
+                                    )
+                                }
                             }
                         }
                     }
-                )
+                }
+
+                // Level Completion Dialog
+                if (showLevelCompleteDialog) {
+                    val currentItem = conversationsList.find { it.id == item.id } ?: item
+                    val isBasicDone = currentItem.isBasicCompleted || completedLevelName == "Basic"
+                    val isInterDone = currentItem.isIntermediateCompleted || completedLevelName == "Intermediate"
+                    val isAdvDone = currentItem.isAdvancedCompleted || completedLevelName == "Advanced"
+                    val isAllDone = isBasicDone && isInterDone && isAdvDone
+
+                    val nextLevelToSuggest = when (completedLevelName) {
+                        "Basic" -> if (!isInterDone) "Intermediate" else if (!isAdvDone) "Advanced" else null
+                        "Intermediate" -> if (!isAdvDone) "Advanced" else if (!isBasicDone) "Basic" else null
+                        "Advanced" -> if (!isBasicDone) "Basic" else if (!isInterDone) "Intermediate" else null
+                        else -> null
+                    }
+
+                    AlertDialog(
+                        onDismissRequest = {
+                            showLevelCompleteDialog = false
+                            viewModel.activeConversation.value = null
+                        },
+                        shape = RoundedCornerShape(24.dp),
+                        containerColor = Color.White,
+                        title = {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                MascotCoach(
+                                    state = MascotState.CELEBRATING,
+                                    coachMessage = if (isAllDone) "All 3 levels mastered!" else "$completedLevelName cleared!",
+                                    size = 76.dp
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = if (isAllDone) "Topic Mastered!" else "$completedLevelName Completed!",
+                                    style = MaterialTheme.typography.titleLarge.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center,
+                                        color = PolishNavy
+                                    )
+                                )
+                            }
+                        },
+                        text = {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Trophy3DBadge(
+                                    title = "$completedLevelName Mastery",
+                                    xpReward = completedLevelXp,
+                                    subtitle = "Dialogue Roleplay Complete"
+                                )
+
+                                Text(
+                                    text = "Topic Completion Progress:",
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = PolishNavy
+                                    )
+                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    listOf(
+                                        Triple("Basic", isBasicDone, 20),
+                                        Triple("Intermediate", isInterDone, 25),
+                                        Triple("Advanced", isAdvDone, 35)
+                                    ).forEach { (lvl, isDone, xp) ->
+                                        Card(
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(12.dp),
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = if (isDone) Emerald50 else PolishBg
+                                            ),
+                                            border = BorderStroke(1.dp, if (isDone) Emerald500 else Slate200)
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.padding(8.dp),
+                                                horizontalAlignment = Alignment.CenterHorizontally
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (isDone) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                                    contentDescription = lvl,
+                                                    tint = if (isDone) Emerald500 else Slate400,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = lvl,
+                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 11.sp,
+                                                        color = PolishNavy
+                                                    )
+                                                )
+                                                Text(
+                                                    text = if (isDone) "Done" else "${xp}XP",
+                                                    style = MaterialTheme.typography.bodySmall.copy(
+                                                        fontSize = 10.sp,
+                                                        color = if (isDone) Emerald600 else Slate500
+                                                    )
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (isAllDone) {
+                                    Text(
+                                        text = "All 3 levels completed! This conversation topic is now marked as mastered on your map.",
+                                        style = MaterialTheme.typography.bodySmall.copy(color = Slate500),
+                                        textAlign = TextAlign.Center
+                                    )
+                                } else if (nextLevelToSuggest != null) {
+                                    Text(
+                                        text = "Complete Basic, Intermediate, and Advanced levels to master this entire topic.",
+                                        style = MaterialTheme.typography.bodySmall.copy(color = Slate500),
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                if (nextLevelToSuggest != null && !isAllDone) {
+                                    Button(
+                                        onClick = {
+                                            showLevelCompleteDialog = false
+                                            selectedLevel = nextLevelToSuggest
+                                            viewModel.activeConversationIndex.value = 0
+                                            showQuiz = false
+                                            selectedQuizAnswer = null
+                                            showQuizFeedback = false
+                                            viewModel.lastScore.value = null
+                                            viewModel.scoredWords.value = emptyList()
+                                            viewModel.recognizedText.value = ""
+                                            viewModel.triggerTtsForCurrentDialogue()
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = PolishTeal,
+                                            contentColor = Color.White
+                                        ),
+                                        shape = RoundedCornerShape(14.dp),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(48.dp)
+                                    ) {
+                                        Text(
+                                            text = "Next Level: $nextLevelToSuggest",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                                OutlinedButton(
+                                    onClick = {
+                                        showLevelCompleteDialog = false
+                                        viewModel.activeConversation.value = null
+                                        viewModel.lastScore.value = null
+                                        viewModel.scoredWords.value = emptyList()
+                                        viewModel.recognizedText.value = ""
+                                    },
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(48.dp)
+                                ) {
+                                    Text(
+                                        text = if (isAllDone) "Return to Map" else "Save & Return to Map",
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = PolishNavy
+                                    )
+                                }
+                            }
+                        }
+                    )
+                }
+            } ?: Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("No active conversation selected.", color = Slate500)
             }
-        } ?: Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("No active conversation selected.")
         }
     }
-}
 }

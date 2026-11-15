@@ -29,12 +29,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.ParagraphSet
 import com.example.ui.EnglishViewModel
-import com.example.ui.WordScoreType
+import com.example.ui.components.MascotCoach
+import com.example.ui.components.MascotState
+import com.example.ui.components.PronunciationFeedbackChips
+import com.example.ui.components.SonicVoiceOrb
 import com.example.ui.components.SpokenVoiceToTextCard
-import com.example.ui.theme.StreakGold
-import com.example.ui.theme.TealPrimary
+import com.example.ui.theme.*
 
 private fun cleanParagraphTitle(title: String): String {
     return title
@@ -55,10 +56,16 @@ fun ParagraphScreen(
     val paragraph by viewModel.activeParagraph.collectAsState()
     val paragraphsList by viewModel.paragraphs.collectAsState()
     val isRecording by viewModel.isRecording.collectAsState()
+    val liveAudioLevel by viewModel.liveAudioLevel.collectAsState()
     val isPlayingBack by viewModel.isPlayingBack.collectAsState()
     val isTtsSpeaking by viewModel.isTtsSpeaking.collectAsState()
     val lastScore by viewModel.lastScore.collectAsState()
     val scoredWords by viewModel.scoredWords.collectAsState()
+    val alignedWordTimings by viewModel.alignedWordTimings.collectAsState()
+    val playbackPositionSec by viewModel.playbackPositionSec.collectAsState()
+    val missedWordsSummary by viewModel.missedWordsSummary.collectAsState()
+    val unclearWordsSummary by viewModel.unclearWordsSummary.collectAsState()
+    val extraWordsSummary by viewModel.extraWordsSummary.collectAsState()
     val recognizedText by viewModel.recognizedText.collectAsState()
     val isProcessingSpeech by viewModel.isProcessingSpeech.collectAsState()
 
@@ -80,7 +87,9 @@ fun ParagraphScreen(
     // Auto-scroll map to next uncompleted paragraph or explicit target
     LaunchedEffect(paragraph == null, parasCompletedCount, scrollToTargetIndex) {
         if (paragraph == null && paragraphsList.isNotEmpty()) {
-            val targetIdx = scrollToTargetIndex ?: paragraphsList.indexOfFirst { !it.isCompleted }.takeIf { it >= 0 } ?: (paragraphsList.size - 1)
+            val targetIdx = scrollToTargetIndex
+                ?: paragraphsList.indexOfFirst { !it.isCompleted }.takeIf { it >= 0 }
+                ?: (paragraphsList.size - 1)
             if (targetIdx in paragraphsList.indices) {
                 mapListState.animateScrollToItem(targetIdx)
             }
@@ -106,11 +115,11 @@ fun ParagraphScreen(
         val filteredList = remember(paragraphsList, searchQuery, selectedLevel) {
             paragraphsList.filter { item ->
                 val matchesSearch = searchQuery.isBlank() ||
-                        item.title.contains(searchQuery, ignoreCase = true) ||
-                        item.text.contains(searchQuery, ignoreCase = true)
+                    item.title.contains(searchQuery, ignoreCase = true) ||
+                    item.text.contains(searchQuery, ignoreCase = true)
                 val matchesLevel = selectedLevel == "All" ||
-                        item.level.equals(selectedLevel, ignoreCase = true) ||
-                        (selectedLevel.equals("Basic", ignoreCase = true) && item.level.equals("Beginner", ignoreCase = true))
+                    item.level.equals(selectedLevel, ignoreCase = true) ||
+                    (selectedLevel.equals("Basic", ignoreCase = true) && item.level.equals("Beginner", ignoreCase = true))
                 matchesSearch && matchesLevel
             }
         }
@@ -119,14 +128,24 @@ fun ParagraphScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Paragraph Map (${paragraphsList.size})") },
+                    title = {
+                        Text(
+                            text = "Paragraph Map (${paragraphsList.size})",
+                            fontWeight = FontWeight.Bold,
+                            color = PolishNavy
+                        )
+                    },
                     navigationIcon = {
                         IconButton(onClick = { viewModel.goBack() }) {
-                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = PolishNavy
+                            )
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background
+                        containerColor = PolishBg
                     )
                 )
             },
@@ -135,13 +154,15 @@ fun ParagraphScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background)
+                    .background(PolishBg)
                     .padding(innerPadding)
             ) {
                 // Header guidance
                 Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = TealPrimary.copy(alpha = 0.08f)),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    border = BorderStroke(1.dp, Slate100),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 6.dp)
@@ -150,25 +171,34 @@ fun ParagraphScreen(
                         modifier = Modifier.padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Map,
-                            contentDescription = "Map Guidance",
-                            tint = TealPrimary,
-                            modifier = Modifier.size(28.dp)
-                        )
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(PolishTealBg)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Map,
+                                contentDescription = "Map Guidance",
+                                tint = PolishTeal,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                         Spacer(modifier = Modifier.width(14.dp))
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "LITERATURE VALLEY (${paragraphsList.size} Checkpoints)",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
-                                    color = TealPrimary
+                                    color = PolishTeal,
+                                    letterSpacing = 0.8.sp
                                 )
                             )
                             Text(
                                 text = "Train long-form reading fluency across speeches, literature, and essays.",
                                 style = MaterialTheme.typography.bodySmall.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = Slate500
                                 )
                             )
                         }
@@ -179,8 +209,15 @@ fun ParagraphScreen(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("Search 60 paragraphs...", fontSize = 14.sp) },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", modifier = Modifier.size(20.dp)) },
+                    placeholder = { Text("Search ${paragraphsList.size} paragraphs...", fontSize = 14.sp, color = Slate400) },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = "Search",
+                            tint = Slate400,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
                             IconButton(onClick = { searchQuery = "" }) {
@@ -189,12 +226,15 @@ fun ParagraphScreen(
                         }
                     },
                     singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 4.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.White,
+                        focusedBorderColor = PolishTeal,
+                        unfocusedBorderColor = Slate200
                     )
                 )
 
@@ -206,10 +246,28 @@ fun ParagraphScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     listOf("All", "Basic", "Intermediate", "Advanced").forEach { lvl ->
+                        val selected = selectedLevel == lvl
                         FilterChip(
-                            selected = selectedLevel == lvl,
+                            selected = selected,
                             onClick = { selectedLevel = lvl },
-                            label = { Text(lvl, fontSize = 12.sp) },
+                            label = {
+                                Text(
+                                    text = lvl,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = Color.White,
+                                labelColor = Slate500,
+                                selectedContainerColor = PolishTeal,
+                                selectedLabelColor = Color.White
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = selected,
+                                borderColor = Slate200
+                            ),
                             shape = RoundedCornerShape(20.dp)
                         )
                     }
@@ -227,7 +285,6 @@ fun ParagraphScreen(
                         val isCompleted = para.isCompleted
                         val isFirstUncompleted = filteredList.indexOfFirst { !it.isCompleted } == index
                         val isActive = isFirstUncompleted || (filteredList.all { it.isCompleted } && index == 0)
-
                         val isLeft = index % 2 == 0
 
                         Row(
@@ -249,14 +306,14 @@ fun ParagraphScreen(
                                         score = if (para.maxAccuracy > 0) para.maxAccuracy else null,
                                         isCompleted = isCompleted,
                                         isActive = isActive,
-                                        accentColor = TealPrimary
+                                        accentColor = PolishTeal
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(12.dp))
                                 MapPinCircle(
                                     isCompleted = isCompleted,
                                     isActive = isActive,
-                                    accentColor = TealPrimary,
+                                    accentColor = PolishTeal,
                                     number = para.id
                                 )
                                 Spacer(modifier = Modifier.width(12.dp))
@@ -267,7 +324,7 @@ fun ParagraphScreen(
                                 MapPinCircle(
                                     isCompleted = isCompleted,
                                     isActive = isActive,
-                                    accentColor = TealPrimary,
+                                    accentColor = PolishTeal,
                                     number = para.id
                                 )
                                 Spacer(modifier = Modifier.width(12.dp))
@@ -278,7 +335,7 @@ fun ParagraphScreen(
                                         score = if (para.maxAccuracy > 0) para.maxAccuracy else null,
                                         isCompleted = isCompleted,
                                         isActive = isActive,
-                                        accentColor = TealPrimary
+                                        accentColor = PolishTeal
                                     )
                                 }
                             }
@@ -297,7 +354,6 @@ fun ParagraphScreen(
         if (item != null) {
             val practiceScrollState = rememberScrollState()
 
-            // Smoothly auto-scroll down to show the results when score arrives
             LaunchedEffect(lastScore) {
                 if (lastScore != null) {
                     practiceScrollState.animateScrollTo(practiceScrollState.maxValue)
@@ -307,7 +363,13 @@ fun ParagraphScreen(
             Scaffold(
                 topBar = {
                     TopAppBar(
-                        title = { Text("Paragraph Fluency") },
+                        title = {
+                            Text(
+                                text = "Paragraph Fluency",
+                                fontWeight = FontWeight.Bold,
+                                color = PolishNavy
+                            )
+                        },
                         navigationIcon = {
                             IconButton(onClick = {
                                 if (currentParaIndex in paragraphsList.indices) {
@@ -318,11 +380,15 @@ fun ParagraphScreen(
                                 viewModel.scoredWords.value = emptyList()
                                 viewModel.recognizedText.value = ""
                             }) {
-                                Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Back",
+                                    tint = PolishNavy
+                                )
                             }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.background
+                            containerColor = PolishBg
                         )
                     )
                 },
@@ -331,10 +397,10 @@ fun ParagraphScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.background)
+                        .background(PolishBg)
                         .padding(innerPadding)
                 ) {
-                    // 1. TOPIC TITLE ROW (Fixed header)
+                    // 1. TOPIC TITLE ROW
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -344,21 +410,30 @@ fun ParagraphScreen(
                     ) {
                         Text(
                             text = cleanParagraphTitle(item.title),
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = PolishNavy
+                            ),
                             modifier = Modifier.weight(1f)
                         )
-                        SuggestionChip(
-                            onClick = {},
-                            label = { Text("Est: ${item.estimatedReadingTime}s") },
-                            colors = SuggestionChipDefaults.suggestionChipColors(
-                                containerColor = TealPrimary.copy(alpha = 0.15f),
-                                labelColor = TealPrimary
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = PolishTealBg,
+                            border = BorderStroke(1.dp, PolishTealLightBorder)
+                        ) {
+                            Text(
+                                text = "Est: ${item.estimatedReadingTime}s",
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = PolishTeal
+                                ),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                             )
-                        )
+                        }
                     }
 
                     // 2. UNIFIED SCROLLABLE PAGE CONTENT
-                    // Single scroll container for the paragraph, instructions, processing banner, You Spoke card, and results!
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -370,8 +445,10 @@ fun ParagraphScreen(
                     ) {
                         // Paragraph Text Box
                         Card(
-                            shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            shape = RoundedCornerShape(24.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            border = BorderStroke(1.dp, Slate100),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(modifier = Modifier.padding(20.dp)) {
@@ -380,47 +457,67 @@ fun ParagraphScreen(
                                     style = MaterialTheme.typography.bodyLarge.copy(
                                         lineHeight = 28.sp,
                                         fontWeight = FontWeight.Normal,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        letterSpacing = 0.5.sp
+                                        color = PolishNavy,
+                                        letterSpacing = 0.3.sp
                                     ),
                                     modifier = Modifier.clickable { viewModel.speak(item.text) }
                                 )
 
                                 Spacer(modifier = Modifier.height(20.dp))
 
-                                // Model control
-                                Button(
+                                FilledTonalButton(
                                     onClick = { viewModel.speak(item.text) },
-                                    colors = ButtonDefaults.buttonColors(containerColor = if (isTtsSpeaking) Color(0xFFFF5252) else MaterialTheme.colorScheme.secondary),
-                                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                                    colors = ButtonDefaults.filledTonalButtonColors(
+                                        containerColor = if (isTtsSpeaking) Red500 else PolishIndigoBg,
+                                        contentColor = if (isTtsSpeaking) Color.White else PolishIndigoText
+                                    ),
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier
+                                        .align(Alignment.CenterHorizontally)
+                                        .height(48.dp)
                                 ) {
-                                    Icon(imageVector = if (isTtsSpeaking) Icons.Default.Stop else Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "Listen")
+                                    Icon(
+                                        imageVector = if (isTtsSpeaking) Icons.Default.Stop else Icons.AutoMirrored.Filled.VolumeUp,
+                                        contentDescription = "Listen",
+                                        modifier = Modifier.size(18.dp)
+                                    )
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text(if (isTtsSpeaking) "Stop Model Guide" else "Play Paragraph Model Guide")
+                                    Text(
+                                        text = if (isTtsSpeaking) "Stop Model Guide" else "Play Paragraph Model Guide",
+                                        fontWeight = FontWeight.SemiBold
+                                    )
                                 }
                             }
                         }
 
                         // Practice Instruction
                         Card(
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)),
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(containerColor = PolishAmberBg),
+                            border = BorderStroke(1.dp, Orange100),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
                                 modifier = Modifier.padding(16.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(imageVector = Icons.AutoMirrored.Filled.TrendingUp, contentDescription = "Fluency Tip", tint = StreakGold)
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.TrendingUp,
+                                    contentDescription = "Fluency Tip",
+                                    tint = Orange600
+                                )
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(
                                         text = "FLUENCY & INTONATION TIP",
-                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, color = StreakGold)
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = Orange600
+                                        )
                                     )
                                     Text(
                                         text = "Take a breath at punctuation marks. Try to glide smoothly from word to word without artificial pauses.",
-                                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        style = MaterialTheme.typography.bodySmall.copy(color = PolishNavy)
                                     )
                                 }
                             }
@@ -435,9 +532,9 @@ fun ParagraphScreen(
                             Card(
                                 shape = RoundedCornerShape(16.dp),
                                 colors = CardDefaults.cardColors(
-                                    containerColor = TealPrimary.copy(alpha = 0.12f)
+                                    containerColor = PolishTealBg
                                 ),
-                                border = BorderStroke(1.5.dp, TealPrimary.copy(alpha = 0.7f)),
+                                border = BorderStroke(1.dp, PolishTealLightBorder),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
@@ -446,7 +543,7 @@ fun ParagraphScreen(
                                 ) {
                                     CircularProgressIndicator(
                                         modifier = Modifier.size(28.dp),
-                                        color = TealPrimary,
+                                        color = PolishTeal,
                                         strokeWidth = 3.dp
                                     )
                                     Spacer(modifier = Modifier.width(16.dp))
@@ -455,13 +552,13 @@ fun ParagraphScreen(
                                             text = "Analyzing your speech...",
                                             style = MaterialTheme.typography.titleSmall.copy(
                                                 fontWeight = FontWeight.Bold,
-                                                color = TealPrimary
+                                                color = PolishTeal
                                             )
                                         )
                                         Text(
-                                            text = "Transcribing audio and computing your fluency score. Please wait a moment...",
+                                            text = "Transcribing audio and computing your fluency score...",
                                             style = MaterialTheme.typography.bodySmall.copy(
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                color = Slate500
                                             )
                                         )
                                     }
@@ -469,7 +566,7 @@ fun ParagraphScreen(
                             }
                         }
 
-                        // Real-time Voice to Text Display (Shown during recording, processing or after evaluation)
+                        // Real-time Voice to Text Display
                         if (isRecording || isProcessingSpeech || lastScore != null || recognizedText.isNotBlank()) {
                             SpokenVoiceToTextCard(
                                 isRecording = isRecording,
@@ -481,14 +578,16 @@ fun ParagraphScreen(
                         // Scoring Output Card
                         lastScore?.let { score ->
                             Card(
-                                shape = RoundedCornerShape(20.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                shape = RoundedCornerShape(22.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                border = BorderStroke(1.dp, Slate100),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(16.dp),
+                                        .padding(18.dp),
                                     verticalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
                                     Row(
@@ -496,85 +595,81 @@ fun ParagraphScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Column {
-                                            Text(
-                                                text = "READING FLUENCY:",
-                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            MascotCoach(
+                                                state = if (score >= 60) MascotState.CELEBRATING else MascotState.ENCOURAGING,
+                                                size = 54.dp
                                             )
-                                            Text(
-                                                text = if (score >= 60) "Passed (>= 60%)" else "Keep Practicing",
-                                                style = MaterialTheme.typography.labelSmall.copy(
-                                                    color = if (score >= 60) Color(0xFF2ECC71) else StreakGold,
-                                                    fontWeight = FontWeight.Bold
+                                            Column {
+                                                Text(
+                                                    text = "READING FLUENCY",
+                                                    style = MaterialTheme.typography.labelMedium.copy(
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Slate500
+                                                    )
                                                 )
-                                            )
+                                                Text(
+                                                    text = if (score >= 60) "Passed (>= 60%)" else "Keep Practicing",
+                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                        color = if (score >= 60) Emerald600 else Orange600,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                )
+                                            }
                                         }
                                         Text(
                                             text = "$score%",
-                                            style = MaterialTheme.typography.titleLarge.copy(
-                                                fontWeight = FontWeight.Bold,
+                                            style = MaterialTheme.typography.headlineMedium.copy(
+                                                fontWeight = FontWeight.ExtraBold,
                                                 color = when {
-                                                    score >= 90 -> Color(0xFF2ECC71)
-                                                    score >= 70 -> StreakGold
-                                                    score >= 50 -> Color(0xFFFF9800)
-                                                    else -> Color(0xFFFF5252)
+                                                    score >= 75 -> Emerald600
+                                                    score >= 60 -> Orange600
+                                                    else -> Red500
                                                 }
                                             )
                                         )
                                     }
 
-                                    FlowRow(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.Center
-                                    ) {
-                                        scoredWords.forEach { (word, scoreType) ->
-                                            val color = when (scoreType) {
-                                                WordScoreType.Correct -> Color(0xFF2ECC71)
-                                                WordScoreType.Hesitant -> StreakGold
-                                                WordScoreType.Incorrect -> Color(0xFFFF5252)
-                                            }
-                                            Box(
-                                                modifier = Modifier
-                                                    .padding(2.dp)
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .background(color.copy(alpha = 0.1f))
-                                                    .clickable { viewModel.speak(word) }
-                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                                            ) {
-                                                Text(
-                                                    text = word,
-                                                    color = color,
-                                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold)
-                                                )
-                                            }
-                                        }
-                                    }
+                                    PronunciationFeedbackChips(
+                                        alignedTimings = alignedWordTimings,
+                                        fallbackScoredWords = scoredWords,
+                                        playbackPositionSec = playbackPositionSec,
+                                        isPlayingBack = isPlayingBack,
+                                        missedWords = missedWordsSummary,
+                                        unclearWords = unclearWordsSummary,
+                                        extraWords = extraWordsSummary,
+                                        onWordClick = { word -> viewModel.speak(word) }
+                                    )
                                 }
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
                     }
 
                     // 3. DOCKED BOTTOM RECORDING BAR
-                    // Always cleanly anchored at bottom of screen, easily reachable by thumb
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        color = MaterialTheme.colorScheme.surface,
-                        shadowElevation = 8.dp,
-                        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+                        color = Color.White,
+                        shadowElevation = 10.dp,
+                        border = BorderStroke(1.dp, Slate100),
+                        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
                     ) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .navigationBarsPadding()
                                 .padding(horizontal = 16.dp, vertical = 12.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
                                 text = "RECORD YOUR ATTEMPT",
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = Slate500,
                                     fontWeight = FontWeight.Bold,
                                     letterSpacing = 1.sp
                                 )
@@ -590,62 +685,55 @@ fun ParagraphScreen(
                                     onClick = { viewModel.playRecordedVoice() },
                                     enabled = lastScore != null && !isProcessingSpeech,
                                     modifier = Modifier
-                                        .size(44.dp)
+                                        .size(48.dp)
                                         .background(
-                                            if (isPlayingBack) Color(0xFFFF5252) else MaterialTheme.colorScheme.secondary.copy(alpha = if (lastScore != null) 0.5f else 0.15f),
+                                            when {
+                                                isPlayingBack -> Red500
+                                                lastScore != null -> PolishIndigoBg
+                                                else -> Slate100
+                                            },
                                             CircleShape
                                         )
                                 ) {
                                     Icon(
                                         imageVector = if (isPlayingBack) Icons.Default.Stop else Icons.Default.PlayArrow,
                                         contentDescription = "Compare",
-                                        tint = if (lastScore != null) Color.White else Color.Gray
+                                        tint = when {
+                                            isPlayingBack -> Color.White
+                                            lastScore != null -> PolishIndigoText
+                                            else -> Slate400
+                                        }
                                     )
                                 }
 
-                                Spacer(modifier = Modifier.width(20.dp))
+                                Spacer(modifier = Modifier.width(14.dp))
 
-                                // Large Mic Recorder
-                                Box(contentAlignment = Alignment.Center) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(64.dp)
-                                            .clip(CircleShape)
-                                            .background(
-                                                when {
-                                                    isProcessingSpeech -> StreakGold
-                                                    isRecording -> Color(0xFFFF5252)
-                                                    else -> TealPrimary
-                                                }
-                                            )
-                                            .clickable(enabled = !isProcessingSpeech) {
-                                                if (isRecording) {
-                                                    viewModel.stopRecording(item.text, "paragraph", item.id)
-                                                } else {
-                                                    viewModel.startRecording(item.text)
-                                                }
-                                            }
-                                            .testTag("paragraph_record_mic"),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        if (isProcessingSpeech) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(28.dp),
-                                                color = Color.Black,
-                                                strokeWidth = 3.dp
-                                            )
+                                SonicVoiceOrb(
+                                    isRecording = isRecording,
+                                    audioLevel = liveAudioLevel,
+                                    isProcessing = isProcessingSpeech,
+                                    onClick = {
+                                        if (isRecording) {
+                                            viewModel.stopRecording(item.text, "paragraph", item.id)
                                         } else {
-                                            Icon(
-                                                imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                                                contentDescription = "Mic",
-                                                tint = Color.Black,
-                                                modifier = Modifier.size(30.dp)
-                                            )
+                                            viewModel.startRecording(item.text)
                                         }
-                                    }
-                                }
+                                    },
+                                    size = 54.dp,
+                                    coreColor = when {
+                                        isProcessingSpeech -> Orange500
+                                        isRecording -> Red500
+                                        else -> PolishTeal
+                                    },
+                                    glowColor = when {
+                                        isProcessingSpeech -> Orange100
+                                        isRecording -> Red400
+                                        else -> Color(0xFF2DD4BF)
+                                    },
+                                    modifier = Modifier.testTag("paragraph_record_mic")
+                                )
 
-                                Spacer(modifier = Modifier.width(20.dp))
+                                Spacer(modifier = Modifier.width(14.dp))
 
                                 // Reset
                                 IconButton(
@@ -656,13 +744,16 @@ fun ParagraphScreen(
                                     },
                                     enabled = lastScore != null && !isProcessingSpeech,
                                     modifier = Modifier
-                                        .size(44.dp)
-                                        .background(MaterialTheme.colorScheme.secondary.copy(alpha = if (lastScore != null) 0.5f else 0.15f), CircleShape)
+                                        .size(48.dp)
+                                        .background(
+                                            if (lastScore != null) Slate100 else Slate50,
+                                            CircleShape
+                                        )
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Refresh,
                                         contentDescription = "Reset",
-                                        tint = if (lastScore != null) Color.White else Color.Gray
+                                        tint = if (lastScore != null) PolishNavy else Slate400
                                     )
                                 }
                             }
@@ -670,21 +761,20 @@ fun ParagraphScreen(
                             Text(
                                 text = when {
                                     isProcessingSpeech -> "Analyzing your audio... Please wait"
-                                    isRecording -> "Recording... Tap to stop and evaluate"
-                                    lastScore != null -> "Tap Mic to practice again"
-                                    else -> "Press Mic and read the paragraph aloud"
+                                    isRecording -> "Recording... Tap the orb to evaluate"
+                                    lastScore != null -> "Tap the orb to practice again"
+                                    else -> "Tap the orb and read the paragraph aloud"
                                 },
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     color = when {
-                                        isProcessingSpeech -> StreakGold
-                                        isRecording -> Color(0xFFFF5252)
-                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                        isProcessingSpeech -> Orange600
+                                        isRecording -> Red500
+                                        else -> Slate500
                                     },
-                                    fontWeight = if (isProcessingSpeech || isRecording) FontWeight.Bold else FontWeight.Normal
+                                    fontWeight = if (isProcessingSpeech || isRecording) FontWeight.Bold else FontWeight.Medium
                                 )
                             )
 
-                            // Action buttons right under mic after speaking
                             if (lastScore != null) {
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -700,13 +790,23 @@ fun ParagraphScreen(
                                                 viewModel.scoredWords.value = emptyList()
                                                 viewModel.recognizedText.value = ""
                                             },
-                                            colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
-                                            modifier = Modifier.weight(1f),
-                                            shape = RoundedCornerShape(12.dp)
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = PolishTeal,
+                                                contentColor = Color.White
+                                            ),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(48.dp),
+                                            shape = RoundedCornerShape(14.dp)
                                         ) {
-                                            Text("Next Lesson", color = Color.Black, fontWeight = FontWeight.Bold)
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Next Lesson", tint = Color.Black)
+                                            Text("Next Lesson", color = Color.White, fontWeight = FontWeight.Bold)
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                                contentDescription = "Next Lesson",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(18.dp)
+                                            )
                                         }
                                     }
                                     Button(
@@ -719,11 +819,20 @@ fun ParagraphScreen(
                                             viewModel.scoredWords.value = emptyList()
                                             viewModel.recognizedText.value = ""
                                         },
-                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                                        modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(12.dp)
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Slate100,
+                                            contentColor = PolishNavy
+                                        ),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(48.dp),
+                                        shape = RoundedCornerShape(14.dp)
                                     ) {
-                                        Text(if (hasNextPara) "Finish (Map)" else "Complete Reading Trail", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
+                                        Text(
+                                            text = if (hasNextPara) "Finish (Map)" else "Complete Trail",
+                                            color = PolishNavy,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
                                     }
                                 }
                             }
@@ -733,7 +842,7 @@ fun ParagraphScreen(
             }
         } else {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No active paragraph practice selected.")
+                Text("No active paragraph practice selected.", color = Slate500)
             }
         }
     }

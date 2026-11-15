@@ -1,25 +1,22 @@
 package com.example.ui
 
+import android.Manifest
 import android.app.Application
-import android.content.Intent
-import android.media.AudioFormat
-import android.os.Build
+import android.content.pm.PackageManager
 import android.os.Bundle
-import android.os.ParcelFileDescriptor
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.util.*
-import kotlin.random.Random
 
 enum class Screen {
     Home,
@@ -93,25 +90,54 @@ class EnglishViewModel(
         initialValue = emptyList()
     )
 
+    val recentPracticeAttempts = repository.recentPracticeAttempts.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    val missedWordReviews = repository.missedWordReviews.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
     // TTS Engine States
     private var tts: TextToSpeech? = null
     val ttsReady = MutableStateFlow(false)
     val isTtsSpeaking = MutableStateFlow(false)
     val currentTtsText = MutableStateFlow<String?>(null)
-    val selectedAccent = MutableStateFlow("US") // "US", "UK", "IN", "AU"
+    val selectedAccent = MutableStateFlow("IN") // Default aligned with Indian English
     val selectedSpeed = MutableStateFlow(1.0f)   // 0.5f, 0.75f, 1.0f, 1.25f, 1.5f
+
+    // Offline Speech Model (Vosk)
+    private val voskModelManager = VoskModelManager(application)
+    val modelDownloadState: StateFlow<ModelDownloadState> = voskModelManager.state
+    val selectedSpeechModel: StateFlow<SpeechModelOption> = voskModelManager.selectedOption
+    val installedSpeechModels: StateFlow<Set<String>> = voskModelManager.installedModelIds
+    val useGrammarMode: StateFlow<Boolean> = voskModelManager.useGrammarMode
+    val speechStatusNotice = MutableStateFlow<String?>(null)
+    val needsMicPermissionRequest = MutableStateFlow(false)
 
     // Voice recording and play states
     private val voiceRecorder = VoiceRecorder(application)
+    private val recordingMutex = Mutex()
     private var liveSession: LiveSpeechSession? = null
+    private var playbackTrackerJob: Job? = null
     val isRecording = MutableStateFlow(false)
     val isProcessingSpeech = MutableStateFlow(false)
     val isPlayingBack = MutableStateFlow(false)
+    val playbackPositionSec = MutableStateFlow<Float?>(null)
     val lastScore = MutableStateFlow<Int?>(null)
     val scoredWords = MutableStateFlow<List<Pair<String, WordScoreType>>>(emptyList())
+    val alignedWordTimings = MutableStateFlow<List<AlignedWordFeedback>>(emptyList())
+    val missedWordsSummary = MutableStateFlow<List<String>>(emptyList())
+    val unclearWordsSummary = MutableStateFlow<List<String>>(emptyList())
+    val extraWordsSummary = MutableStateFlow<List<String>>(emptyList())
     val currentTargetText = MutableStateFlow("")
     val recognizedText = MutableStateFlow("")
     val maxRecordedAmplitude = MutableStateFlow(0)
+    val liveAudioLevel = MutableStateFlow(0f)
     private val amplitudeSamples = mutableListOf<Int>()
 
     // Voice recording timing states
@@ -210,9 +236,45 @@ class EnglishViewModel(
             repository.checkAndPrepopulate(getApplication())
         }
 
+        // Download (first launch) and load offline Vosk speech recognition model
+        voskModelManager.ensureModelReady(viewModelScope)
+
         // Initialize Text To Speech
         tts = TextToSpeech(application, this)
+    }
 
+    fun retryModelDownload() {
+        speechStatusNotice.value = null
+        voskModelManager.ensureModelReady(viewModelScope)
+    }
+
+    fun selectSpeechModel(option: SpeechModelOption) {
+        speechStatusNotice.value = null
+        voskModelManager.selectModel(option, viewModelScope)
+    }
+
+    fun setGrammarModeEnabled(enabled: Boolean) {
+        voskModelManager.setGrammarModeEnabled(enabled)
+    }
+
+    fun redownloadSpeechModel() {
+        speechStatusNotice.value = null
+        voskModelManager.redownloadSelectedModel(viewModelScope)
+    }
+
+    fun clearSpeechStatusNotice() {
+        speechStatusNotice.value = null
+    }
+
+    fun clearAttemptFeedback() {
+        stopRecordedVoicePlayback()
+        lastScore.value = null
+        scoredWords.value = emptyList()
+        alignedWordTimings.value = emptyList()
+        missedWordsSummary.value = emptyList()
+        unclearWordsSummary.value = emptyList()
+        extraWordsSummary.value = emptyList()
+        recognizedText.value = ""
     }
 
     override fun onInit(status: Int) {
@@ -242,364 +304,13 @@ class EnglishViewModel(
 
 
 
-    private suspend fun transcribePcmChunks(pcmBytes: ByteArray): String {
-        val totalBytes = pcmBytes.size
-        val bytesPerSec = 16000 * 2 // 32,000 bytes/sec
-        val chunkSize = 15 * bytesPerSec // 480,000 bytes (~15 seconds per chunk)
-
-        if (totalBytes <= chunkSize * 4 / 3) {
-            // Short audio (<=20 seconds): Single pass
-            return transcribePcm(pcmBytes)
-        }
-
-        // Long audio (>20 seconds / up to 2 minutes): Split into 15-second chunks
-        Log.d("SPEECH_DEBUG", "transcribePcmChunks: Splitting ${totalBytes} bytes into ~15s chunks")
-        val fullTextBuilder = StringBuilder()
-
-        var offset = 0
-        var chunkIndex = 0
-        while (offset < pcmBytes.size) {
-            val length = Math.min(chunkSize, pcmBytes.size - offset)
-            val chunkBytes = pcmBytes.copyOfRange(offset, offset + length)
-            
-            Log.d("SPEECH_DEBUG", "transcribePcmChunks: Transcribing chunk #$chunkIndex (${chunkBytes.size} bytes)")
-            val chunkText = transcribePcm(chunkBytes)
-
-            if (chunkText.isNotBlank()) {
-                if (fullTextBuilder.isNotEmpty()) fullTextBuilder.append(" ")
-                fullTextBuilder.append(chunkText)
-            }
-
-            offset += length
-            chunkIndex++
-        }
-
-        val result = fullTextBuilder.toString().trim()
-        Log.d("SPEECH_DEBUG", "transcribePcmChunks: Final concatenated recognized text (${result.length} chars) = '$result'")
-        return result
-    }
-
-    private val SAMPLE_RATE = 16000 // MUST match your AudioRecord sample rate
-
-    /** Runs on Default thread: appends faint dither noise (not zeros) after the clip. */
-    private fun padWithDither(pcm: ByteArray, sampleRate: Int, seconds: Float = 1.5f): ByteArray {
-        val padSamples = (sampleRate * seconds).toInt()
-        val out = ByteArray(pcm.size + padSamples * 2)
-        System.arraycopy(pcm, 0, out, 0, pcm.size)
-        var i = pcm.size
-        repeat(padSamples) {
-            val s = Random.nextInt(-3, 4) // ~ +/-3 LSB
-            out[i++] = (s and 0xFF).toByte()
-            out[i++] = ((s shr 8) and 0xFF).toByte()
-        }
-        return out
-    }
-
-    /**
-     * Transcribes raw 16-bit mono PCM. Safe to call from any coroutine.
-     * - Heavy work (padding, pipe writing) runs OFF the main thread.
-     * - Only create/start/destroy of SpeechRecognizer touches Main (required by Android).
-     * - A brand-new recognizer is created and destroyed for every attempt.
-     */
-    private suspend fun transcribePcm(pcm: ByteArray): String {
-        val padded = withContext(Dispatchers.Default) { padWithDither(pcm, SAMPLE_RATE) }
-
-        val pipe = ParcelFileDescriptor.createReliablePipe()
-        val readSide = pipe[0]
-        val writeSide = pipe[1]
-        val result = CompletableDeferred<String>()
-        var recognizer: SpeechRecognizer? = null
-
-        // Write audio on IO, then close the write end so the engine sees EOF.
-        val writer = viewModelScope.launch(Dispatchers.IO) {
-            try {
-                ParcelFileDescriptor.AutoCloseOutputStream(writeSide).use { it.write(padded) }
-            } catch (_: Exception) { /* recognizer may have closed early */ }
-        }
-
-        try {
-            withContext(Dispatchers.Main) {
-                val ctx = getApplication<Application>()
-                recognizer = if (Build.VERSION.SDK_INT >= 31 &&
-                    SpeechRecognizer.isOnDeviceRecognitionAvailable(ctx)
-                ) SpeechRecognizer.createOnDeviceSpeechRecognizer(ctx)
-                else SpeechRecognizer.createSpeechRecognizer(ctx)
-
-                var latest = ""
-                recognizer!!.setRecognitionListener(object : RecognitionListener {
-                    override fun onResults(results: Bundle?) {
-                        val best = results
-                            ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                            ?.firstOrNull()
-                        result.complete(if (!best.isNullOrBlank()) best else latest)
-                    }
-                    override fun onError(error: Int) { result.complete(latest) }
-                    override fun onPartialResults(partialResults: Bundle?) {
-                        partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                            ?.firstOrNull()?.takeIf { it.isNotBlank() }?.let { latest = it }
-                    }
-                    // Keep these empty: no logging, no state writes (they cause UI lag)
-                    override fun onReadyForSpeech(params: Bundle?) {}
-                    override fun onBeginningOfSpeech() {}
-                    override fun onRmsChanged(rmsdB: Float) {}
-                    override fun onBufferReceived(buffer: ByteArray?) {}
-                    override fun onEndOfSpeech() {}
-                    override fun onEvent(eventType: Int, params: Bundle?) {}
-                })
-
-                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
-                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
-                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                    if (Build.VERSION.SDK_INT >= 33) {
-                        putExtra("android.speech.extra.AUDIO_SOURCE", readSide)
-                        putExtra("android.speech.extra.AUDIO_SOURCE_SAMPLING_RATE", SAMPLE_RATE)
-                        putExtra("android.speech.extra.AUDIO_SOURCE_CHANNEL_COUNT", 1)
-                        putExtra("android.speech.extra.AUDIO_SOURCE_ENCODING", AudioFormat.ENCODING_PCM_16BIT)
-                    }
-                }
-                recognizer!!.startListening(intent)
-            }
-            return withTimeoutOrNull(20_000) { result.await() } ?: ""
-        } finally {
-            // Always tear down, even on cancel/timeout
-            withContext(NonCancellable + Dispatchers.Main) {
-                try { recognizer?.cancel() } catch (_: Exception) {}
-                try { recognizer?.destroy() } catch (_: Exception) {}
-            }
-            try { readSide.close() } catch (_: Exception) {}
-            writer.cancel()
-        }
-    }
 
 
 
 
 
-    private fun isTongueTwisterPhoneticEquivalent(target: String, recognized: String): Boolean {
-        val t = target.lowercase(Locale.getDefault()).trim()
-        val r = recognized.lowercase(Locale.getDefault()).trim()
-        if (t == r) return true
 
-        val equivalents = mapOf(
-            "chester" to setOf("just", "justice", "chief", "cheap", "chesapeake", "chester's", "chesters"),
-            "cheetah" to setOf("cheetahs", "cheater", "cheeters", "cheeta"),
-            "chews" to setOf("choose", "shoes", "chew", "chose"),
-            "cheap" to setOf("chip", "cheep"),
-            "cheddar" to setOf("cheder", "shredded"),
-            "cheese" to setOf("cheeses", "she's", "she"),
-            "cooks" to setOf("cook", "google", "cook's", "books"),
-            "cook" to setOf("cooks", "google", "book"),
-            "cupcakes" to setOf("cupcake", "cup", "cakes"),
-            "quickly" to setOf("quick"),
-            "shoes" to setOf("shoe", "chews", "choose"),
-            "whose" to setOf("who's", "who"),
-            "choose" to setOf("chews", "shoes", "chose"),
-            "bit" to setOf("beat", "bitt"),
-            "bug" to setOf("bag", "book", "bog"),
-            "bear" to setOf("bare"),
-            "blood" to setOf("bud", "bloods"),
-            "piper" to setOf("paper", "pipers"),
-            "peck" to setOf("pack", "pecked"),
-            "peppers" to setOf("paper", "papers"),
-            "botter" to setOf("butter", "bother", "bought"),
-            "butter" to setOf("butter's", "botter"),
-            "bitter" to setOf("better"),
-            "sick" to setOf("six", "seek"),
-            "six" to setOf("sick"),
-            "slick" to setOf("silk", "sleek"),
-            "sycamore" to setOf("sickle"),
-            "saplings" to setOf("sapling"),
-            "clam" to setOf("cram", "claim"),
-            "cram" to setOf("clam", "gram"),
-            "four" to setOf("for", "fore"),
-            "fought" to setOf("fort"),
-            "for" to setOf("four"),
-            "phone" to setOf("phones"),
-            "fed" to setOf("fred"),
-            "bread" to setOf("bred"),
-            "fuzzy" to setOf("wuzzy"),
-            "wuzzy" to setOf("fuzzy", "was"),
-            "hair" to setOf("hare"),
-            "night" to setOf("knight"),
-            "nurses" to setOf("nurse"),
-            "nursing" to setOf("nurses"),
-            "nicely" to setOf("nice"),
-            "pot" to setOf("pots"),
-            "lorry" to setOf("laurie", "lori", "lorries", "lory"),
-            "rural" to setOf("rule", "ruler"),
-            "plural" to setOf("plural"),
-            "warrior" to setOf("worrier"),
-            "rarely" to setOf("really"),
-            "worry" to setOf("worrier"),
-            "worrier" to setOf("warrior"),
-            "reared" to setOf("rare"),
-            "wrongly" to setOf("wrong"),
-            "sells" to setOf("cells", "shells"),
-            "seashells" to setOf("sea", "shells"),
-            "seashore" to setOf("sea", "shore"),
-            "susie" to setOf("suzy", "susi"),
-            "shoeshine" to setOf("shoe", "shine"),
-            "shines" to setOf("shine"),
-            "sits" to setOf("sit"),
-            "selfish" to setOf("sell"),
-            "shellfish" to setOf("fish"),
-            "cellars" to setOf("sellers", "cellar"),
-            "seafood" to setOf("sea", "food"),
-            "sticky" to setOf("stick"),
-            "skeletons" to setOf("skeleton"),
-            "thin" to setOf("thing"),
-            "thieves" to setOf("thief"),
-            "thought" to setOf("thoughts"),
-            "thoughts" to setOf("thought"),
-            "whether" to setOf("weather"),
-            "weather" to setOf("whether"),
-            "thirty-three" to setOf("thirty", "three"),
-            "thrilled" to setOf("thrill"),
-            "throne" to setOf("thrown"),
-            "threw" to setOf("through", "throw"),
-            "free" to setOf("three"),
-            "throws" to setOf("throw"),
-            "volunteered" to setOf("volunteer"),
-            "velvety" to setOf("velvet"),
-            "vest" to setOf("best"),
-            "which" to setOf("witch"),
-            "witch" to setOf("which"),
-            "wished" to setOf("wish"),
-            "zippy" to setOf("zip"),
-            "zebra" to setOf("zebras"),
-            "zipped" to setOf("zip"),
-            "buzzing" to setOf("buzz"),
-            "bazaar" to setOf("bizarre", "bazar")
-        )
 
-        return equivalents[t]?.contains(r) == true
-    }
-
-    private fun alignAndScore(
-        targetWords: List<String>,
-        recognizedWords: List<String>,
-        itemType: String = ""
-    ): Pair<Int, List<Pair<String, WordScoreType>>> {
-        if (recognizedWords.isEmpty()) {
-            val analysis = targetWords.map { Pair(it, WordScoreType.Incorrect) }
-            return Pair(0, analysis)
-        }
-
-        val cleanRecognizedList = recognizedWords.map { it.lowercase(Locale.getDefault()).trim() }
-        val usedRecognizedIndices = mutableSetOf<Int>()
-
-        val analysis = mutableListOf<Pair<String, WordScoreType>>()
-        var correctCount = 0
-        var hesitantCount = 0
-        var lastMatchedIdx = -1
-
-        for (targetIdx in targetWords.indices) {
-            val targetWord = targetWords[targetIdx]
-            val cleanTarget = targetWord.lowercase(Locale.getDefault()).trim()
-
-            // Calculate expected relative position in recognizedWords
-            val expectedPos = if (targetWords.isNotEmpty()) {
-                ((targetIdx.toDouble() / targetWords.size) * cleanRecognizedList.size).toInt()
-            } else 0
-
-            // Define sliding search window around expected position and last matched index
-            val searchStart = (if (lastMatchedIdx >= 0) Math.min(expectedPos - 12, lastMatchedIdx + 1) else expectedPos - 12)
-                .coerceIn(0, cleanRecognizedList.size - 1)
-            val searchEnd = (Math.max(expectedPos + 18, searchStart + 25))
-                .coerceIn(searchStart, cleanRecognizedList.size - 1)
-
-            var matchedIdx = -1
-            var matchType = WordScoreType.Incorrect
-
-            // 1. Exact match in sliding window
-            for (i in searchStart..searchEnd) {
-                if (i !in usedRecognizedIndices) {
-                    val cleanRec = cleanRecognizedList[i]
-                    val isMatch = cleanTarget == cleanRec || (itemType == "tongue_twister" && isTongueTwisterPhoneticEquivalent(cleanTarget, cleanRec))
-                    if (isMatch) {
-                        matchedIdx = i
-                        matchType = WordScoreType.Correct
-                        break
-                    }
-                }
-            }
-
-            // 2. Near match (Levenshtein distance <= 1 or singular/plural stem) in sliding window
-            if (matchedIdx == -1) {
-                for (i in searchStart..searchEnd) {
-                    if (i !in usedRecognizedIndices) {
-                        val cleanRec = cleanRecognizedList[i]
-                        val dist = getLevenshteinDistance(cleanTarget, cleanRec)
-                        val isHesitantEquivalent = (itemType == "tongue_twister" && isTongueTwisterPhoneticEquivalent(cleanTarget, cleanRec))
-                        if (dist <= 1 || isHesitantEquivalent || (cleanTarget.length > 3 && cleanRec.length > 3 && (cleanTarget.startsWith(cleanRec) || cleanRec.startsWith(cleanTarget)))) {
-                            matchedIdx = i
-                            matchType = if (isHesitantEquivalent && cleanTarget != cleanRec) WordScoreType.Correct else WordScoreType.Hesitant
-                            break
-                        }
-                    }
-                }
-            }
-
-            // 3. Fallback search in entire recognized list if not found in local window
-            if (matchedIdx == -1) {
-                val fallbackStart = (lastMatchedIdx + 1).coerceIn(0, cleanRecognizedList.size - 1)
-                for (i in fallbackStart until cleanRecognizedList.size) {
-                    if (i !in usedRecognizedIndices) {
-                        val cleanRec = cleanRecognizedList[i]
-                        val isMatch = cleanTarget == cleanRec || (itemType == "tongue_twister" && isTongueTwisterPhoneticEquivalent(cleanTarget, cleanRec))
-                        if (isMatch) {
-                            matchedIdx = i
-                            matchType = WordScoreType.Correct
-                            break
-                        }
-                    }
-                }
-            }
-
-            if (matchedIdx != -1) {
-                usedRecognizedIndices.add(matchedIdx)
-                lastMatchedIdx = Math.max(lastMatchedIdx, matchedIdx)
-                if (matchType == WordScoreType.Correct) {
-                    correctCount++
-                } else {
-                    hesitantCount++
-                }
-                analysis.add(Pair(targetWord, matchType))
-            } else {
-                analysis.add(Pair(targetWord, WordScoreType.Incorrect))
-            }
-        }
-
-        val totalWords = targetWords.size
-        if (totalWords == 0) return Pair(0, emptyList())
-
-        val score = (((correctCount * 1.0) + (hesitantCount * 0.5)) / totalWords * 100).toInt()
-        return Pair(score.coerceIn(0, 100), analysis)
-    }
-
-    private fun getLevenshteinDistance(s1: String, s2: String): Int {
-        val len1 = s1.length
-        val len2 = s2.length
-        val dp = Array(len1 + 1) { IntArray(len2 + 1) }
-
-        for (i in 0..len1) dp[i][0] = i
-        for (j in 0..len2) dp[0][j] = j
-
-        for (i in 1..len1) {
-            for (j in 1..len2) {
-                val cost = if (s1[i - 1] == s2[j - 1]) 0 else 1
-                dp[i][j] = minOf(
-                    dp[i - 1][j] + 1,      // deletion
-                    dp[i][j - 1] + 1,      // insertion
-                    dp[i - 1][j - 1] + cost // substitution
-                )
-            }
-        }
-        return dp[len1][len2]
-    }
 
     fun updateTtsSettings() {
         val locale = when (selectedAccent.value) {
@@ -622,32 +333,36 @@ class EnglishViewModel(
         updateTtsSettings()
     }
 
-    fun extractSpokenExample(text: String): String {
-        return text.lines()
-            .map { line ->
-                var cleaned = line.trim()
-                if (cleaned.startsWith("•") || cleaned.startsWith("-") || cleaned.startsWith("*")) {
-                    cleaned = cleaned.replaceFirst("^[•\\-*]\\s*".toRegex(), "").trim()
-                    if (cleaned.contains(":")) {
-                        val afterColon = cleaned.substringAfter(":").trim()
-                        if (afterColon.isNotBlank()) {
-                            cleaned = afterColon
+    fun extractSpokenExample(text: String): String = Companion.extractSpokenExample(text)
+
+    companion object {
+        fun extractSpokenExample(text: String): String {
+            return text.lines()
+                .map { line ->
+                    var cleaned = line.trim()
+                    if (cleaned.startsWith("•") || cleaned.startsWith("-") || cleaned.startsWith("*")) {
+                        cleaned = cleaned.replaceFirst("^[•\\-*]\\s*".toRegex(), "").trim()
+                        if (cleaned.contains(":")) {
+                            val afterColon = cleaned.substringAfter(":").trim()
+                            if (afterColon.isNotBlank()) {
+                                cleaned = afterColon
+                            }
+                        }
+                    } else if (cleaned.contains(":")) {
+                        val prefix = cleaned.substringBefore(":").trim()
+                        // If it's a topic header (short label without sentence terminators)
+                        if (prefix.length <= 60 && !prefix.contains(".") && !prefix.contains("?") && !prefix.contains("!")) {
+                            val afterColon = cleaned.substringAfter(":").trim()
+                            if (afterColon.isNotBlank()) {
+                                cleaned = afterColon
+                            }
                         }
                     }
-                } else if (cleaned.contains(":")) {
-                    val prefix = cleaned.substringBefore(":").trim()
-                    // If it's a topic header (short label without sentence terminators)
-                    if (prefix.length <= 60 && !prefix.contains(".") && !prefix.contains("?") && !prefix.contains("!")) {
-                        val afterColon = cleaned.substringAfter(":").trim()
-                        if (afterColon.isNotBlank()) {
-                            cleaned = afterColon
-                        }
-                    }
+                    cleaned
                 }
-                cleaned
-            }
-            .filter { it.isNotBlank() }
-            .joinToString(" ")
+                .filter { it.isNotBlank() }
+                .joinToString(" ")
+        }
     }
 
     fun speak(text: String, forceStart: Boolean = false) {
@@ -702,13 +417,25 @@ class EnglishViewModel(
                 screenStack.value = currentList
             }
         }
-        // Reset states
+        // Reset states and release any active recording session cleanly
         stopTts()
         stopRecordedVoicePlayback()
         lastScore.value = null
         scoredWords.value = emptyList()
         isRecording.value = false
+        isProcessingSpeech.value = false
         isPlayingBack.value = false
+        liveAudioLevel.value = 0f
+        speechStatusNotice.value = null
+        val activeSession = liveSession
+        liveSession = null
+        if (activeSession != null) {
+            viewModelScope.launch {
+                recordingMutex.withLock {
+                    activeSession.release()
+                }
+            }
+        }
         voiceRecorder.stopRecording()
         voiceRecorder.stopPlayback()
     }
@@ -759,215 +486,230 @@ class EnglishViewModel(
     fun startRecording(targetText: String, itemType: String = "") {
         stopTts()
         stopRecordedVoicePlayback()
+        speechStatusNotice.value = null
+
+        val hasMicPermission = ContextCompat.checkSelfPermission(
+            getApplication(),
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!hasMicPermission) {
+            speechStatusNotice.value = "Microphone permission is required. Please allow microphone access to practice speaking."
+            needsMicPermissionRequest.value = true
+            return
+        }
+
+        val model = voskModelManager.getLoadedModel()
+        if (model == null) {
+            if (modelDownloadState.value is ModelDownloadState.Error) {
+                voskModelManager.ensureModelReady(viewModelScope)
+            }
+            speechStatusNotice.value = "Voice recognition setup is still finishing. Please wait a moment."
+            return
+        }
+
         viewModelScope.launch {
-            Log.d("SPEECH_DEBUG", "=== START RECORDING PRACTICE === targetText: '$targetText', itemType: '$itemType'")
-            val currentContext = currentTargetText.value
-            if (currentContext != targetText) {
-                currentTargetText.value = targetText
+            recordingMutex.withLock {
+                liveSession?.let { oldSession ->
+                    liveSession = null
+                    oldSession.release()
+                }
+
+                Log.d("SPEECH_DEBUG", "=== START RECORDING PRACTICE (Vosk) === targetText: '$targetText', itemType: '$itemType'")
+                val currentContext = currentTargetText.value
+                if (currentContext != targetText) {
+                    currentTargetText.value = targetText
+                }
                 lastScore.value = null
                 scoredWords.value = emptyList()
+                alignedWordTimings.value = emptyList()
+                missedWordsSummary.value = emptyList()
+                unclearWordsSummary.value = emptyList()
+                extraWordsSummary.value = emptyList()
                 recognizedText.value = ""
-            }
 
-            maxRecordedAmplitude.value = 0
-            synchronized(amplitudeSamples) {
-                amplitudeSamples.clear()
-            }
-            recordStartTime = System.currentTimeMillis()
-            isRecording.value = true
+                maxRecordedAmplitude.value = 0
+                synchronized(amplitudeSamples) {
+                    amplitudeSamples.clear()
+                }
+                recordStartTime = System.currentTimeMillis()
+                isRecording.value = true
 
-            liveSession = LiveSpeechSession(getApplication(), viewModelScope, itemType, targetText)
-            liveSession?.start()
+                val recordingsDir = File(getApplication<Application>().filesDir, "recordings")
+                if (!recordingsDir.exists()) recordingsDir.mkdirs()
+                // Keep disk usage tidy by pruning recordings older than latest 20
+                recordingsDir.listFiles()?.sortedByDescending { it.lastModified() }?.drop(20)?.forEach {
+                    it.delete()
+                }
+                val wavFile = File(recordingsDir, "attempt_${itemType.ifBlank { "drill" }}_${System.currentTimeMillis()}.wav")
+
+                val session = LiveSpeechSession(
+                    context = getApplication(),
+                    model = model,
+                    targetText = targetText,
+                    wavFile = wavFile,
+                    useGrammarMode = voskModelManager.useGrammarMode.value,
+                    onAmplitude = { amp -> liveAudioLevel.value = amp },
+                    onPartialText = { partial -> recognizedText.value = partial }
+                )
+                liveSession = session
+                session.start(viewModelScope)
+            }
         }
     }
 
     fun stopRecording(targetText: String, itemType: String, itemId: Int) {
         val s = liveSession ?: return
-        
+        liveSession = null
+
         viewModelScope.launch {
-            Log.d("SPEECH_DEBUG", "=== STOP RECORDING PRACTICE === targetText: '$targetText', itemType: $itemType")
-            isRecording.value = false
-            isProcessingSpeech.value = true
+            recordingMutex.withLock {
+                Log.d("SPEECH_DEBUG", "=== STOP RECORDING PRACTICE (Vosk) === targetText: '$targetText', itemType: $itemType")
+                isRecording.value = false
+                liveAudioLevel.value = 0f
+                isProcessingSpeech.value = true
 
-            val speechResult: Pair<String, ByteArray> = s.stop()
-            val text: String = speechResult.first
-            val pcmBytes: ByteArray = speechResult.second
-            liveSession = null
-            
-            recognizedText.value = text
+                val captureResult = s.stop()
+                recognizedText.value = captureResult.transcript
+                voiceRecorder.setActiveRecordedFile(captureResult.wavFilePath)
 
-            val recordDurationMs = System.currentTimeMillis() - recordStartTime
-            
-            // Save WAV file for playback
-            withContext(Dispatchers.IO) {
-                voiceRecorder.saveRawPcmToWav(pcmBytes)
-            }
+                val recordDurationMs = System.currentTimeMillis() - recordStartTime
 
-            try {
-                // Transcribe speech using chunked PCM audio processing for full 1-2 minute paragraph coverage
-                if (itemType == "paragraph") {
-                    val fullText = transcribePcmChunks(pcmBytes)
-                    if (fullText.isNotBlank()) {
-                        recognizedText.value = fullText
+                try {
+                    Log.d("SPEECH_DEBUG", "stopRecording: Vosk transcript='${captureResult.transcript}', words=${captureResult.spokenWords.size}")
+
+                    val displayWords = targetText
+                        .replace(Regex("[^a-zA-Z0-9'\\s]"), " ")
+                        .split(Regex("\\s+"))
+                        .filter { it.isNotBlank() }
+
+                    var eval = PronunciationScorer.evaluatePronunciation(
+                        targetDisplayWords = displayWords,
+                        spokenWords = captureResult.spokenWords,
+                        itemType = itemType,
+                        grammarWords = captureResult.grammarWords,
+                        energyWindows = captureResult.energyWindows
+                    )
+
+                    // Smart Tongue Twister credit for fast alliterative speech when user spoke full duration and matched words
+                    if (itemType == "tongue_twister" && displayWords.isNotEmpty()) {
+                        val minExpectedDurationMs = (displayWords.size * 350L).coerceAtLeast(1800L)
+                        val hasMatchedWords = eval.wordScores.any {
+                            it.second == WordScoreType.Correct || it.second == WordScoreType.Hesitant
+                        }
+                        if (recordDurationMs >= minExpectedDurationMs && hasMatchedWords && eval.score < 75) {
+                            var correctCount = 0
+                            var hesitantCount = 0
+                            val upgradedPairs = eval.wordScores.map { (word, scoreType) ->
+                                val finalType = if (scoreType == WordScoreType.Incorrect) WordScoreType.Hesitant else scoreType
+                                if (finalType == WordScoreType.Correct) correctCount++
+                                if (finalType == WordScoreType.Hesitant) hesitantCount++
+                                word to finalType
+                            }
+                            val upgradedScore = (((correctCount * 1.0) + (hesitantCount * 0.75)) / displayWords.size * 100)
+                                .toInt()
+                                .coerceIn(0, 100)
+                            eval = eval.copy(score = upgradedScore, wordScores = upgradedPairs)
+                        }
                     }
-                }
 
-                Log.d("SPEECH_DEBUG", "stopRecording: Transcription completed! Final recognizedText = '${recognizedText.value}'")
+                    val finalScore = eval.score.coerceIn(0, 100)
+                    lastScore.value = finalScore
+                    scoredWords.value = eval.wordScores
+                    alignedWordTimings.value = eval.alignedDetails
+                    missedWordsSummary.value = eval.missedWords
+                    unclearWordsSummary.value = eval.unclearWords
+                    extraWordsSummary.value = eval.extraWords
 
-                val cleanTarget = targetText.replace(Regex("[^a-zA-Z\\s]"), "")
-                val words = cleanTarget.split(" ").filter { it.isNotEmpty() }
+                    // Step F: Save score, missed words, WAV file path, and timestamps to Room + feed spaced repetition
+                    val correctWords = eval.alignedDetails
+                        .filter { it.status == WordAlignmentStatus.Correct && !it.isUnclear }
+                        .map { it.targetWord }
+                    repository.savePracticeAttemptAndFeedSpacedRepetition(
+                        itemType = itemType,
+                        itemId = itemId,
+                        targetText = targetText,
+                        recognizedText = captureResult.transcript,
+                        score = finalScore,
+                        missedWords = eval.missedWords,
+                        unclearWords = eval.unclearWords,
+                        extraWords = eval.extraWords,
+                        correctWords = correctWords,
+                        wavFilePath = captureResult.wavFilePath,
+                        wordTimingsJson = PronunciationScorer.serializeAlignedTimings(eval.alignedDetails)
+                    )
 
-                val cleanRecognized = recognizedText.value.replace(Regex("[^a-zA-Z\\s]"), "").trim()
-                val recognizedWords = cleanRecognized.split(" ").filter { it.isNotEmpty() }
+                    // Track user XP progression (Max once per lesson/exercise per calendar day)
+                    val passingThreshold = if (itemType == "paragraph") 60 else 75
+                    val isPassed = finalScore >= passingThreshold
 
-                Log.d("SPEECH_DEBUG", "stopRecording: Evaluation targetWords=$words, recognizedWords=$recognizedWords")
-
-                val recordedFile = voiceRecorder.getRecordedFile()
-                val fileSize = recordedFile?.length() ?: 0L
-                val currentSamples = synchronized(amplitudeSamples) { amplitudeSamples.toList() }
-
-                val (score, analysis) = evaluateVoiceInput(
-                    targetWords = words,
-                    recognizedWords = recognizedWords,
-                    recordedFileSize = fileSize,
-                    recordDurationMs = recordDurationMs,
-                    amplitudeSamples = currentSamples,
-                    maxAmplitude = maxRecordedAmplitude.value,
-                    itemType = itemType
-                )
-
-                val finalScore = score.coerceIn(0, 100)
-                Log.d("SPEECH_DEBUG", "stopRecording: Evaluation finalScore=$finalScore, analysis=$analysis")
-                lastScore.value = finalScore
-                scoredWords.value = analysis
-
-                // Track user XP progression (Max once per lesson/exercise per calendar day)
-                // Conversations only award XP upon completing all sentences in a level, not per sentence.
-                // Critical: Only award XP if the user meets or exceeds the lesson's passing threshold!
-                // (60% for long paragraphs, 75% for daily sentences, tongue twisters, and grammar drills)
-                val passingThreshold = if (itemType == "paragraph") 60 else 75
-                val isPassed = finalScore >= passingThreshold
-
-                val xpAwarded = if (isPassed && itemType != "conversation") {
-                    when {
-                        finalScore >= 90 -> 15
-                        finalScore >= 80 -> 10
-                        else -> 5 // Passing score (>= 75% for regular drills, >= 60% for paragraph)
+                    val xpAwarded = if (isPassed && itemType != "conversation") {
+                        when {
+                            finalScore >= 90 -> 15
+                            finalScore >= 80 -> 10
+                            else -> 5
+                        }
+                    } else {
+                        0
                     }
-                } else {
-                    0
-                }
 
-                if (xpAwarded > 0) {
-                    val itemKey = if (itemId > 0) "${itemType}_${itemId}" else "${itemType}_${targetText.trim().hashCode()}"
-                    val xpClaimed = repository.awardLessonXp(itemKey, xpAwarded)
-                    if (xpClaimed) {
-                        showRewardOverlay.value = xpAwarded
+                    if (xpAwarded > 0) {
+                        val itemKey = if (itemId > 0) "${itemType}_${itemId}" else "${itemType}_${targetText.trim().hashCode()}"
+                        val xpClaimed = repository.awardLessonXp(itemKey, xpAwarded)
+                        showRewardOverlay.value = if (xpClaimed) xpAwarded else null
                     } else {
                         showRewardOverlay.value = null
                     }
-                } else {
-                    showRewardOverlay.value = null
-                }
 
-                // Persistent progress update based on module type
-                // Except paragraph reading (which passes at 60%), all lessons require at least 75% to complete!
-                if (finalScore > 0) {
-                    when (itemType) {
-                        "grammar" -> {
-                            activeGrammarLesson.value?.let { lesson ->
-                                val isPassed = lesson.isCompleted || (finalScore >= 75)
-                                repository.updateGrammarLesson(lesson.copy(isCompleted = isPassed))
+                    if (finalScore > 0) {
+                        when (itemType) {
+                            "grammar" -> {
+                                activeGrammarLesson.value?.let { lesson ->
+                                    val completed = lesson.isCompleted || (finalScore >= 75)
+                                    repository.updateGrammarLesson(lesson.copy(isCompleted = completed))
+                                }
                             }
-                        }
-                        "daily_sentence" -> {
-                            activeDailySentence.value?.let { sentence ->
-                                val isPassed = sentence.isCompleted || (finalScore >= 75)
-                                val isCorrect = finalScore >= 75
-                                repository.updateDailySentence(sentence.copy(
-                                    isCompleted = isPassed,
-                                    timesPracticed = sentence.timesPracticed + 1,
-                                    lastAccuracy = finalScore
-                                ))
-                                repository.scheduleSpacedRepetition(sentence.id, isCorrect, finalScore)
+                            "daily_sentence" -> {
+                                activeDailySentence.value?.let { sentence ->
+                                    val completed = sentence.isCompleted || (finalScore >= 75)
+                                    val isCorrect = finalScore >= 75
+                                    repository.updateDailySentence(sentence.copy(
+                                        isCompleted = completed,
+                                        timesPracticed = sentence.timesPracticed + 1,
+                                        lastAccuracy = finalScore
+                                    ))
+                                    repository.scheduleSpacedRepetition(sentence.id, isCorrect, finalScore)
+                                }
                             }
-                        }
-                        "paragraph" -> {
-                            activeParagraph.value?.let { para ->
-                                val currentMax = if (finalScore > para.maxAccuracy) finalScore else para.maxAccuracy
-                                val isPassed = para.isCompleted || (finalScore >= 60)
-                                repository.updateParagraph(para.copy(isCompleted = isPassed, maxAccuracy = currentMax))
+                            "paragraph" -> {
+                                activeParagraph.value?.let { para ->
+                                    val currentMax = if (finalScore > para.maxAccuracy) finalScore else para.maxAccuracy
+                                    val completed = para.isCompleted || (finalScore >= 60)
+                                    repository.updateParagraph(para.copy(isCompleted = completed, maxAccuracy = currentMax))
+                                }
                             }
-                        }
-                        "tongue_twister" -> {
-                            activeTongueTwister.value?.let { twister ->
-                                val currentMax = if (finalScore > twister.maxAccuracy) finalScore else twister.maxAccuracy
-                                val isPassed = twister.isCompleted || (finalScore >= 75)
-                                repository.updateTongueTwister(twister.copy(
-                                    isCompleted = isPassed,
-                                    maxAccuracy = currentMax,
-                                    practiceCount = twister.practiceCount + 1
-                                ))
+                            "tongue_twister" -> {
+                                activeTongueTwister.value?.let { twister ->
+                                    val currentMax = if (finalScore > twister.maxAccuracy) finalScore else twister.maxAccuracy
+                                    val completed = twister.isCompleted || (finalScore >= 75)
+                                    repository.updateTongueTwister(twister.copy(
+                                        isCompleted = completed,
+                                        maxAccuracy = currentMax,
+                                        practiceCount = twister.practiceCount + 1
+                                    ))
+                                }
                             }
-                        }
-                        "conversation" -> {
-                            // Advance conversation roleplay line upon scoring
+                            "conversation" -> {
+                                // Roleplay line scored
+                            }
                         }
                     }
+                } catch (e: Exception) {
+                    Log.e("SPEECH_DEBUG", "stopRecording: Error during transcription/evaluation", e)
+                } finally {
+                    isProcessingSpeech.value = false
                 }
-            } catch (e: Exception) {
-                Log.e("SPEECH_DEBUG", "stopRecording: Error during transcription/evaluation", e)
-            } finally {
-                isProcessingSpeech.value = false
             }
         }
-    }
-
-    private fun evaluateVoiceInput(
-        targetWords: List<String>,
-        recognizedWords: List<String>,
-        recordedFileSize: Long,
-        recordDurationMs: Long,
-        amplitudeSamples: List<Int>,
-        maxAmplitude: Int,
-        itemType: String = ""
-    ): Pair<Int, List<Pair<String, WordScoreType>>> {
-        if (targetWords.isEmpty() || recognizedWords.isEmpty()) {
-            // If no speech was spoken/recognized, score is strictly 0 and all words are marked Incorrect (Red)
-            val silentAnalysis = targetWords.map { Pair(it, WordScoreType.Incorrect) }
-            return Pair(0, silentAnalysis)
-        }
-
-        val (baseScore, baseAnalysis) = alignAndScore(targetWords, recognizedWords, itemType)
-
-        // Smart Tongue Twister Evaluator:
-        // Tongue twisters trigger heavy ASR alliteration dropping. If the user spoke for the full expected
-        // speech duration and the ASR matched key words, give credit for ASR-dropped words as Hesitant (Gold).
-        if (itemType == "tongue_twister" && targetWords.isNotEmpty()) {
-            val minExpectedDurationMs = (targetWords.size * 350L).coerceAtLeast(1800L)
-            val hasMatchedWords = baseAnalysis.any { it.second == WordScoreType.Correct || it.second == WordScoreType.Hesitant }
-
-            if (recordDurationMs >= minExpectedDurationMs && hasMatchedWords) {
-                var correctCount = 0
-                var hesitantCount = 0
-                val upgradedAnalysis = baseAnalysis.map { (word, scoreType) ->
-                    val finalType = if (scoreType == WordScoreType.Incorrect) WordScoreType.Hesitant else scoreType
-                    if (finalType == WordScoreType.Correct) correctCount++
-                    if (finalType == WordScoreType.Hesitant) hesitantCount++
-                    Pair(word, finalType)
-                }
-
-                val upgradedScore = (((correctCount * 1.0) + (hesitantCount * 0.75)) / targetWords.size * 100).toInt().coerceIn(0, 100)
-                Log.d("SPEECH_DEBUG", "evaluateVoiceInput: Smart Tongue Twister Evaluator upgraded score from $baseScore% to $upgradedScore%")
-                
-                // Align recognizedText display with the full target sentence so "YOU SPOKE" matches the score
-                recognizedText.value = targetWords.joinToString(" ")
-                
-                return Pair(upgradedScore, upgradedAnalysis)
-            }
-        }
-
-        return Pair(baseScore, baseAnalysis)
     }
 
     fun playRecordedVoice() {
@@ -983,8 +725,22 @@ class EnglishViewModel(
 
         if (recordedFile != null && recordedFile.length() > 44) {
             isPlayingBack.value = true
+            playbackPositionSec.value = 0f
             voiceRecorder.startPlayback {
+                playbackTrackerJob?.cancel()
+                playbackTrackerJob = null
                 isPlayingBack.value = false
+                playbackPositionSec.value = null
+            }
+            playbackTrackerJob?.cancel()
+            playbackTrackerJob = viewModelScope.launch {
+                while (isPlayingBack.value) {
+                    val posMs = voiceRecorder.getCurrentPositionMs()
+                    if (posMs >= 0) {
+                        playbackPositionSec.value = posMs / 1000f
+                    }
+                    delay(50L)
+                }
             }
         } else if (currentTargetText.value.isNotEmpty()) {
             speak(currentTargetText.value)
@@ -992,8 +748,11 @@ class EnglishViewModel(
     }
 
     fun stopRecordedVoicePlayback() {
+        playbackTrackerJob?.cancel()
+        playbackTrackerJob = null
         voiceRecorder.stopPlayback()
         isPlayingBack.value = false
+        playbackPositionSec.value = null
     }
 
     // --- CONVERSATION ROLE PLAY ENGINE ---
@@ -1115,6 +874,7 @@ class EnglishViewModel(
                 repository.updateTongueTwister(it.copy(isCompleted = false, maxAccuracy = 0, practiceCount = 0))
             }
             repository.deleteAllDailyXpClaims()
+            repository.clearPracticeLogs()
             restoreStruggledSection()
         }
     }
@@ -1126,14 +886,23 @@ class EnglishViewModel(
         }
     }
 
-    override fun onCleared() {
-        super.onCleared()
-        tts?.shutdown()
-        viewModelScope.launch {
-            liveSession?.release()
+    fun releaseResources() {
+        playbackTrackerJob?.cancel()
+        playbackTrackerJob = null
+        val activeSession = liveSession
+        liveSession = null
+        CoroutineScope(Dispatchers.IO).launch {
+            activeSession?.release()
+            voskModelManager.release()
         }
         voiceRecorder.stopRecording()
         voiceRecorder.stopPlayback()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        tts?.shutdown()
+        releaseResources()
     }
 }
 

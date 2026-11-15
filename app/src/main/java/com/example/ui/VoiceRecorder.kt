@@ -167,11 +167,26 @@ class VoiceRecorder(private val context: Context) {
         }
     }
 
+    private var activeCustomFile: File? = null
+
+    fun setActiveRecordedFile(filePath: String?) {
+        activeCustomFile = filePath?.takeIf { it.isNotBlank() }?.let { File(it) }
+    }
+
+    fun getCurrentPositionMs(): Int {
+        return try {
+            val player = mediaPlayer
+            if (player != null && player.isPlaying) player.currentPosition else -1
+        } catch (_: Exception) {
+            -1
+        }
+    }
+
     fun startPlayback(onComplete: () -> Unit = {}) {
         stopPlayback()
 
         val fileToPlay = getRecordedFile()
-        if (fileToPlay == null || fileToPlay.length() == 0L) {
+        if (fileToPlay == null || fileToPlay.length() <= 44L) {
             Log.w("SPEECH_DEBUG", "VoiceRecorder: No recorded file found to play.")
             onComplete()
             return
@@ -215,7 +230,9 @@ class VoiceRecorder(private val context: Context) {
     }
 
     fun getRecordedFile(): File? {
-        if (recordedFile.exists() && recordedFile.length() > 0L) return recordedFile
+        val custom = activeCustomFile
+        if (custom != null && custom.exists() && custom.length() > 44L) return custom
+        if (recordedFile.exists() && recordedFile.length() > 44L) return recordedFile
         if (legacyRecordedFile.exists() && legacyRecordedFile.length() > 0L) return legacyRecordedFile
         return null
     }

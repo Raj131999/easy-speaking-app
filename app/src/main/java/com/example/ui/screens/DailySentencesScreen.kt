@@ -2,39 +2,45 @@ package com.example.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.border
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.DailySentence
 import com.example.ui.EnglishViewModel
 import com.example.ui.Screen
-import com.example.ui.WordScoreType
+import com.example.ui.components.MascotCoach
+import com.example.ui.components.MascotState
+import com.example.ui.components.PhoneticMouthGuideDialog
+import com.example.ui.components.PronunciationFeedbackChips
+import com.example.ui.components.SonicVoiceOrb
 import com.example.ui.components.SpokenVoiceToTextCard
-import com.example.ui.theme.PolishTeal
-import com.example.ui.theme.StreakGold
-import com.example.ui.theme.TealPrimary
+import com.example.ui.components.resolvePhoneticGuideSound
+import com.example.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,12 +55,20 @@ fun DailySentencesScreen(
     val reviewIndex by viewModel.currentReviewIndex.collectAsState()
 
     val isRecording by viewModel.isRecording.collectAsState()
+    val liveAudioLevel by viewModel.liveAudioLevel.collectAsState()
     val isPlayingBack by viewModel.isPlayingBack.collectAsState()
     val isTtsSpeaking by viewModel.isTtsSpeaking.collectAsState()
     val lastScore by viewModel.lastScore.collectAsState()
     val scoredWords by viewModel.scoredWords.collectAsState()
+    val alignedWordTimings by viewModel.alignedWordTimings.collectAsState()
+    val playbackPositionSec by viewModel.playbackPositionSec.collectAsState()
+    val missedWordsSummary by viewModel.missedWordsSummary.collectAsState()
+    val unclearWordsSummary by viewModel.unclearWordsSummary.collectAsState()
+    val extraWordsSummary by viewModel.extraWordsSummary.collectAsState()
     val recognizedText by viewModel.recognizedText.collectAsState()
     val isProcessingSpeech by viewModel.isProcessingSpeech.collectAsState()
+
+    var showMouthGuide by remember { mutableStateOf(false) }
 
     val currentList = if (isReviewSession) reviewList else sentences
     val effectiveIndex = if (isReviewSession) {
@@ -72,7 +86,9 @@ fun DailySentencesScreen(
 
     LaunchedEffect(activeSentence == null, isReviewSession, completedCount, scrollToTargetIndex) {
         if (!isReviewSession && activeSentence == null && sentences.isNotEmpty()) {
-            val targetIdx = scrollToTargetIndex ?: sentences.indexOfFirst { !it.isCompleted && it.lastAccuracy < 75 }.takeIf { it >= 0 } ?: (sentences.size - 1)
+            val targetIdx = scrollToTargetIndex
+                ?: sentences.indexOfFirst { !it.isCompleted && it.lastAccuracy < 75 }.takeIf { it >= 0 }
+                ?: (sentences.size - 1)
             if (targetIdx in sentences.indices) {
                 mapListState.animateScrollToItem(targetIdx)
             }
@@ -101,14 +117,24 @@ fun DailySentencesScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Daily Sentences Map") },
+                    title = {
+                        Text(
+                            text = "Daily Sentences Map",
+                            fontWeight = FontWeight.Bold,
+                            color = PolishNavy
+                        )
+                    },
                     navigationIcon = {
                         IconButton(onClick = { viewModel.goBack() }) {
-                            Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = PolishNavy
+                            )
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background
+                        containerColor = PolishBg
                     )
                 )
             },
@@ -117,13 +143,15 @@ fun DailySentencesScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background)
+                    .background(PolishBg)
                     .padding(innerPadding)
             ) {
-                // Header guidance
+                // Header guidance card
                 Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = TealPrimary.copy(alpha = 0.08f)),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    border = BorderStroke(1.dp, Slate100),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -132,25 +160,35 @@ fun DailySentencesScreen(
                         modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Map,
-                            contentDescription = "Map Guidance",
-                            tint = TealPrimary,
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(46.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(PolishTealBg)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Map,
+                                contentDescription = "Map Guidance",
+                                tint = PolishTeal,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "DAILY WORKOUT TRAIL",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
-                                    color = TealPrimary
+                                    color = PolishTeal,
+                                    letterSpacing = 1.sp
                                 )
                             )
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Practice any daily sentence location on the trail below. Perfect your score to complete a location!",
+                                text = "Tap any station on the trail below. Score 75%+ to complete a location!",
                                 style = MaterialTheme.typography.bodySmall.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = Slate500
                                 )
                             )
                         }
@@ -163,15 +201,12 @@ fun DailySentencesScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .weight(1f),
-                    contentPadding = PaddingValues(top = 16.dp, bottom = 48.dp, start = 16.dp, end = 16.dp)
+                    contentPadding = PaddingValues(top = 12.dp, bottom = 48.dp, start = 16.dp, end = 16.dp)
                 ) {
                     itemsIndexed(sentences) { index, sentence ->
                         val isCompleted = sentence.isCompleted || sentence.lastAccuracy >= 75
-                        // The first uncompleted item or the current selected one is active
                         val isFirstUncompleted = sentences.indexOfFirst { !it.isCompleted && it.lastAccuracy < 75 } == index
                         val isActive = isFirstUncompleted || (sentences.all { it.isCompleted || it.lastAccuracy >= 75 } && index == 0)
-
-                        // Alternate left & right detail cards around the center line
                         val isLeft = index % 2 == 0
 
                         Row(
@@ -193,28 +228,28 @@ fun DailySentencesScreen(
                                         score = if (sentence.lastAccuracy > 0) sentence.lastAccuracy else null,
                                         isCompleted = isCompleted,
                                         isActive = isActive,
-                                        accentColor = TealPrimary
+                                        accentColor = PolishTeal
                                     )
                                 }
-                                Spacer(modifier = Modifier.width(16.dp))
+                                Spacer(modifier = Modifier.width(14.dp))
                                 MapPinCircle(
                                     isCompleted = isCompleted,
                                     isActive = isActive,
-                                    accentColor = TealPrimary,
+                                    accentColor = PolishTeal,
                                     number = index + 1
                                 )
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Box(modifier = Modifier.weight(1f)) // Empty spacer same weight
+                                Spacer(modifier = Modifier.width(14.dp))
+                                Box(modifier = Modifier.weight(1f))
                             } else {
-                                Box(modifier = Modifier.weight(1f)) // Empty spacer same weight
-                                Spacer(modifier = Modifier.width(16.dp))
+                                Box(modifier = Modifier.weight(1f))
+                                Spacer(modifier = Modifier.width(14.dp))
                                 MapPinCircle(
                                     isCompleted = isCompleted,
                                     isActive = isActive,
-                                    accentColor = TealPrimary,
+                                    accentColor = PolishTeal,
                                     number = index + 1
                                 )
-                                Spacer(modifier = Modifier.width(16.dp))
+                                Spacer(modifier = Modifier.width(14.dp))
                                 Box(modifier = Modifier.weight(1f)) {
                                     MapLocationCard(
                                         title = sentence.category,
@@ -222,13 +257,12 @@ fun DailySentencesScreen(
                                         score = if (sentence.lastAccuracy > 0) sentence.lastAccuracy else null,
                                         isCompleted = isCompleted,
                                         isActive = isActive,
-                                        accentColor = TealPrimary
+                                        accentColor = PolishTeal
                                     )
                                 }
                             }
                         }
 
-                        // Connect to next item
                         if (index < sentences.size - 1) {
                             MapConnector()
                         }
@@ -241,7 +275,9 @@ fun DailySentencesScreen(
         val sentence = if (isReviewSession) {
             reviewList.getOrNull(effectiveIndex) ?: reviewList.firstOrNull()
         } else {
-            sentences.find { it.id == activeSentence?.id } ?: sentences.getOrNull(effectiveIndex) ?: sentences.firstOrNull()
+            sentences.find { it.id == activeSentence?.id }
+                ?: sentences.getOrNull(effectiveIndex)
+                ?: sentences.firstOrNull()
         }
 
         Scaffold(
@@ -249,21 +285,25 @@ fun DailySentencesScreen(
                 TopAppBar(
                     title = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(if (isReviewSession) "Spaced Review Gym" else "Daily Speaking Gym")
+                            Text(
+                                text = if (isReviewSession) "Spaced Review Gym" else "Daily Speaking Gym",
+                                fontWeight = FontWeight.Bold,
+                                color = PolishNavy
+                            )
                             if (isReviewSession) {
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Surface(
                                     shape = RoundedCornerShape(8.dp),
-                                    color = PolishTeal.copy(alpha = 0.15f),
-                                    border = BorderStroke(1.dp, PolishTeal.copy(alpha = 0.3f))
+                                    color = PolishTealLight,
+                                    border = BorderStroke(1.dp, PolishTealLightBorder)
                                 ) {
                                     Text(
                                         text = "REVIEW",
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             fontWeight = FontWeight.Bold,
-                                            color = PolishTeal
+                                            color = PolishTealDark
                                         ),
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                     )
                                 }
                             }
@@ -276,7 +316,7 @@ fun DailySentencesScreen(
                                 viewModel.goBack()
                             } else {
                                 if (effectiveIndex in sentences.indices) {
-                                  scrollToTargetIndex = effectiveIndex
+                                    scrollToTargetIndex = effectiveIndex
                                 }
                                 viewModel.activeDailySentence.value = null
                                 viewModel.lastScore.value = null
@@ -284,11 +324,15 @@ fun DailySentencesScreen(
                                 viewModel.recognizedText.value = ""
                             }
                         }) {
-                            Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = PolishNavy
+                            )
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background
+                        containerColor = PolishBg
                     )
                 )
             },
@@ -296,11 +340,24 @@ fun DailySentencesScreen(
         ) { innerPadding ->
             if (sentence != null) {
                 val scrollState = rememberScrollState()
+                val mascotState = when {
+                    isRecording -> MascotState.LISTENING
+                    lastScore != null && lastScore!! >= 75 -> MascotState.CELEBRATING
+                    lastScore != null -> MascotState.ENCOURAGING
+                    else -> MascotState.IDLE
+                }
+                val coachMessage = when {
+                    isProcessingSpeech -> "Scoring your clarity..."
+                    isRecording -> "I'm listening — speak naturally!"
+                    lastScore != null && lastScore!! >= 75 -> "Great job! Scored ${lastScore}%"
+                    lastScore != null -> "Almost there! Tap amber words to practice"
+                    else -> "Listen first, then tap the orb to speak"
+                }
 
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.background)
+                        .background(PolishBg)
                         .padding(innerPadding)
                         .verticalScroll(scrollState)
                         .padding(16.dp),
@@ -321,34 +378,53 @@ fun DailySentencesScreen(
                             },
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = if (isReviewSession) PolishTeal else TealPrimary,
+                                color = PolishTeal,
                                 letterSpacing = 1.2.sp
                             )
                         )
-                        SuggestionChip(
-                            onClick = {},
-                            label = { Text("Sound: ${sentence.soundFocus.uppercase()}") },
-                            colors = SuggestionChipDefaults.suggestionChipColors(
-                                containerColor = StreakGold.copy(alpha = 0.15f),
-                                labelColor = StreakGold
-                            )
-                        )
+                        Surface(
+                            onClick = { showMouthGuide = true },
+                            shape = RoundedCornerShape(12.dp),
+                            color = PolishAmberBg,
+                            border = BorderStroke(1.dp, Orange100)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.RecordVoiceOver,
+                                    contentDescription = "Open Mouth Guide",
+                                    tint = Orange600,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "Sound: ${sentence.soundFocus.uppercase()}",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = Orange600
+                                    )
+                                )
+                            }
+                        }
                     }
 
                     LinearProgressIndicator(
                         progress = { if (totalCount > 0) (effectiveIndex + 1).toFloat() / totalCount else 1f },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(3.dp)),
-                        color = if (isReviewSession) PolishTeal else TealPrimary,
-                        trackColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f)
+                            .height(7.dp)
+                            .clip(RoundedCornerShape(4.dp)),
+                        color = PolishTeal,
+                        trackColor = Slate200
                     )
 
                     // Primary Sentence Card
                     Card(
                         shape = RoundedCornerShape(24.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        border = BorderStroke(1.dp, Slate100),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -359,10 +435,11 @@ fun DailySentencesScreen(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = if (isReviewSession) "REVIEW AND REPEAT:" else "REPEAT AFTER ME:",
+                                text = if (isReviewSession) "REVIEW AND REPEAT" else "REPEAT AFTER ME",
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    letterSpacing = 1.sp
+                                    color = Slate500,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.2.sp
                                 )
                             )
                             Spacer(modifier = Modifier.height(12.dp))
@@ -371,6 +448,7 @@ fun DailySentencesScreen(
                                 style = MaterialTheme.typography.headlineMedium.copy(
                                     fontWeight = FontWeight.Bold,
                                     textAlign = TextAlign.Center,
+                                    color = PolishNavy,
                                     lineHeight = 34.sp
                                 ),
                                 modifier = Modifier.fillMaxWidth()
@@ -378,40 +456,75 @@ fun DailySentencesScreen(
 
                             Spacer(modifier = Modifier.height(20.dp))
 
-                            // Play Speaker button
-                            FilledTonalButton(
-                                onClick = { viewModel.speak(sentence.text) },
-                                colors = ButtonDefaults.filledTonalButtonColors(
-                                    containerColor = if (isTtsSpeaking) Color(0xFFFF5252) else if (isReviewSession) PolishTeal.copy(alpha = 0.15f) else TealPrimary.copy(alpha = 0.15f),
-                                    contentColor = if (isTtsSpeaking) Color.White else if (isReviewSession) PolishTeal else TealPrimary
-                                ),
-                                shape = RoundedCornerShape(12.dp)
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = if (isTtsSpeaking) Icons.Default.Stop else Icons.Default.VolumeUp,
-                                    contentDescription = if (isTtsSpeaking) "Stop" else "Listen",
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = if (isTtsSpeaking) "Stop Audio" else "Hear Native Speaker",
-                                    fontWeight = FontWeight.SemiBold
-                                )
+                                FilledTonalButton(
+                                    onClick = { viewModel.speak(sentence.text) },
+                                    colors = ButtonDefaults.filledTonalButtonColors(
+                                        containerColor = if (isTtsSpeaking) Red500 else PolishTealBg,
+                                        contentColor = if (isTtsSpeaking) Color.White else PolishTeal
+                                    ),
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier.height(48.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isTtsSpeaking) Icons.Default.Stop else Icons.AutoMirrored.Filled.VolumeUp,
+                                        contentDescription = if (isTtsSpeaking) "Stop" else "Listen",
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = if (isTtsSpeaking) "Stop Audio" else "Hear Native",
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+
+                                FilledTonalButton(
+                                    onClick = { showMouthGuide = true },
+                                    colors = ButtonDefaults.filledTonalButtonColors(
+                                        containerColor = PolishIndigoBg,
+                                        contentColor = PolishIndigoText
+                                    ),
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier.height(48.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Face,
+                                        contentDescription = "Mouth Guide",
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Mouth Guide",
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
                             }
                         }
                     }
 
-                    // --- RECORDING CONTROLS CARD ---
+                    // --- RECORDING CONTROLS & MASCOT COACH CARD ---
                     Card(
                         shape = RoundedCornerShape(24.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        border = BorderStroke(1.dp, Slate100),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(
                             modifier = Modifier.padding(20.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
+                            MascotCoach(
+                                state = mascotState,
+                                audioLevel = liveAudioLevel,
+                                coachMessage = coachMessage,
+                                size = 72.dp
+                            )
+
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.Center,
@@ -424,61 +537,54 @@ fun DailySentencesScreen(
                                     modifier = Modifier
                                         .size(48.dp)
                                         .background(
-                                            if (isPlayingBack) Color(0xFFFF5252) else MaterialTheme.colorScheme.secondary.copy(alpha = if (lastScore != null) 0.5f else 0.15f),
+                                            when {
+                                                isPlayingBack -> Red500
+                                                lastScore != null -> PolishIndigoBg
+                                                else -> Slate100
+                                            },
                                             CircleShape
                                         )
                                 ) {
                                     Icon(
                                         imageVector = if (isPlayingBack) Icons.Default.Stop else Icons.Default.PlayArrow,
-                                        contentDescription = "UserPlayback",
-                                        tint = if (lastScore != null) Color.White else Color.Gray
+                                        contentDescription = "Play your recording",
+                                        tint = when {
+                                            isPlayingBack -> Color.White
+                                            lastScore != null -> PolishIndigoText
+                                            else -> Slate400
+                                        }
                                     )
                                 }
 
-                                Spacer(modifier = Modifier.width(24.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
 
-                                // Large central Mic button
-                                Box(contentAlignment = Alignment.Center) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(76.dp)
-                                            .clip(CircleShape)
-                                            .background(
-                                                when {
-                                                    isProcessingSpeech -> StreakGold
-                                                    isRecording -> Color(0xFFFF5252)
-                                                    isReviewSession -> PolishTeal
-                                                    else -> TealPrimary
-                                                }
-                                            )
-                                            .clickable(enabled = !isProcessingSpeech) {
-                                                if (isRecording) {
-                                                    viewModel.stopRecording(sentence.text, "daily_sentence", sentence.id)
-                                                } else {
-                                                    viewModel.startRecording(sentence.text)
-                                                }
-                                            }
-                                            .testTag("sentence_record_mic"),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        if (isProcessingSpeech) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(32.dp),
-                                                color = Color.Black,
-                                                strokeWidth = 3.dp
-                                            )
+                                // Sonic Pulse Audio-Reactive Voice Orb
+                                SonicVoiceOrb(
+                                    isRecording = isRecording,
+                                    audioLevel = liveAudioLevel,
+                                    isProcessing = isProcessingSpeech,
+                                    onClick = {
+                                        if (isRecording) {
+                                            viewModel.stopRecording(sentence.text, "daily_sentence", sentence.id)
                                         } else {
-                                            Icon(
-                                                imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                                                contentDescription = "Record",
-                                                tint = Color.Black,
-                                                modifier = Modifier.size(32.dp)
-                                            )
+                                            viewModel.startRecording(sentence.text)
                                         }
-                                    }
-                                }
+                                    },
+                                    size = 64.dp,
+                                    coreColor = when {
+                                        isProcessingSpeech -> Orange500
+                                        isRecording -> Red500
+                                        else -> PolishTeal
+                                    },
+                                    glowColor = when {
+                                        isProcessingSpeech -> Orange100
+                                        isRecording -> Red400
+                                        else -> Color(0xFF2DD4BF)
+                                    },
+                                    modifier = Modifier.testTag("sentence_record_mic")
+                                )
 
-                                Spacer(modifier = Modifier.width(24.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
 
                                 // Retry / Clear attempt button
                                 IconButton(
@@ -490,12 +596,15 @@ fun DailySentencesScreen(
                                     enabled = lastScore != null && !isProcessingSpeech,
                                     modifier = Modifier
                                         .size(48.dp)
-                                        .background(MaterialTheme.colorScheme.secondary.copy(alpha = if (lastScore != null) 0.5f else 0.15f), CircleShape)
+                                        .background(
+                                            if (lastScore != null) Slate100 else Slate50,
+                                            CircleShape
+                                        )
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Refresh,
                                         contentDescription = "Retry",
-                                        tint = if (lastScore != null) Color.White else Color.Gray
+                                        tint = if (lastScore != null) PolishNavy else Slate400
                                     )
                                 }
                             }
@@ -503,17 +612,17 @@ fun DailySentencesScreen(
                             Text(
                                 text = when {
                                     isProcessingSpeech -> "Analyzing your audio... Please wait"
-                                    isRecording -> "Recording... Speak clearly now"
-                                    lastScore != null -> "Tap microphone to try again"
-                                    else -> "Tap microphone to record yourself"
+                                    isRecording -> "Recording... Tap the orb to finish"
+                                    lastScore != null -> "Tap the orb to try again"
+                                    else -> "Tap the orb to record yourself"
                                 },
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     color = when {
-                                        isProcessingSpeech -> StreakGold
-                                        isRecording -> Color(0xFFFF5252)
-                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                        isProcessingSpeech -> Orange600
+                                        isRecording -> Red500
+                                        else -> Slate500
                                     },
-                                    fontWeight = if (isProcessingSpeech || isRecording) FontWeight.Bold else FontWeight.Normal
+                                    fontWeight = if (isProcessingSpeech || isRecording) FontWeight.Bold else FontWeight.Medium
                                 )
                             )
 
@@ -540,13 +649,27 @@ fun DailySentencesScreen(
                                                 viewModel.scoredWords.value = emptyList()
                                                 viewModel.recognizedText.value = ""
                                             },
-                                            colors = ButtonDefaults.buttonColors(containerColor = if (isReviewSession) PolishTeal else TealPrimary),
-                                            modifier = Modifier.weight(1f),
-                                            shape = RoundedCornerShape(12.dp)
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = PolishTeal,
+                                                contentColor = Color.White
+                                            ),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(48.dp),
+                                            shape = RoundedCornerShape(14.dp)
                                         ) {
-                                            Text(if (isReviewSession) "Next Review" else "Next Lesson", color = Color.Black, fontWeight = FontWeight.Bold)
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Icon(imageVector = Icons.Default.ArrowForward, contentDescription = "Next Lesson", tint = Color.Black)
+                                            Text(
+                                                text = if (isReviewSession) "Next Review" else "Next Lesson",
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                                contentDescription = "Next Lesson",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(18.dp)
+                                            )
                                         }
                                     }
                                     Button(
@@ -564,11 +687,20 @@ fun DailySentencesScreen(
                                             viewModel.scoredWords.value = emptyList()
                                             viewModel.recognizedText.value = ""
                                         },
-                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                                        modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(12.dp)
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Slate100,
+                                            contentColor = PolishNavy
+                                        ),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(48.dp),
+                                        shape = RoundedCornerShape(14.dp)
                                     ) {
-                                        Text("Finish (Map)", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
+                                        Text(
+                                            text = "Finish (Map)",
+                                            color = PolishNavy,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
                                     }
                                 }
                             }
@@ -580,12 +712,14 @@ fun DailySentencesScreen(
                                 exit = fadeOut() + shrinkVertically()
                             ) {
                                 Card(
-                                    shape = RoundedCornerShape(12.dp),
+                                    shape = RoundedCornerShape(14.dp),
                                     colors = CardDefaults.cardColors(
-                                        containerColor = TealPrimary.copy(alpha = 0.12f)
+                                        containerColor = PolishTealBg
                                     ),
-                                    border = BorderStroke(1.dp, TealPrimary.copy(alpha = 0.7f)),
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                    border = BorderStroke(1.dp, PolishTealLightBorder),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
                                 ) {
                                     Row(
                                         modifier = Modifier.padding(12.dp),
@@ -593,7 +727,7 @@ fun DailySentencesScreen(
                                     ) {
                                         CircularProgressIndicator(
                                             modifier = Modifier.size(24.dp),
-                                            color = TealPrimary,
+                                            color = PolishTeal,
                                             strokeWidth = 2.5.dp
                                         )
                                         Spacer(modifier = Modifier.width(12.dp))
@@ -602,13 +736,13 @@ fun DailySentencesScreen(
                                                 text = "Analyzing your speech...",
                                                 style = MaterialTheme.typography.bodySmall.copy(
                                                     fontWeight = FontWeight.Bold,
-                                                    color = TealPrimary
+                                                    color = PolishTeal
                                                 )
                                             )
                                             Text(
                                                 text = "Evaluating pronunciation and fluency...",
                                                 style = MaterialTheme.typography.labelSmall.copy(
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    color = Slate500
                                                 )
                                             )
                                         }
@@ -626,7 +760,7 @@ fun DailySentencesScreen(
                             // Accuracy Score and Feedback
                             lastScore?.let { score ->
                                 val isPassed = score >= 75
-                                HorizontalDivider()
+                                HorizontalDivider(color = Slate100)
 
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -635,75 +769,66 @@ fun DailySentencesScreen(
                                 ) {
                                     Column {
                                         Text(
-                                            text = "PRONUNCIATION SCORE:",
+                                            text = "PRONUNCIATION SCORE",
                                             style = MaterialTheme.typography.labelMedium.copy(
                                                 fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                color = Slate500
                                             )
                                         )
                                         Text(
                                             text = if (isPassed) "Lesson Passed (>= 75%)" else "Need 75% to Complete",
                                             style = MaterialTheme.typography.labelSmall.copy(
                                                 fontWeight = FontWeight.Bold,
-                                                color = if (isPassed) Color(0xFF2ECC71) else StreakGold
+                                                color = if (isPassed) Emerald600 else Orange600
                                             )
                                         )
                                     }
                                     Text(
                                         text = "$score%",
-                                        style = MaterialTheme.typography.titleLarge.copy(
-                                            fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.headlineMedium.copy(
+                                            fontWeight = FontWeight.ExtraBold,
                                             color = when {
-                                                score >= 90 -> Color(0xFF2ECC71)
-                                                score >= 75 -> Color(0xFF2ECC71)
-                                                score >= 50 -> StreakGold
-                                                else -> Color(0xFFFF5252)
+                                                score >= 75 -> Emerald600
+                                                score >= 50 -> Orange600
+                                                else -> Red500
                                             }
                                         )
                                     )
                                 }
 
-                                // Dynamic Phonetics Highlight
-                                FlowRow(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    scoredWords.forEach { (word, scoreType) ->
-                                        val color = when (scoreType) {
-                                            WordScoreType.Correct -> Color(0xFF2ECC71)
-                                            WordScoreType.Hesitant -> StreakGold
-                                            WordScoreType.Incorrect -> Color(0xFFFF5252)
-                                        }
-                                        Box(
-                                            modifier = Modifier
-                                                .padding(4.dp)
-                                                .clip(RoundedCornerShape(6.dp))
-                                                .background(color.copy(alpha = 0.15f))
-                                                .clickable { viewModel.speak(word) }
-                                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                                        ) {
-                                            Text(
-                                                text = word,
-                                                color = color,
-                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
-                                            )
-                                        }
-                                    }
-                                }
+                                // Word-level alignment & playback-synced timestamp highlighting
+                                PronunciationFeedbackChips(
+                                    alignedTimings = alignedWordTimings,
+                                    fallbackScoredWords = scoredWords,
+                                    playbackPositionSec = playbackPositionSec,
+                                    isPlayingBack = isPlayingBack,
+                                    missedWords = missedWordsSummary,
+                                    unclearWords = unclearWordsSummary,
+                                    extraWords = extraWordsSummary,
+                                    onWordClick = { word -> viewModel.speak(word) }
+                                )
                             }
                         }
                     }
                 }
+
+                if (showMouthGuide) {
+                    PhoneticMouthGuideDialog(
+                        initialSound = resolvePhoneticGuideSound(sentence.soundFocus),
+                        onDismiss = { showMouthGuide = false },
+                        onSpeakWord = { word -> viewModel.speak(word) }
+                    )
+                }
             } else {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No review sentences available.")
+                    Text("No review sentences available.", color = Slate500)
                 }
             }
         }
     }
 }
 
-// --- REUSABLE MAP COMPONENTS ---
+// --- REUSABLE MODERN TRAIL MAP COMPONENTS ---
 
 @Composable
 fun MapPinCircle(
@@ -717,19 +842,21 @@ fun MapPinCircle(
         modifier = Modifier
             .size(54.dp)
             .clip(CircleShape)
-            .background(
+            .then(
                 when {
-                    isCompleted -> Color(0xFF2ECC71)
-                    isActive -> accentColor
-                    else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                    isCompleted -> Modifier.background(Emerald500)
+                    isActive -> Modifier.background(
+                        Brush.linearGradient(listOf(accentColor, PolishTealDark))
+                    )
+                    else -> Modifier.background(Color.White)
                 }
             )
             .border(
-                width = if (isActive || isCompleted) 3.dp else 1.5.dp,
+                width = if (isActive) 3.dp else 1.5.dp,
                 color = when {
-                    isCompleted -> Color(0xFF2ECC71)
-                    isActive -> Color.White
-                    else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)
+                    isCompleted -> Emerald100
+                    isActive -> PolishTealLight
+                    else -> Slate200
                 },
                 shape = CircleShape
             )
@@ -745,7 +872,7 @@ fun MapPinCircle(
             Icon(
                 imageVector = Icons.Default.PlayArrow,
                 contentDescription = "Active",
-                tint = Color.Black,
+                tint = Color.White,
                 modifier = Modifier.size(26.dp)
             )
         } else {
@@ -753,7 +880,7 @@ fun MapPinCircle(
                 text = number.toString(),
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                    color = Slate500
                 )
             )
         }
@@ -771,39 +898,43 @@ fun MapLocationCard(
     customStatusText: String? = null
 ) {
     Card(
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
             containerColor = when {
-                isCompleted -> Color(0xFF2ECC71).copy(alpha = 0.08f)
-                isActive -> accentColor.copy(alpha = 0.06f)
-                else -> MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
+                isCompleted -> Emerald50.copy(alpha = 0.65f)
+                isActive -> Color.White
+                else -> Color.White
             }
         ),
         border = BorderStroke(
             width = if (isCompleted || isActive) 1.5.dp else 1.dp,
             color = when {
-                isCompleted -> Color(0xFF2ECC71)
+                isCompleted -> Emerald500.copy(alpha = 0.55f)
                 isActive -> accentColor
-                else -> MaterialTheme.colorScheme.outlineVariant
+                else -> Slate200
             }
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isActive || isCompleted) 2.dp else 0.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isActive) 3.dp else 1.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            // Status Badge
-            val badgeColor = when {
-                isCompleted -> Color(0xFF2ECC71)
+            val badgeBg = when {
+                isCompleted -> Emerald100
+                isActive -> PolishTealBg
+                else -> Slate100
+            }
+            val badgeTextColor = when {
+                isCompleted -> Emerald600
                 isActive -> accentColor
-                else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                else -> Slate500
             }
             val badgeText = customStatusText ?: when {
                 isCompleted -> "Completed"
                 isActive -> "Current Topic"
-                else -> "Not Completed"
+                else -> "Ready"
             }
             val badgeIcon = when {
                 isCompleted -> Icons.Default.CheckCircle
@@ -812,25 +943,24 @@ fun MapLocationCard(
             }
 
             Surface(
-                color = badgeColor.copy(alpha = 0.15f),
-                shape = RoundedCornerShape(6.dp),
-                border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.3f))
+                color = badgeBg,
+                shape = RoundedCornerShape(8.dp)
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Icon(
                         imageVector = badgeIcon,
                         contentDescription = null,
-                        tint = badgeColor,
+                        tint = badgeTextColor,
                         modifier = Modifier.size(12.dp)
                     )
                     Text(
                         text = badgeText,
                         style = MaterialTheme.typography.labelSmall.copy(
-                            color = badgeColor,
+                            color = badgeTextColor,
                             fontWeight = FontWeight.Bold,
                             fontSize = 10.sp
                         )
@@ -844,7 +974,7 @@ fun MapLocationCard(
                 text = title,
                 style = MaterialTheme.typography.titleSmall.copy(
                     fontWeight = FontWeight.Bold,
-                    color = if (isCompleted || isActive) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                    color = PolishNavy
                 ),
                 maxLines = 1
             )
@@ -852,7 +982,7 @@ fun MapLocationCard(
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall.copy(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = Slate500,
                     fontSize = 11.sp
                 ),
                 maxLines = 2
@@ -867,13 +997,13 @@ fun MapLocationCard(
                     Icon(
                         imageVector = Icons.Default.Star,
                         contentDescription = "Score",
-                        tint = StreakGold,
-                        modifier = Modifier.size(12.dp)
+                        tint = Orange600,
+                        modifier = Modifier.size(13.dp)
                     )
                     Text(
                         text = "Score: $score%",
                         style = MaterialTheme.typography.labelSmall.copy(
-                            color = StreakGold,
+                            color = Orange600,
                             fontWeight = FontWeight.Bold
                         )
                     )
@@ -893,10 +1023,10 @@ fun MapConnector() {
     ) {
         Box(
             modifier = Modifier
-                .width(4.dp)
+                .width(3.dp)
                 .fillMaxHeight()
                 .background(
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.15f),
+                    color = Slate200,
                     shape = RoundedCornerShape(2.dp)
                 )
         )

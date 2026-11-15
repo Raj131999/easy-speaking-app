@@ -33,6 +33,7 @@ import androidx.lifecycle.ViewModelProvider
 import com.example.data.AppDatabase
 import com.example.data.EnglishRepository
 import com.example.ui.*
+import com.example.ui.components.DependencyDownloadBanner
 import com.example.ui.screens.*
 import com.example.ui.theme.*
 import kotlinx.coroutines.delay
@@ -45,7 +46,12 @@ class MainActivity : ComponentActivity() {
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
-        // Permission result handled gracefully; if denied, we use simulated voice capture
+        if (::viewModel.isInitialized) {
+            viewModel.needsMicPermissionRequest.value = false
+            if (isGranted) {
+                viewModel.clearSpeechStatusNotice()
+            }
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,14 +66,29 @@ class MainActivity : ComponentActivity() {
         val factory = EnglishViewModelFactory(application, repository)
         viewModel = ViewModelProvider(this, factory)[EnglishViewModel::class.java]
 
-        // Check/request MIC permission proactively for smooth offline flow
+        // Check/request MIC permission proactively for smooth speaking practice flow
         checkMicrophonePermission()
 
         setContent {
+            val needsMicPermission by viewModel.needsMicPermissionRequest.collectAsState()
+            LaunchedEffect(needsMicPermission) {
+                if (needsMicPermission) {
+                    viewModel.needsMicPermissionRequest.value = false
+                    requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                }
+            }
             MyApplicationTheme {
                 MainShell(viewModel = viewModel)
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (::viewModel.isInitialized) {
+            viewModel.releaseResources()
+        }
+        MicrophoneCaptureService.stop(this)
     }
 
     private fun checkMicrophonePermission() {
@@ -87,6 +108,8 @@ fun MainShell(viewModel: EnglishViewModel) {
     val currentScreen by viewModel.currentScreen.collectAsState()
     val rewardAmount by viewModel.showRewardOverlay.collectAsState()
     val progress by viewModel.userProgress.collectAsState()
+    val modelDownloadState by viewModel.modelDownloadState.collectAsState()
+    val speechStatusNotice by viewModel.speechStatusNotice.collectAsState()
 
     val activeGrammar by viewModel.activeGrammarLesson.collectAsState()
     val activeConversation by viewModel.activeConversation.collectAsState()
@@ -105,8 +128,22 @@ fun MainShell(viewModel: EnglishViewModel) {
         viewModel.goBack()
     }
 
-    // Temporary local context
-    val context = LocalContext.current
+    var showReadyConfirmation by remember { mutableStateOf(false) }
+    var wasNotReady by remember { mutableStateOf(false) }
+    LaunchedEffect(modelDownloadState) {
+        if (modelDownloadState !is ModelDownloadState.Ready) {
+            wasNotReady = true
+            showReadyConfirmation = false
+        } else if (wasNotReady) {
+            showReadyConfirmation = true
+            delay(2500)
+            showReadyConfirmation = false
+            wasNotReady = false
+        }
+    }
+    val hasBannerContent = (modelDownloadState !is ModelDownloadState.Ready) ||
+        showReadyConfirmation ||
+        !speechStatusNotice.isNullOrBlank()
 
     Scaffold(
         topBar = {
@@ -163,27 +200,58 @@ fun MainShell(viewModel: EnglishViewModel) {
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            // State-Based Content Router
-            AnimatedContent(
-                targetState = currentScreen,
-                transitionSpec = {
-                    fadeIn() togetherWith fadeOut()
-                },
-                label = "ScreenTransition"
-            ) { screen ->
-                val padModifier = Modifier.padding(
-                    top = if (screen == Screen.Home) innerPadding.calculateTopPadding() else 0.dp,
-                    bottom = if (screen == Screen.Home || screen == Screen.Settings) innerPadding.calculateBottomPadding() else 0.dp
-                )
+            Column(modifier = Modifier.fillMaxSize()) {
+                if (hasBannerContent) {
+                    val bannerContainerModifier = if (currentScreen == Screen.Home) {
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                top = innerPadding.calculateTopPadding() + 8.dp,
+                                start = 16.dp,
+                                end = 16.dp
+                            )
+                    } else {
+                        Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .consumeWindowInsets(WindowInsets.statusBars)
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    }
 
-                when (screen) {
-                    Screen.Home -> HomeScreen(viewModel = viewModel, modifier = padModifier)
-                    Screen.Grammar -> GrammarScreen(viewModel = viewModel, modifier = padModifier)
-                    Screen.Conversation -> ConversationScreen(viewModel = viewModel, modifier = padModifier)
-                    Screen.DailySentences -> DailySentencesScreen(viewModel = viewModel, modifier = padModifier)
-                    Screen.Paragraph -> ParagraphScreen(viewModel = viewModel, modifier = padModifier)
-                    Screen.TongueTwister -> TongueTwistersScreen(viewModel = viewModel, modifier = padModifier)
-                    Screen.Settings -> SettingsScreen(viewModel = viewModel, modifier = padModifier)
+                    DependencyDownloadBanner(
+                        modelState = modelDownloadState,
+                        speechStatusNotice = speechStatusNotice,
+                        onRetryDownload = { viewModel.retryModelDownload() },
+                        onDismissNotice = { viewModel.clearSpeechStatusNotice() },
+                        modifier = bannerContainerModifier
+                    )
+                }
+
+                // State-Based Content Router
+                AnimatedContent(
+                    targetState = currentScreen,
+                    transitionSpec = {
+                        fadeIn() togetherWith fadeOut()
+                    },
+                    label = "ScreenTransition",
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                ) { screen ->
+                    val padModifier = Modifier.padding(
+                        top = if (screen == Screen.Home && !hasBannerContent) innerPadding.calculateTopPadding() else 0.dp,
+                        bottom = if (screen == Screen.Home || screen == Screen.Settings) innerPadding.calculateBottomPadding() else 0.dp
+                    )
+
+                    when (screen) {
+                        Screen.Home -> HomeScreen(viewModel = viewModel, modifier = padModifier)
+                        Screen.Grammar -> GrammarScreen(viewModel = viewModel, modifier = padModifier)
+                        Screen.Conversation -> ConversationScreen(viewModel = viewModel, modifier = padModifier)
+                        Screen.DailySentences -> DailySentencesScreen(viewModel = viewModel, modifier = padModifier)
+                        Screen.Paragraph -> ParagraphScreen(viewModel = viewModel, modifier = padModifier)
+                        Screen.TongueTwister -> TongueTwistersScreen(viewModel = viewModel, modifier = padModifier)
+                        Screen.Settings -> SettingsScreen(viewModel = viewModel, modifier = padModifier)
+                    }
                 }
             }
 
@@ -192,76 +260,49 @@ fun MainShell(viewModel: EnglishViewModel) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.4f)),
+                        .background(PolishNavy.copy(alpha = 0.45f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    // Celebration Banner
                     Card(
-                        shape = RoundedCornerShape(24.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                        shape = RoundedCornerShape(28.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
                         modifier = Modifier
-                            .fillMaxWidth(0.85f)
+                            .fillMaxWidth(0.88f)
                             .padding(16.dp)
                     ) {
                         Column(
-                            modifier = Modifier.padding(24.dp),
+                            modifier = Modifier.padding(22.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .size(72.dp)
-                                    .clip(androidx.compose.foundation.shape.CircleShape)
-                                    .background(Orange600.copy(alpha = 0.2f))
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Grade,
-                                    contentDescription = "Star",
-                                    tint = Orange600,
-                                    modifier = Modifier.size(44.dp)
-                                )
-                            }
-
-                            Text(
-                                text = "EXCELLENT WORK!",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = Orange600,
-                                    letterSpacing = 1.2.sp
-                                )
+                            com.example.ui.components.MascotCoach(
+                                state = com.example.ui.components.MascotState.CELEBRATING,
+                                coachMessage = "Awesome speaking!",
+                                size = 92.dp
                             )
 
-                            Text(
-                                text = "Your spoken English is improving. Keep up the daily workout!",
-                                style = MaterialTheme.typography.bodyLarge.copy(
-                                    textAlign = TextAlign.Center,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            )
-
-                            Text(
-                                text = "+$xp XP AWARDED",
-                                style = MaterialTheme.typography.headlineMedium.copy(
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = PolishTeal
-                                )
+                            com.example.ui.components.Trophy3DBadge(
+                                title = "DAILY MILESTONE",
+                                xpReward = xp,
+                                subtitle = "Fluency & pronunciation improving"
                             )
 
                             Button(
                                 onClick = { viewModel.showRewardOverlay.value = null },
                                 colors = ButtonDefaults.buttonColors(containerColor = PolishTeal),
-                                modifier = Modifier.fillMaxWidth()
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 48.dp)
                             ) {
-                                Text("Awesome!", color = Color.White, fontWeight = FontWeight.Bold)
+                                Text("Continue", color = Color.White, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
 
-                    // Auto-dismiss the overlay after 2.5 seconds
                     LaunchedEffect(xp) {
-                        delay(2500)
+                        delay(2600)
                         viewModel.showRewardOverlay.value = null
                     }
                 }
@@ -277,63 +318,79 @@ fun HeaderBar(progress: com.example.data.UserProgress?) {
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .height(64.dp)
+            .height(68.dp)
             .background(PolishBg)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Column {
-            Text(
-                text = "ENGLISH LEARNER",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = Slate500,
-                    letterSpacing = 1.5.sp,
-                    fontSize = 11.sp
-                )
-            )
-            Text(
-                text = "easy speaking",
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = PolishNavy
-                )
-            )
-        }
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Streak badge with orange styling
-            Row(
+            Box(
+                contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Orange50)
-                    .border(1.dp, Orange100, RoundedCornerShape(20.dp))
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(13.dp))
+                    .background(
+                        androidx.compose.ui.graphics.Brush.linearGradient(
+                            colors = listOf(PolishTeal, PolishIndigoText)
+                        )
+                    )
             ) {
+                Icon(
+                    imageVector = Icons.Default.GraphicEq,
+                    contentDescription = "Easy Speaking Logo",
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Column {
                 Text(
-                    text = "$streak",
-                    style = MaterialTheme.typography.bodyMedium.copy(
+                    text = "SPEECH COACH",
+                    style = MaterialTheme.typography.labelSmall.copy(
                         fontWeight = FontWeight.Bold,
-                        color = Orange600
+                        color = PolishTeal,
+                        letterSpacing = 1.4.sp
                     )
                 )
-                Box(
-                    modifier = Modifier
-                        .size(16.dp)
-                        .clip(androidx.compose.foundation.shape.CircleShape)
-                        .background(Orange500),
-                    contentAlignment = Alignment.Center
+                Text(
+                    text = "Easy Speaking",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = PolishNavy
+                    )
+                )
+            }
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = Orange50,
+                border = androidx.compose.foundation.BorderStroke(1.dp, Orange100)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(androidx.compose.foundation.shape.CircleShape)
-                            .background(Color.White)
+                    Icon(
+                        imageVector = Icons.Default.LocalFireDepartment,
+                        contentDescription = "Day streak",
+                        tint = Orange600,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = "$streak",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = Orange600
+                        )
                     )
                 }
             }

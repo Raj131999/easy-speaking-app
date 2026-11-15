@@ -14,8 +14,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,13 +33,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.GrammarLesson
 import com.example.ui.EnglishViewModel
-import com.example.ui.Screen
-import com.example.ui.WordScoreType
+import com.example.ui.components.MascotCoach
+import com.example.ui.components.MascotState
+import com.example.ui.components.PronunciationFeedbackChips
+import com.example.ui.components.SonicVoiceOrb
 import com.example.ui.components.SpokenVoiceToTextCard
-import com.example.ui.theme.StreakGold
-import com.example.ui.theme.TealPrimary
+import com.example.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,10 +50,16 @@ fun GrammarScreen(
     val lesson by viewModel.activeGrammarLesson.collectAsState()
     val lessons by viewModel.grammarLessons.collectAsState()
     val isRecording by viewModel.isRecording.collectAsState()
+    val liveAudioLevel by viewModel.liveAudioLevel.collectAsState()
     val isPlayingBack by viewModel.isPlayingBack.collectAsState()
     val isTtsSpeaking by viewModel.isTtsSpeaking.collectAsState()
     val lastScore by viewModel.lastScore.collectAsState()
     val scoredWords by viewModel.scoredWords.collectAsState()
+    val alignedWordTimings by viewModel.alignedWordTimings.collectAsState()
+    val playbackPositionSec by viewModel.playbackPositionSec.collectAsState()
+    val missedWordsSummary by viewModel.missedWordsSummary.collectAsState()
+    val unclearWordsSummary by viewModel.unclearWordsSummary.collectAsState()
+    val extraWordsSummary by viewModel.extraWordsSummary.collectAsState()
     val recognizedText by viewModel.recognizedText.collectAsState()
     val isProcessingSpeech by viewModel.isProcessingSpeech.collectAsState()
 
@@ -58,11 +68,9 @@ fun GrammarScreen(
     var selectedAnswer by remember { mutableStateOf<String?>(null) }
     var showQuizFeedback by remember { mutableStateOf(false) }
 
-    // Tab selection state
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Speech Patterns", "Useful Lessons")
 
-    // Filter speech patterns vs useful lessons
     val speechLessons = remember(lessons) { lessons.filter { it.id <= 15 } }
     val usefulLessons = remember(lessons) { lessons.filter { it.id > 15 } }
 
@@ -72,12 +80,10 @@ fun GrammarScreen(
     var selectedCategory by remember { mutableStateOf<String?>(null) }
     var scrollToTargetIndex by remember { mutableStateOf<Int?>(null) }
 
-    // LazyListStates for maps
     val speechMapListState = rememberLazyListState()
     val categoryMapListState = rememberLazyListState()
     val categoryLessonsMapListState = rememberLazyListState()
 
-    // Determine current lesson list and next lesson
     val currentLessonList = remember(lesson, speechLessons, usefulLessons, selectedCategory, groupedUsefulLessons) {
         if (lesson == null) emptyList()
         else if (lesson!!.id <= 15) speechLessons
@@ -99,10 +105,11 @@ fun GrammarScreen(
         }
     }
 
-    // Auto scroll map to next uncompleted lesson or explicit target lesson
     LaunchedEffect(lesson == null, selectedTab, speechCompletedCount, scrollToTargetIndex) {
         if (lesson == null && selectedTab == 0 && speechLessons.isNotEmpty()) {
-            val targetIdx = scrollToTargetIndex ?: speechLessons.indexOfFirst { !it.isCompleted }.takeIf { it >= 0 } ?: (speechLessons.size - 1)
+            val targetIdx = scrollToTargetIndex
+                ?: speechLessons.indexOfFirst { !it.isCompleted }.takeIf { it >= 0 }
+                ?: (speechLessons.size - 1)
             if (targetIdx in speechLessons.indices) {
                 speechMapListState.animateScrollToItem(targetIdx)
             }
@@ -114,7 +121,9 @@ fun GrammarScreen(
         if (lesson == null && selectedTab == 1 && selectedCategory != null) {
             val catLessons = groupedUsefulLessons[selectedCategory] ?: emptyList()
             if (catLessons.isNotEmpty()) {
-                val targetIdx = scrollToTargetIndex ?: catLessons.indexOfFirst { !it.isCompleted }.takeIf { it >= 0 } ?: (catLessons.size - 1)
+                val targetIdx = scrollToTargetIndex
+                    ?: catLessons.indexOfFirst { !it.isCompleted }.takeIf { it >= 0 }
+                    ?: (catLessons.size - 1)
                 if (targetIdx in catLessons.indices) {
                     categoryLessonsMapListState.animateScrollToItem(targetIdx)
                 }
@@ -133,7 +142,6 @@ fun GrammarScreen(
         }
     }
 
-    // Intercept back button when practicing a lesson to return to that lesson on the map
     BackHandler(enabled = (lesson != null)) {
         val activeItem = lesson
         if (activeItem != null) {
@@ -153,7 +161,6 @@ fun GrammarScreen(
         viewModel.recognizedText.value = ""
     }
 
-    // Intercept back button when in category view to return to categories list
     BackHandler(enabled = (lesson == null && selectedCategory != null)) {
         val categoryList = groupedUsefulLessons.keys.toList()
         val catIdx = categoryList.indexOf(selectedCategory).takeIf { it >= 0 }
@@ -163,7 +170,6 @@ fun GrammarScreen(
         selectedCategory = null
     }
 
-    // Reset local quiz state when the active lesson changes
     LaunchedEffect(lesson) {
         selectedAnswer = null
         if (lesson?.optionsString?.isEmpty() == true) {
@@ -178,14 +184,24 @@ fun GrammarScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Spoken Grammar") },
+                    title = {
+                        Text(
+                            text = "Spoken Grammar",
+                            fontWeight = FontWeight.Bold,
+                            color = PolishNavy
+                        )
+                    },
                     navigationIcon = {
                         IconButton(onClick = { viewModel.goBack() }) {
-                            Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = PolishNavy
+                            )
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background
+                        containerColor = PolishBg
                     )
                 )
             },
@@ -194,19 +210,27 @@ fun GrammarScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background)
+                    .background(PolishBg)
                     .padding(innerPadding)
             ) {
-                // Tab Selection Row
                 TabRow(
                     selectedTabIndex = selectedTab,
-                    containerColor = MaterialTheme.colorScheme.background,
-                    contentColor = TealPrimary
+                    containerColor = Color.White,
+                    contentColor = PolishTeal,
+                    indicator = { tabPositions ->
+                        TabRowDefaults.SecondaryIndicator(
+                            modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                            color = PolishTeal
+                        )
+                    },
+                    divider = { HorizontalDivider(color = Slate100) }
                 ) {
                     tabs.forEachIndexed { index, title ->
                         Tab(
                             selected = selectedTab == index,
                             onClick = { selectedTab = index },
+                            selectedContentColor = PolishTeal,
+                            unselectedContentColor = Slate500,
                             text = {
                                 Text(
                                     text = title,
@@ -221,57 +245,64 @@ fun GrammarScreen(
                 if (selectedTab == 0) {
                     // --- TAB 1: SPEECH PATTERNS TRAIL ---
                     Column(modifier = Modifier.fillMaxSize()) {
-                        // Header guidance
                         Card(
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = TealPrimary.copy(alpha = 0.08f)),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            border = BorderStroke(1.dp, Slate100),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                                .padding(horizontal = 16.dp, vertical = 10.dp)
                         ) {
                             Row(
                                 modifier = Modifier.padding(16.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Map,
-                                    contentDescription = "Map Guidance",
-                                    tint = TealPrimary,
-                                    modifier = Modifier.size(28.dp)
-                                )
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Column {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(PolishTealBg)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Map,
+                                        contentDescription = "Map Guidance",
+                                        tint = PolishTeal,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(14.dp))
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = "GRAMMAR TRAIL",
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             fontWeight = FontWeight.Bold,
-                                            color = TealPrimary
+                                            color = PolishTeal,
+                                            letterSpacing = 0.8.sp
                                         )
                                     )
                                     Text(
-                                        text = "Master essential spoken grammar structures step-by-step. Speak clearly to complete lessons on the trail!",
+                                        text = "Master essential spoken grammar structures step-by-step on the trail.",
                                         style = MaterialTheme.typography.bodySmall.copy(
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            color = Slate500
                                         )
                                     )
                                 }
                             }
                         }
 
-                        // Map Path
                         LazyColumn(
                             state = speechMapListState,
                             modifier = Modifier
                                 .fillMaxSize()
                                 .weight(1f),
-                            contentPadding = PaddingValues(top = 16.dp, bottom = 48.dp, start = 16.dp, end = 16.dp)
+                            contentPadding = PaddingValues(top = 8.dp, bottom = 48.dp, start = 16.dp, end = 16.dp)
                         ) {
                             itemsIndexed(speechLessons) { index, item ->
                                 val isCompleted = item.isCompleted
                                 val isFirstUncompleted = speechLessons.indexOfFirst { !it.isCompleted } == index
                                 val isActive = isFirstUncompleted || (speechLessons.all { it.isCompleted } && index == 0)
-
-                                // Alternate left & right detail cards around the center line
                                 val isLeft = index % 2 == 0
 
                                 Row(
@@ -293,28 +324,28 @@ fun GrammarScreen(
                                                 score = if (isCompleted) 100 else null,
                                                 isCompleted = isCompleted,
                                                 isActive = isActive,
-                                                accentColor = TealPrimary
+                                                accentColor = PolishTeal
                                             )
                                         }
-                                        Spacer(modifier = Modifier.width(16.dp))
+                                        Spacer(modifier = Modifier.width(14.dp))
                                         MapPinCircle(
                                             isCompleted = isCompleted,
                                             isActive = isActive,
-                                            accentColor = TealPrimary,
+                                            accentColor = PolishTeal,
                                             number = index + 1
                                         )
-                                        Spacer(modifier = Modifier.width(16.dp))
-                                        Box(modifier = Modifier.weight(1f)) // Empty spacer same weight
+                                        Spacer(modifier = Modifier.width(14.dp))
+                                        Box(modifier = Modifier.weight(1f))
                                     } else {
-                                        Box(modifier = Modifier.weight(1f)) // Empty spacer same weight
-                                        Spacer(modifier = Modifier.width(16.dp))
+                                        Box(modifier = Modifier.weight(1f))
+                                        Spacer(modifier = Modifier.width(14.dp))
                                         MapPinCircle(
                                             isCompleted = isCompleted,
                                             isActive = isActive,
-                                            accentColor = TealPrimary,
+                                            accentColor = PolishTeal,
                                             number = index + 1
                                         )
-                                        Spacer(modifier = Modifier.width(16.dp))
+                                        Spacer(modifier = Modifier.width(14.dp))
                                         Box(modifier = Modifier.weight(1f)) {
                                             MapLocationCard(
                                                 title = item.title,
@@ -322,13 +353,12 @@ fun GrammarScreen(
                                                 score = if (isCompleted) 100 else null,
                                                 isCompleted = isCompleted,
                                                 isActive = isActive,
-                                                accentColor = TealPrimary
+                                                accentColor = PolishTeal
                                             )
                                         }
                                     }
                                 }
 
-                                // Connect to next item
                                 if (index < speechLessons.size - 1) {
                                     MapConnector()
                                 }
@@ -338,53 +368,61 @@ fun GrammarScreen(
                 } else {
                     // --- TAB 2: USEFUL LESSONS MAP ---
                     if (selectedCategory == null) {
-                        // Category Selection Map Trail
                         val categoryList = remember(groupedUsefulLessons) { groupedUsefulLessons.keys.toList() }
                         Column(modifier = Modifier.fillMaxSize()) {
-                            // Category instruction header
                             Card(
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(containerColor = TealPrimary.copy(alpha = 0.08f)),
+                                shape = RoundedCornerShape(20.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                border = BorderStroke(1.dp, Slate100),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                                    .padding(horizontal = 16.dp, vertical = 10.dp)
                             ) {
                                 Row(
                                     modifier = Modifier.padding(16.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Map,
-                                        contentDescription = "Map Guidance",
-                                        tint = TealPrimary,
-                                        modifier = Modifier.size(28.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(16.dp))
-                                    Column {
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(PolishIndigoBg)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Map,
+                                            contentDescription = "Map Guidance",
+                                            tint = PolishIndigoText,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(14.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = "GRAMMAR PATHS",
                                             style = MaterialTheme.typography.labelSmall.copy(
                                                 fontWeight = FontWeight.Bold,
-                                                color = TealPrimary
+                                                color = PolishIndigoText,
+                                                letterSpacing = 0.8.sp
                                             )
                                         )
                                         Text(
-                                            text = "Expand your daily English vocabulary across 32 comprehensive grammar categories. Tap a location on the map to begin!",
+                                            text = "Expand daily grammar fluency across structured spoken categories.",
                                             style = MaterialTheme.typography.bodySmall.copy(
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                color = Slate500
                                             )
                                         )
                                     }
                                 }
                             }
 
-                            // Category Map Path
                             LazyColumn(
                                 state = categoryMapListState,
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .weight(1f),
-                                contentPadding = PaddingValues(top = 16.dp, bottom = 48.dp, start = 16.dp, end = 16.dp)
+                                contentPadding = PaddingValues(top = 8.dp, bottom = 48.dp, start = 16.dp, end = 16.dp)
                             ) {
                                 itemsIndexed(categoryList) { index, categoryName ->
                                     val categoryLessons = groupedUsefulLessons[categoryName] ?: emptyList()
@@ -395,10 +433,8 @@ fun GrammarScreen(
                                     val statusText = when {
                                         isCompleted -> "Completed"
                                         completedLessons > 0 -> "In Progress ($completedLessons/$totalLessons)"
-                                        else -> "Not Completed"
+                                        else -> "Ready"
                                     }
-
-                                    // Alternate left & right detail cards around the center line
                                     val isLeft = index % 2 == 0
 
                                     Row(
@@ -418,29 +454,29 @@ fun GrammarScreen(
                                                     score = if (totalLessons > 0) (completedLessons * 100 / totalLessons) else null,
                                                     isCompleted = isCompleted,
                                                     isActive = isActive,
-                                                    accentColor = TealPrimary,
+                                                    accentColor = PolishTeal,
                                                     customStatusText = statusText
                                                 )
                                             }
-                                            Spacer(modifier = Modifier.width(16.dp))
+                                            Spacer(modifier = Modifier.width(14.dp))
                                             MapPinCircle(
                                                 isCompleted = isCompleted,
                                                 isActive = isActive,
-                                                accentColor = TealPrimary,
+                                                accentColor = PolishTeal,
                                                 number = index + 1
                                             )
-                                            Spacer(modifier = Modifier.width(16.dp))
-                                            Box(modifier = Modifier.weight(1f)) // Empty spacer same weight
+                                            Spacer(modifier = Modifier.width(14.dp))
+                                            Box(modifier = Modifier.weight(1f))
                                         } else {
-                                            Box(modifier = Modifier.weight(1f)) // Empty spacer same weight
-                                            Spacer(modifier = Modifier.width(16.dp))
+                                            Box(modifier = Modifier.weight(1f))
+                                            Spacer(modifier = Modifier.width(14.dp))
                                             MapPinCircle(
                                                 isCompleted = isCompleted,
                                                 isActive = isActive,
-                                                accentColor = TealPrimary,
+                                                accentColor = PolishTeal,
                                                 number = index + 1
                                             )
-                                            Spacer(modifier = Modifier.width(16.dp))
+                                            Spacer(modifier = Modifier.width(14.dp))
                                             Box(modifier = Modifier.weight(1f)) {
                                                 MapLocationCard(
                                                     title = categoryName,
@@ -448,14 +484,13 @@ fun GrammarScreen(
                                                     score = if (totalLessons > 0) (completedLessons * 100 / totalLessons) else null,
                                                     isCompleted = isCompleted,
                                                     isActive = isActive,
-                                                    accentColor = TealPrimary,
+                                                    accentColor = PolishTeal,
                                                     customStatusText = statusText
                                                 )
                                             }
                                         }
                                     }
 
-                                    // Connect to next item
                                     if (index < categoryList.size - 1) {
                                         MapConnector()
                                     }
@@ -463,11 +498,9 @@ fun GrammarScreen(
                             }
                         }
                     } else {
-                        // Category Selected -> Show Lessons Map Trail
                         val categoryName = selectedCategory!!
                         val categoryLessons = groupedUsefulLessons[categoryName] ?: emptyList()
                         Column(modifier = Modifier.fillMaxSize()) {
-                            // Row with Back button and Category Title
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -484,67 +517,64 @@ fun GrammarScreen(
                                         selectedCategory = null
                                     },
                                     modifier = Modifier
-                                        .size(36.dp)
-                                        .background(TealPrimary.copy(alpha = 0.1f), CircleShape)
+                                        .size(48.dp)
+                                        .background(PolishTealBg, CircleShape)
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.ArrowBack,
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                         contentDescription = "Back to Categories",
-                                        tint = TealPrimary,
-                                        modifier = Modifier.size(18.dp)
+                                        tint = PolishTeal,
+                                        modifier = Modifier.size(20.dp)
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Text(
                                     text = categoryName,
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.onSurface,
+                                    color = PolishNavy,
                                     modifier = Modifier.weight(1f)
                                 )
                             }
 
-                            // Instruction Header
                             Card(
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(containerColor = TealPrimary.copy(alpha = 0.08f)),
+                                shape = RoundedCornerShape(18.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                border = BorderStroke(1.dp, Slate100),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp, vertical = 4.dp)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(16.dp),
+                                    modifier = Modifier.padding(14.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.PlayCircle,
                                         contentDescription = "Lesson Guidance",
-                                        tint = TealPrimary,
-                                        modifier = Modifier.size(24.dp)
+                                        tint = PolishTeal,
+                                        modifier = Modifier.size(22.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Spacer(modifier = Modifier.width(12.dp))
                                     Text(
                                         text = "Complete each spoken lesson step-by-step to master the patterns!",
                                         style = MaterialTheme.typography.bodySmall.copy(
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            color = Slate500
                                         )
                                     )
                                 }
                             }
 
-                            // Lessons Map Path
                             LazyColumn(
                                 state = categoryLessonsMapListState,
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .weight(1f),
-                                contentPadding = PaddingValues(top = 16.dp, bottom = 48.dp, start = 16.dp, end = 16.dp)
+                                contentPadding = PaddingValues(top = 12.dp, bottom = 48.dp, start = 16.dp, end = 16.dp)
                             ) {
                                 itemsIndexed(categoryLessons) { index, item ->
                                     val isCompleted = item.isCompleted
                                     val isFirstUncompleted = categoryLessons.indexOfFirst { !it.isCompleted } == index
                                     val isActive = isFirstUncompleted || (categoryLessons.all { it.isCompleted } && index == 0)
-
-                                    // Alternate left & right detail cards around the center line
                                     val isLeft = index % 2 == 0
 
                                     Row(
@@ -566,28 +596,28 @@ fun GrammarScreen(
                                                     score = if (isCompleted) 100 else null,
                                                     isCompleted = isCompleted,
                                                     isActive = isActive,
-                                                    accentColor = TealPrimary
+                                                    accentColor = PolishTeal
                                                 )
                                             }
-                                            Spacer(modifier = Modifier.width(16.dp))
+                                            Spacer(modifier = Modifier.width(14.dp))
                                             MapPinCircle(
                                                 isCompleted = isCompleted,
                                                 isActive = isActive,
-                                                accentColor = TealPrimary,
+                                                accentColor = PolishTeal,
                                                 number = index + 1
                                             )
-                                            Spacer(modifier = Modifier.width(16.dp))
-                                            Box(modifier = Modifier.weight(1f)) // Empty spacer same weight
+                                            Spacer(modifier = Modifier.width(14.dp))
+                                            Box(modifier = Modifier.weight(1f))
                                         } else {
-                                            Box(modifier = Modifier.weight(1f)) // Empty spacer same weight
-                                            Spacer(modifier = Modifier.width(16.dp))
+                                            Box(modifier = Modifier.weight(1f))
+                                            Spacer(modifier = Modifier.width(14.dp))
                                             MapPinCircle(
                                                 isCompleted = isCompleted,
                                                 isActive = isActive,
-                                                accentColor = TealPrimary,
+                                                accentColor = PolishTeal,
                                                 number = index + 1
                                             )
-                                            Spacer(modifier = Modifier.width(16.dp))
+                                            Spacer(modifier = Modifier.width(14.dp))
                                             Box(modifier = Modifier.weight(1f)) {
                                                 MapLocationCard(
                                                     title = item.title,
@@ -595,13 +625,12 @@ fun GrammarScreen(
                                                     score = if (isCompleted) 100 else null,
                                                     isCompleted = isCompleted,
                                                     isActive = isActive,
-                                                    accentColor = TealPrimary
+                                                    accentColor = PolishTeal
                                                 )
                                             }
                                         }
                                     }
 
-                                    // Connect to next item
                                     if (index < categoryLessons.size - 1) {
                                         MapConnector()
                                     }
@@ -617,7 +646,13 @@ fun GrammarScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Spoken Grammar") },
+                    title = {
+                        Text(
+                            text = "Spoken Grammar",
+                            fontWeight = FontWeight.Bold,
+                            color = PolishNavy
+                        )
+                    },
                     navigationIcon = {
                         IconButton(onClick = {
                             val activeItem = lesson
@@ -637,21 +672,39 @@ fun GrammarScreen(
                             viewModel.scoredWords.value = emptyList()
                             viewModel.recognizedText.value = ""
                         }) {
-                            Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = PolishNavy
+                            )
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background
+                        containerColor = PolishBg
                     )
                 )
             },
             modifier = modifier.fillMaxSize()
         ) { innerPadding ->
             lesson?.let { item ->
+                val mascotState = when {
+                    isRecording -> MascotState.LISTENING
+                    lastScore != null && lastScore!! >= 75 -> MascotState.CELEBRATING
+                    lastScore != null -> MascotState.ENCOURAGING
+                    else -> MascotState.IDLE
+                }
+                val coachMessage = when {
+                    isProcessingSpeech -> "Checking grammar & clarity..."
+                    isRecording -> "Speak smoothly — I'm listening!"
+                    lastScore != null && lastScore!! >= 75 -> "Well spoken! ${lastScore}%"
+                    lastScore != null -> "Give it one more try!"
+                    else -> "Listen to the example, then tap the orb"
+                }
+
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.background)
+                        .background(PolishBg)
                         .padding(innerPadding)
                         .verticalScroll(scrollState)
                         .padding(16.dp),
@@ -665,31 +718,43 @@ fun GrammarScreen(
                     ) {
                         Text(
                             text = item.title,
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = PolishNavy
+                            ),
                             modifier = Modifier.weight(1f)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        SuggestionChip(
-                            onClick = {},
-                            label = { Text(item.level) },
-                            colors = SuggestionChipDefaults.suggestionChipColors(
-                                containerColor = TealPrimary.copy(alpha = 0.15f),
-                                labelColor = TealPrimary
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = PolishTealBg,
+                            border = BorderStroke(1.dp, PolishTealLightBorder)
+                        ) {
+                            Text(
+                                text = item.level,
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = PolishTeal
+                                ),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                             )
-                        )
+                        }
                     }
 
                     // Grammar Rule Explanation Box
                     Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        border = BorderStroke(1.dp, Slate100),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
+                        Column(modifier = Modifier.padding(18.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Default.Info,
                                     contentDescription = "Grammar Rule",
-                                    tint = TealPrimary,
+                                    tint = PolishTeal,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -697,7 +762,7 @@ fun GrammarScreen(
                                     text = "HOW SPOKEN ENGLISH WORKS",
                                     style = MaterialTheme.typography.labelMedium.copy(
                                         fontWeight = FontWeight.Bold,
-                                        color = TealPrimary,
+                                        color = PolishTeal,
                                         letterSpacing = 1.sp
                                     )
                                 )
@@ -706,8 +771,8 @@ fun GrammarScreen(
                             Text(
                                 text = item.explanation,
                                 style = MaterialTheme.typography.bodyLarge.copy(
-                                    lineHeight = 22.sp,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    lineHeight = 23.sp,
+                                    color = PolishNavy
                                 )
                             )
                         }
@@ -716,12 +781,14 @@ fun GrammarScreen(
                     // Native Audio Example Card
                     val exampleLines = item.exampleText.split("\n").filter { it.isNotBlank() }
                     Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        border = BorderStroke(1.dp, Slate100),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(
-                            modifier = Modifier.padding(16.dp),
+                            modifier = Modifier.padding(18.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Row(
@@ -729,9 +796,9 @@ fun GrammarScreen(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.VolumeUp,
+                                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
                                     contentDescription = "Examples",
-                                    tint = TealPrimary,
+                                    tint = PolishTeal,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -739,7 +806,7 @@ fun GrammarScreen(
                                     text = if (exampleLines.size > 1) "EXAMPLES & USAGE" else "EXAMPLE SENTENCE",
                                     style = MaterialTheme.typography.labelMedium.copy(
                                         fontWeight = FontWeight.Bold,
-                                        color = TealPrimary,
+                                        color = PolishTeal,
                                         letterSpacing = 1.sp
                                     ),
                                     modifier = Modifier.weight(1f)
@@ -748,20 +815,20 @@ fun GrammarScreen(
                                     IconButton(
                                         onClick = { viewModel.speak(viewModel.extractSpokenExample(item.exampleText)) },
                                         modifier = Modifier
-                                            .size(32.dp)
-                                            .background(TealPrimary.copy(alpha = 0.15f), CircleShape)
+                                            .size(48.dp)
+                                            .background(PolishTealBg, CircleShape)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.PlayArrow,
                                             contentDescription = "Play All Examples",
-                                            tint = TealPrimary,
-                                            modifier = Modifier.size(18.dp)
+                                            tint = PolishTeal,
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
                                 }
                             }
 
-                            Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                            HorizontalDivider(color = Slate100)
 
                             exampleLines.forEach { line ->
                                 val speechText = viewModel.extractSpokenExample(line)
@@ -774,7 +841,7 @@ fun GrammarScreen(
                                             withStyle(
                                                 SpanStyle(
                                                     fontWeight = FontWeight.Bold,
-                                                    color = TealPrimary
+                                                    color = PolishTeal
                                                 )
                                             ) {
                                                 append(topicPart)
@@ -782,7 +849,7 @@ fun GrammarScreen(
                                             withStyle(
                                                 SpanStyle(
                                                     fontWeight = FontWeight.Normal,
-                                                    color = Color.Unspecified
+                                                    color = PolishNavy
                                                 )
                                             ) {
                                                 append(examplePart)
@@ -795,7 +862,7 @@ fun GrammarScreen(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(RoundedCornerShape(8.dp))
+                                        .clip(RoundedCornerShape(10.dp))
                                         .clickable { viewModel.speak(speechText) }
                                         .padding(vertical = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically
@@ -803,13 +870,13 @@ fun GrammarScreen(
                                     IconButton(
                                         onClick = { viewModel.speak(speechText) },
                                         modifier = Modifier
-                                            .size(36.dp)
-                                            .background(TealPrimary.copy(alpha = 0.15f), CircleShape)
+                                            .size(48.dp)
+                                            .background(PolishTealBg, CircleShape)
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.VolumeUp,
+                                            imageVector = Icons.AutoMirrored.Filled.VolumeUp,
                                             contentDescription = "Hear Line",
-                                            tint = TealPrimary,
+                                            tint = PolishTeal,
                                             modifier = Modifier.size(18.dp)
                                         )
                                     }
@@ -817,7 +884,7 @@ fun GrammarScreen(
                                     Text(
                                         text = annotatedLine,
                                         style = MaterialTheme.typography.bodyMedium.copy(
-                                            color = MaterialTheme.colorScheme.onSurface,
+                                            color = PolishNavy,
                                             lineHeight = 20.sp
                                         ),
                                         modifier = Modifier.weight(1f)
@@ -831,16 +898,18 @@ fun GrammarScreen(
                     if (item.optionsString.isNotEmpty()) {
                         Text(
                             text = "Quick Comprehension Check",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            modifier = Modifier.padding(top = 8.dp)
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = PolishNavy
+                            ),
+                            modifier = Modifier.padding(top = 4.dp)
                         )
 
                         if (item.quizQuestion.isNotBlank()) {
                             Card(
-                                shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                                ),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = PolishIndigoBg),
+                                border = BorderStroke(1.dp, Color(0xFFE0E7FF)),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
@@ -850,7 +919,7 @@ fun GrammarScreen(
                                     Icon(
                                         imageVector = Icons.Default.HelpOutline,
                                         contentDescription = "Question",
-                                        tint = TealPrimary,
+                                        tint = PolishIndigoText,
                                         modifier = Modifier.size(22.dp)
                                     )
                                     Spacer(modifier = Modifier.width(10.dp))
@@ -858,7 +927,7 @@ fun GrammarScreen(
                                         text = item.quizQuestion,
                                         style = MaterialTheme.typography.bodyMedium.copy(
                                             fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurface,
+                                            color = PolishNavy,
                                             lineHeight = 20.sp
                                         )
                                     )
@@ -871,15 +940,22 @@ fun GrammarScreen(
                             val isCorrect = option == item.correctOption
 
                             val cardColor = when {
-                                showQuizFeedback && isCorrect -> Color(0xFF2ECC71).copy(alpha = 0.15f)
-                                showQuizFeedback && isSelected && !isCorrect -> Color(0xFFE74C3C).copy(alpha = 0.15f)
-                                isSelected -> TealPrimary.copy(alpha = 0.1f)
-                                else -> MaterialTheme.colorScheme.surface
+                                showQuizFeedback && isCorrect -> Emerald50
+                                showQuizFeedback && isSelected && !isCorrect -> Red50
+                                isSelected -> PolishTealBg
+                                else -> Color.White
+                            }
+                            val borderColor = when {
+                                showQuizFeedback && isCorrect -> Emerald500
+                                showQuizFeedback && isSelected && !isCorrect -> Red500
+                                isSelected -> PolishTeal
+                                else -> Slate200
                             }
 
                             Card(
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(14.dp),
                                 colors = CardDefaults.cardColors(containerColor = cardColor),
+                                border = BorderStroke(if (isSelected || (showQuizFeedback && isCorrect)) 1.5.dp else 1.dp, borderColor),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
@@ -889,7 +965,7 @@ fun GrammarScreen(
                                     }
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(16.dp),
+                                    modifier = Modifier.padding(14.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     RadioButton(
@@ -898,14 +974,18 @@ fun GrammarScreen(
                                             if (!showQuizFeedback) {
                                                 selectedAnswer = option
                                             }
-                                        }
+                                        },
+                                        colors = RadioButtonDefaults.colors(
+                                            selectedColor = PolishTeal,
+                                            unselectedColor = Slate400
+                                        )
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = option,
                                         style = MaterialTheme.typography.bodyLarge.copy(
                                             fontWeight = FontWeight.Medium,
-                                            color = MaterialTheme.colorScheme.onSurface
+                                            color = PolishNavy
                                         )
                                     )
                                     Spacer(modifier = Modifier.weight(1f))
@@ -914,13 +994,13 @@ fun GrammarScreen(
                                             Icon(
                                                 imageVector = Icons.Default.CheckCircle,
                                                 contentDescription = "Correct",
-                                                tint = Color(0xFF2ECC71)
+                                                tint = Emerald500
                                             )
                                         } else if (isSelected) {
                                             Icon(
                                                 imageVector = Icons.Default.Cancel,
                                                 contentDescription = "Incorrect",
-                                                tint = Color(0xFFE74C3C)
+                                                tint = Red500
                                             )
                                         }
                                     }
@@ -932,12 +1012,18 @@ fun GrammarScreen(
                             Button(
                                 onClick = { showQuizFeedback = true },
                                 enabled = selectedAnswer != null,
-                                colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = PolishTeal,
+                                    contentColor = Color.White,
+                                    disabledContainerColor = Slate200,
+                                    disabledContentColor = Slate400
+                                ),
+                                shape = RoundedCornerShape(14.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(50.dp)
                             ) {
-                                Text("Check Answer", color = Color.Black, fontWeight = FontWeight.Bold)
+                                Text("Check Answer", fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -948,16 +1034,18 @@ fun GrammarScreen(
                         enter = fadeIn() + expandVertically()
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                            HorizontalDivider(color = Slate200, modifier = Modifier.padding(vertical = 4.dp))
                             Text(
                                 text = "Step 2: Read Aloud Speaking Drill",
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = TealPrimary
+                                color = PolishTeal
                             )
 
                             Card(
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                shape = RoundedCornerShape(24.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                border = BorderStroke(1.dp, Slate100),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(
@@ -965,9 +1053,10 @@ fun GrammarScreen(
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     Text(
-                                        text = "SAY THIS SENTENCE:",
+                                        text = "SAY THIS SENTENCE",
                                         style = MaterialTheme.typography.labelSmall.copy(
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            color = Slate500,
+                                            fontWeight = FontWeight.Bold,
                                             letterSpacing = 1.sp
                                         )
                                     )
@@ -976,95 +1065,102 @@ fun GrammarScreen(
                                         text = item.speechPrompt,
                                         style = MaterialTheme.typography.titleLarge.copy(
                                             fontWeight = FontWeight.Bold,
-                                            textAlign = TextAlign.Center
+                                            textAlign = TextAlign.Center,
+                                            color = PolishNavy
                                         )
                                     )
 
-                                    Spacer(modifier = Modifier.height(20.dp))
+                                    Spacer(modifier = Modifier.height(16.dp))
 
-                                    // Playback reference model
-                                    Button(
+                                    FilledTonalButton(
                                         onClick = { viewModel.speak(item.speechPrompt) },
-                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                                        modifier = Modifier.height(40.dp)
+                                        colors = ButtonDefaults.filledTonalButtonColors(
+                                            containerColor = if (isTtsSpeaking) Red500 else PolishIndigoBg,
+                                            contentColor = if (isTtsSpeaking) Color.White else PolishIndigoText
+                                        ),
+                                        shape = RoundedCornerShape(14.dp),
+                                        modifier = Modifier.height(48.dp)
                                     ) {
-                                        Icon(imageVector = Icons.Default.VolumeUp, contentDescription = "Hear", modifier = Modifier.size(18.dp))
+                                        Icon(
+                                            imageVector = if (isTtsSpeaking) Icons.Default.Stop else Icons.AutoMirrored.Filled.VolumeUp,
+                                            contentDescription = "Hear",
+                                            modifier = Modifier.size(18.dp)
+                                        )
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Hear Model Audio", style = MaterialTheme.typography.bodyMedium)
+                                        Text(
+                                            text = if (isTtsSpeaking) "Stop Model" else "Hear Model Audio",
+                                            fontWeight = FontWeight.SemiBold
+                                        )
                                     }
 
-                                    Spacer(modifier = Modifier.height(24.dp))
+                                    Spacer(modifier = Modifier.height(18.dp))
 
-                                    // Large Mic Button
-                                    Box(contentAlignment = Alignment.Center) {
-                                        val micColor = when {
-                                            isProcessingSpeech -> StreakGold
-                                            isRecording -> Color(0xFFFF5252)
-                                            else -> TealPrimary
-                                        }
-                                        Box(
-                                            modifier = Modifier
-                                                .size(72.dp)
-                                                .clip(CircleShape)
-                                                .background(micColor)
-                                                .clickable(enabled = !isProcessingSpeech) {
-                                                    if (isRecording) {
-                                                        viewModel.stopRecording(item.speechPrompt, "grammar", item.id)
-                                                    } else {
-                                                        viewModel.startRecording(item.speechPrompt)
-                                                    }
-                                                }
-                                                .testTag("record_mic_button"),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            if (isProcessingSpeech) {
-                                                CircularProgressIndicator(
-                                                    modifier = Modifier.size(30.dp),
-                                                    color = Color.Black,
-                                                    strokeWidth = 3.dp
-                                                )
+                                    MascotCoach(
+                                        state = mascotState,
+                                        audioLevel = liveAudioLevel,
+                                        coachMessage = coachMessage,
+                                        size = 66.dp
+                                    )
+
+                                    Spacer(modifier = Modifier.height(6.dp))
+
+                                    SonicVoiceOrb(
+                                        isRecording = isRecording,
+                                        audioLevel = liveAudioLevel,
+                                        isProcessing = isProcessingSpeech,
+                                        onClick = {
+                                            if (isRecording) {
+                                                viewModel.stopRecording(item.speechPrompt, "grammar", item.id)
                                             } else {
-                                                Icon(
-                                                    imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                                                    contentDescription = if (isRecording) "Stop Recording" else "Record Speaking",
-                                                    tint = Color.Black,
-                                                    modifier = Modifier.size(32.dp)
-                                                )
+                                                viewModel.startRecording(item.speechPrompt)
                                             }
-                                        }
-                                    }
+                                        },
+                                        size = 64.dp,
+                                        coreColor = when {
+                                            isProcessingSpeech -> Orange500
+                                            isRecording -> Red500
+                                            else -> PolishTeal
+                                        },
+                                        glowColor = when {
+                                            isProcessingSpeech -> Orange100
+                                            isRecording -> Red400
+                                            else -> Color(0xFF2DD4BF)
+                                        },
+                                        modifier = Modifier.testTag("record_mic_button")
+                                    )
 
-                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Spacer(modifier = Modifier.height(6.dp))
                                     Text(
                                         text = when {
                                             isProcessingSpeech -> "Analyzing your speech... Please wait"
-                                            isRecording -> "Recording... Tap to stop"
-                                            lastScore != null -> "Tap to Record & Compare Again"
-                                            else -> "Tap to Record & Compare"
+                                            isRecording -> "Recording... Tap the orb to stop"
+                                            lastScore != null -> "Tap the orb to Record & Compare Again"
+                                            else -> "Tap the orb to Record & Compare"
                                         },
-                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                        style = MaterialTheme.typography.bodySmall.copy(
                                             color = when {
-                                                isProcessingSpeech -> StreakGold
-                                                isRecording -> Color(0xFFFF5252)
-                                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                                isProcessingSpeech -> Orange600
+                                                isRecording -> Red500
+                                                else -> Slate500
                                             },
-                                            fontWeight = if (isRecording || isProcessingSpeech) FontWeight.Bold else FontWeight.Normal
+                                            fontWeight = if (isRecording || isProcessingSpeech) FontWeight.Bold else FontWeight.Medium
                                         )
                                     )
 
-                                    // Audio processing notification banner
                                     AnimatedVisibility(
                                         visible = isProcessingSpeech,
                                         enter = fadeIn() + expandVertically(),
                                         exit = fadeOut() + shrinkVertically()
                                     ) {
                                         Card(
-                                            shape = RoundedCornerShape(12.dp),
+                                            shape = RoundedCornerShape(14.dp),
                                             colors = CardDefaults.cardColors(
-                                                containerColor = TealPrimary.copy(alpha = 0.12f)
+                                                containerColor = PolishTealBg
                                             ),
-                                            border = BorderStroke(1.dp, TealPrimary.copy(alpha = 0.7f)),
-                                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                            border = BorderStroke(1.dp, PolishTealLightBorder),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 8.dp)
                                         ) {
                                             Row(
                                                 modifier = Modifier.padding(12.dp),
@@ -1072,7 +1168,7 @@ fun GrammarScreen(
                                             ) {
                                                 CircularProgressIndicator(
                                                     modifier = Modifier.size(24.dp),
-                                                    color = TealPrimary,
+                                                    color = PolishTeal,
                                                     strokeWidth = 2.5.dp
                                                 )
                                                 Spacer(modifier = Modifier.width(12.dp))
@@ -1081,13 +1177,13 @@ fun GrammarScreen(
                                                         text = "Evaluating speech pattern...",
                                                         style = MaterialTheme.typography.bodySmall.copy(
                                                             fontWeight = FontWeight.Bold,
-                                                            color = TealPrimary
+                                                            color = PolishTeal
                                                         )
                                                     )
                                                     Text(
                                                         text = "Analyzing pronunciation and accuracy...",
                                                         style = MaterialTheme.typography.labelSmall.copy(
-                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                            color = Slate500
                                                         )
                                                     )
                                                 }
@@ -1095,7 +1191,6 @@ fun GrammarScreen(
                                         }
                                     }
 
-                                    // Real-time Voice to Text Display
                                     Spacer(modifier = Modifier.height(12.dp))
                                     SpokenVoiceToTextCard(
                                         isRecording = isRecording,
@@ -1103,32 +1198,32 @@ fun GrammarScreen(
                                         hasEvaluated = lastScore != null
                                     )
 
-                                    // Scoring & feedback visualization
                                     lastScore?.let { score ->
                                         val isPassed = score >= 75
-                                        Spacer(modifier = Modifier.height(20.dp))
+                                        Spacer(modifier = Modifier.height(18.dp))
                                         Text(
                                             text = "Pronunciation Score",
-                                            style = MaterialTheme.typography.labelMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            style = MaterialTheme.typography.labelMedium.copy(
+                                                color = Slate500,
+                                                fontWeight = FontWeight.Bold
+                                            )
                                         )
                                         Text(
                                             text = "$score%",
                                             style = MaterialTheme.typography.displayMedium.copy(
-                                                fontWeight = FontWeight.Bold,
+                                                fontWeight = FontWeight.ExtraBold,
                                                 color = when {
-                                                    score >= 90 -> Color(0xFF2ECC71)
-                                                    score >= 75 -> Color(0xFF2ECC71)
-                                                    score >= 50 -> StreakGold
-                                                    else -> Color(0xFFFF5252)
+                                                    score >= 75 -> Emerald600
+                                                    score >= 50 -> Orange600
+                                                    else -> Red500
                                                 }
                                             )
                                         )
 
-                                        // Lesson passing indicator
                                         Surface(
-                                            shape = RoundedCornerShape(8.dp),
-                                            color = if (isPassed) Color(0xFF2ECC71).copy(alpha = 0.15f) else StreakGold.copy(alpha = 0.15f),
-                                            border = BorderStroke(1.dp, if (isPassed) Color(0xFF2ECC71) else StreakGold),
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = if (isPassed) Emerald50 else PolishAmberBg,
+                                            border = BorderStroke(1.dp, if (isPassed) Emerald500 else Orange500),
                                             modifier = Modifier.padding(top = 4.dp)
                                         ) {
                                             Row(
@@ -1138,7 +1233,7 @@ fun GrammarScreen(
                                                 Icon(
                                                     imageVector = if (isPassed) Icons.Default.CheckCircle else Icons.Default.Info,
                                                     contentDescription = null,
-                                                    tint = if (isPassed) Color(0xFF2ECC71) else StreakGold,
+                                                    tint = if (isPassed) Emerald600 else Orange600,
                                                     modifier = Modifier.size(16.dp)
                                                 )
                                                 Spacer(modifier = Modifier.width(6.dp))
@@ -1146,58 +1241,43 @@ fun GrammarScreen(
                                                     text = if (isPassed) "Lesson Passed (>= 75%)" else "Need 75% to complete lesson (Current: $score%)",
                                                     style = MaterialTheme.typography.bodySmall.copy(
                                                         fontWeight = FontWeight.Bold,
-                                                        color = if (isPassed) Color(0xFF2ECC71) else StreakGold
+                                                        color = if (isPassed) Emerald600 else Orange600
                                                     )
                                                 )
                                             }
                                         }
 
-                                        // Display Word-by-Word correctness
                                         Spacer(modifier = Modifier.height(12.dp))
-                                        FlowRow(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.Center
-                                        ) {
-                                            scoredWords.forEach { (word, scoreType) ->
-                                                val color = when (scoreType) {
-                                                    WordScoreType.Correct -> Color(0xFF2ECC71)
-                                                    WordScoreType.Hesitant -> StreakGold
-                                                    WordScoreType.Incorrect -> Color(0xFFFF5252)
-                                                }
-                                                Card(
-                                                    colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.15f)),
-                                                    shape = RoundedCornerShape(6.dp),
-                                                    modifier = Modifier
-                                                        .padding(4.dp)
-                                                        .clickable { viewModel.speak(word) }
-                                                ) {
-                                                    Text(
-                                                        text = word,
-                                                        color = color,
-                                                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                                    )
-                                                }
-                                            }
-                                        }
+                                        PronunciationFeedbackChips(
+                                            alignedTimings = alignedWordTimings,
+                                            fallbackScoredWords = scoredWords,
+                                            playbackPositionSec = playbackPositionSec,
+                                            isPlayingBack = isPlayingBack,
+                                            missedWords = missedWordsSummary,
+                                            unclearWords = unclearWordsSummary,
+                                            extraWords = extraWordsSummary,
+                                            onWordClick = { word -> viewModel.speak(word) }
+                                        )
 
-                                        // Voice Playback and Next / Finish controls
-                                        Spacer(modifier = Modifier.height(20.dp))
+                                        Spacer(modifier = Modifier.height(18.dp))
                                         Column(
                                             modifier = Modifier.fillMaxWidth(),
                                             verticalArrangement = Arrangement.spacedBy(10.dp),
                                             horizontalAlignment = Alignment.CenterHorizontally
                                         ) {
                                             Row(
-                                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
                                                 modifier = Modifier.fillMaxWidth()
                                             ) {
                                                 OutlinedButton(
                                                     onClick = { viewModel.playRecordedVoice() },
-                                                    modifier = Modifier.weight(1f),
-                                                    shape = RoundedCornerShape(12.dp),
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .height(48.dp),
+                                                    shape = RoundedCornerShape(14.dp),
+                                                    border = BorderStroke(1.dp, if (isPlayingBack) Red500 else PolishTeal),
                                                     colors = ButtonDefaults.outlinedButtonColors(
-                                                        contentColor = if (isPlayingBack) Color(0xFFFF5252) else TealPrimary
+                                                        contentColor = if (isPlayingBack) Red500 else PolishTeal
                                                     )
                                                 ) {
                                                     Icon(
@@ -1205,7 +1285,10 @@ fun GrammarScreen(
                                                         contentDescription = "Play"
                                                     )
                                                     Spacer(modifier = Modifier.width(6.dp))
-                                                    Text(if (isPlayingBack) "Stop Voice" else "Hear Your Voice")
+                                                    Text(
+                                                        text = if (isPlayingBack) "Stop" else "Hear Voice",
+                                                        fontWeight = FontWeight.SemiBold
+                                                    )
                                                 }
 
                                                 if (hasNextLesson && nextLesson != null) {
@@ -1216,13 +1299,23 @@ fun GrammarScreen(
                                                             viewModel.scoredWords.value = emptyList()
                                                             viewModel.recognizedText.value = ""
                                                         },
-                                                        modifier = Modifier.weight(1f),
-                                                        shape = RoundedCornerShape(12.dp),
-                                                        colors = ButtonDefaults.buttonColors(containerColor = TealPrimary)
+                                                        modifier = Modifier
+                                                            .weight(1f)
+                                                            .height(48.dp),
+                                                        shape = RoundedCornerShape(14.dp),
+                                                        colors = ButtonDefaults.buttonColors(
+                                                            containerColor = PolishTeal,
+                                                            contentColor = Color.White
+                                                        )
                                                     ) {
-                                                        Text("Next Lesson", color = Color.Black, fontWeight = FontWeight.Bold)
-                                                        Spacer(modifier = Modifier.width(4.dp))
-                                                        Icon(imageVector = Icons.Default.ArrowForward, contentDescription = "Next", tint = Color.Black)
+                                                        Text("Next Lesson", color = Color.White, fontWeight = FontWeight.Bold)
+                                                        Spacer(modifier = Modifier.width(6.dp))
+                                                        Icon(
+                                                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                                            contentDescription = "Next",
+                                                            tint = Color.White,
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
                                                     }
                                                 }
                                             }
@@ -1247,20 +1340,23 @@ fun GrammarScreen(
                                                     viewModel.recognizedText.value = ""
                                                 },
                                                 colors = ButtonDefaults.buttonColors(
-                                                    containerColor = if (hasNextLesson) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.secondary
+                                                    containerColor = if (hasNextLesson) Slate100 else PolishTeal,
+                                                    contentColor = if (hasNextLesson) PolishNavy else Color.White
                                                 ),
-                                                modifier = Modifier.fillMaxWidth(),
-                                                shape = RoundedCornerShape(12.dp)
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(48.dp),
+                                                shape = RoundedCornerShape(14.dp)
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.Default.Map,
                                                     contentDescription = "Map View",
-                                                    tint = if (hasNextLesson) MaterialTheme.colorScheme.onSurfaceVariant else Color.White
+                                                    tint = if (hasNextLesson) PolishNavy else Color.White
                                                 )
                                                 Spacer(modifier = Modifier.width(8.dp))
                                                 Text(
                                                     text = if (hasNextLesson) "Finish Lesson (View Next on Map)" else "Complete Lesson Trail",
-                                                    color = if (hasNextLesson) MaterialTheme.colorScheme.onSurfaceVariant else Color.White,
+                                                    color = if (hasNextLesson) PolishNavy else Color.White,
                                                     fontWeight = FontWeight.SemiBold
                                                 )
                                             }
@@ -1272,22 +1368,8 @@ fun GrammarScreen(
                     }
                 }
             } ?: Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No grammar lesson selected.")
+                Text("No grammar lesson selected.", color = Slate500)
             }
         }
     }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-fun FlowRow(
-    modifier: Modifier = Modifier,
-    horizontalArrangement: Arrangement.Horizontal = Arrangement.Start,
-    content: @Composable () -> Unit
-) {
-    androidx.compose.foundation.layout.FlowRow(
-        modifier = modifier,
-        horizontalArrangement = horizontalArrangement,
-        content = { content() }
-    )
 }
