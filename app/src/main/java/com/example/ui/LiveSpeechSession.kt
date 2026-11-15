@@ -5,6 +5,7 @@ import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.os.Process
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -17,6 +18,7 @@ import org.vosk.Recognizer
 import java.io.File
 import java.io.RandomAccessFile
 import java.util.concurrent.Executors
+import java.util.concurrent.LinkedBlockingQueue
 import kotlin.math.sqrt
 
 data class SessionCaptureResult(
@@ -29,14 +31,15 @@ data class SessionCaptureResult(
 )
 
 /**
- * Single-capture offline Vosk speech session:
- * - Starts MicrophoneCaptureService on Android 14+ (API 34+)
- * - Runs two recognizers on the same PCM16 stream:
+ * Decoupled Producer-Consumer offline Vosk speech session:
+ * - Dedicated audio-priority capture thread starts AudioRecord immediately (before recognizers finish
+ *   compiling) with a large 3-second ring buffer, streams 16kHz mono PCM16 losslessly to WAV,
+ *   computes RMS energy windows, and pushes PCM chunks onto non-blocking queues.
+ * - Parallel decoder threads consume the exact same queued PCM stream for:
  *   1) Free open-vocabulary recognizer (honest "You spoke" transcript & live partials)
- *   2) Optional target grammar hint recognizer (helps rescue target words dropped by small acoustic models)
- * - Streams 16kHz mono PCM16 directly to a WAV file (44-byte placeholder header patched on stop)
- * - Drains tail hardware buffer on Stop and feeds ~700ms silence before finalResult so ending words commit
- * - Records per-chunk RMS energy windows alongside audio timestamps
+ *   2) Optional target grammar hint recognizer (helps match target words)
+ * - Because capture never waits on Vosk decoding, WAV playback never stutters or cuts off abruptly,
+ *   and zero audio frames are dropped during heavy graph decoding.
  */
 class LiveSpeechSession(
     private val context: Context,
@@ -53,15 +56,30 @@ class LiveSpeechSession(
         private const val CHANNELS = 1
         private const val BITS_PER_SAMPLE = 16
         private const val BYTES_PER_SECOND = RATE * CHANNELS * (BITS_PER_SAMPLE / 8)
-        private const val CHUNK_BYTES = RATE / 10 * 2 // 100 ms = 3200 bytes
-        private const val STOP_DRAIN_MS = 200L
-        private const val SILENCE_TAIL_CHUNKS = 7 // 700 ms of zeroed PCM16 before finalResult
+        private const val CAPTURE_CHUNK_BYTES = 1600 // 50 ms mono PCM16
+        private const val SILENCE_CHUNK_BYTES = 3200 // 100 ms mono PCM16
+        private const val STOP_DRAIN_MS = 300L
+        private const val SILENCE_TAIL_CHUNKS = 8 // 800 ms zeroed PCM16 to flush trailing words
+        private const val PARTIAL_EMIT_INTERVAL_MS = 200L
     }
 
-    private val voskExecutor = Executors.newSingleThreadExecutor { runnable ->
-        Thread(runnable, "VoskCaptureThread")
+    private val captureExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "AudioCaptureThread")
     }
-    private val voskDispatcher = voskExecutor.asCoroutineDispatcher()
+    private val captureDispatcher = captureExecutor.asCoroutineDispatcher()
+
+    private val freeDecodeExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "VoskFreeDecodeThread")
+    }
+    private val freeDecodeDispatcher = freeDecodeExecutor.asCoroutineDispatcher()
+
+    private val grammarDecodeExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "VoskGrammarDecodeThread")
+    }
+    private val grammarDecodeDispatcher = grammarDecodeExecutor.asCoroutineDispatcher()
+
+    private val freeQueue = LinkedBlockingQueue<ByteArray>()
+    private val grammarQueue = LinkedBlockingQueue<ByteArray>()
 
     private val committedText = StringBuilder()
     private val spokenWords = mutableListOf<SpokenWordTiming>()
@@ -75,10 +93,12 @@ class LiveSpeechSession(
     @Volatile
     private var isReleased = false
 
-    private var freeRecognizer: Recognizer? = null
-    private var grammarRecognizer: Recognizer? = null
-    private var recordJob: Job? = null
+    private var captureJob: Job? = null
+    private var freeDecodeJob: Job? = null
+    private var grammarDecodeJob: Job? = null
+
     private var lastEmittedTranscript = ""
+    @Volatile
     private var totalAudioBytes = 0L
 
     @SuppressLint("MissingPermission")
@@ -88,41 +108,35 @@ class LiveSpeechSession(
         stopRequestedAtMs = 0L
         MicrophoneCaptureService.start(context)
 
-        recordJob = scope.launch(voskDispatcher) {
+        // Start parallel decoder threads immediately while capture begins without waiting for FST setup
+        freeDecodeJob = scope.launch(freeDecodeDispatcher) {
+            runFreeDecoder()
+        }
+        if (useGrammarMode) {
+            grammarDecodeJob = scope.launch(grammarDecodeDispatcher) {
+                runGrammarDecoder()
+            }
+        }
+
+        captureJob = scope.launch(captureDispatcher) {
+            try {
+                Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
+            } catch (_: Throwable) {}
+
             var audioRecord: AudioRecord? = null
             var raf: RandomAccessFile? = null
             try {
-                // Primary free recognizer (honest transcript & live partials)
-                val freeRec = Recognizer(model, RATE.toFloat()).apply {
-                    setWords(true)
-                }
-                freeRecognizer = freeRec
-
-                // Secondary grammar recognizer (hint for target words)
-                val grammarJson = if (useGrammarMode) PronunciationScorer.buildGrammarJson(targetText) else null
-                val grammarRec = createGrammarRecognizerOrNull(grammarJson)?.apply {
-                    setWords(true)
-                }
-                grammarRecognizer = grammarRec
-
-                // Create AudioRecord (MIC, 16 kHz, mono, PCM16) with buffer >= getMinBufferSize * 2
                 val minBuf = AudioRecord.getMinBufferSize(
                     RATE,
                     AudioFormat.CHANNEL_IN_MONO,
                     AudioFormat.ENCODING_PCM_16BIT
-                ).coerceAtLeast(CHUNK_BYTES)
-                val bufferSize = maxOf(minBuf * 2, CHUNK_BYTES * 4)
+                ).coerceAtLeast(CAPTURE_CHUNK_BYTES)
+                // Generous 3-second kernel ring buffer prevents AudioRecord overflow
+                val bufferSize = maxOf(minBuf * 8, BYTES_PER_SECOND * 3)
 
-                val ar = AudioRecord(
-                    MediaRecorder.AudioSource.MIC,
-                    RATE,
-                    AudioFormat.CHANNEL_IN_MONO,
-                    AudioFormat.ENCODING_PCM_16BIT,
-                    bufferSize
-                )
-                if (ar.state != AudioRecord.STATE_INITIALIZED) {
-                    Log.e(TAG, "AudioRecord failed to initialize (state=${ar.state})")
-                    ar.release()
+                val ar = createAudioRecordWithFallback(bufferSize)
+                if (ar == null) {
+                    Log.e(TAG, "AudioRecord failed to initialize on all audio sources")
                     recording = false
                     return@launch
                 }
@@ -135,18 +149,22 @@ class LiveSpeechSession(
                 raf.write(ByteArray(44))
                 totalAudioBytes = 0L
 
-                // Capture loop on dedicated background thread
                 ar.startRecording()
-                val buf = ByteArray(CHUNK_BYTES)
+                val buf = ByteArray(CAPTURE_CHUNK_BYTES)
+                var drainedAfterStop = false
+
                 while (!isReleased) {
                     val stopReqMs = stopRequestedAtMs
-                    if (stopReqMs > 0L && System.currentTimeMillis() - stopReqMs >= STOP_DRAIN_MS) {
+                    if (stopReqMs > 0L && drainedAfterStop && System.currentTimeMillis() - stopReqMs >= STOP_DRAIN_MS) {
                         recording = false
                         break
                     }
                     if (!recording && stopReqMs == 0L) break
 
                     val n = ar.read(buf, 0, buf.size)
+                    if (stopReqMs > 0L) {
+                        drainedAfterStop = true
+                    }
                     if (n <= 0) continue
 
                     val startSec = totalAudioBytes.toFloat() / BYTES_PER_SECOND
@@ -155,27 +173,20 @@ class LiveSpeechSession(
                     val endSec = totalAudioBytes.toFloat() / BYTES_PER_SECOND
 
                     val rms = computeRms(buf, n)
-                    energyWindows.add(AudioEnergyWindow(startSec = startSec, endSec = endSec, rms = rms))
+                    synchronized(energyWindows) {
+                        energyWindows.add(AudioEnergyWindow(startSec = startSec, endSec = endSec, rms = rms))
+                    }
                     emitAmplitude(rms)
 
-                    // Feed identical PCM16 chunk to both recognizers
-                    if (freeRec.acceptWaveForm(buf, n)) {
-                        appendFreeResult(freeRec.result)
-                        emitTranscript(committedText.toString())
-                    } else {
-                        val partial = parsePartial(freeRec.partialResult)
-                        val combined = combineTranscript(committedText.toString(), partial)
-                        emitTranscript(combined)
-                    }
-
-                    if (grammarRec != null && grammarRec.acceptWaveForm(buf, n)) {
-                        appendGrammarResult(grammarRec.result)
+                    val chunk = buf.copyOf(n)
+                    freeQueue.offer(chunk)
+                    if (useGrammarMode) {
+                        grammarQueue.offer(chunk)
                     }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error during Vosk single-capture loop", e)
+                Log.e(TAG, "Error during audio capture loop", e)
             } finally {
-                // Stop and release AudioRecord, patch WAV header, close file
                 try {
                     if (audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
                         audioRecord.stop()
@@ -188,10 +199,174 @@ class LiveSpeechSession(
                 try {
                     raf?.let { file ->
                         patchWavHeader(file, totalAudioBytes)
+                        runCatching { file.fd.sync() }
                         file.close()
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error patching/closing WAV file", e)
+                }
+
+                // Always signal EOF to decoders so they drain cleanly and never hang
+                signalDecoderEof()
+            }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun createAudioRecordWithFallback(bufferSize: Int): AudioRecord? {
+        val sources = listOf(
+            MediaRecorder.AudioSource.MIC,
+            MediaRecorder.AudioSource.VOICE_RECOGNITION
+        )
+        for (source in sources) {
+            try {
+                val ar = AudioRecord(
+                    source,
+                    RATE,
+                    AudioFormat.CHANNEL_IN_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT,
+                    bufferSize
+                )
+                if (ar.state == AudioRecord.STATE_INITIALIZED) {
+                    return ar
+                }
+                ar.release()
+            } catch (e: Exception) {
+                Log.w(TAG, "AudioRecord init failed for source=$source", e)
+            }
+        }
+        return null
+    }
+
+    private fun signalDecoderEof() {
+        val sentinel = ByteArray(0)
+        freeQueue.offer(sentinel)
+        if (useGrammarMode) {
+            grammarQueue.offer(sentinel)
+        }
+    }
+
+    private fun runFreeDecoder() {
+        var freeRec: Recognizer? = null
+        try {
+            freeRec = synchronized(model) {
+                Recognizer(model, RATE.toFloat()).apply {
+                    setWords(true)
+                }
+            }
+
+            var eof = false
+            var lastPartialMs = 0L
+            val batch = ArrayList<ByteArray>(8)
+
+            while (!eof && !isReleased) {
+                val first = freeQueue.take()
+                if (first.isEmpty()) {
+                    eof = true
+                    break
+                }
+                batch.clear()
+                batch.add(first)
+                freeQueue.drainTo(batch)
+
+                for (chunk in batch) {
+                    if (chunk.isEmpty()) {
+                        eof = true
+                        break
+                    }
+                    if (isReleased) break
+                    if (freeRec.acceptWaveForm(chunk, chunk.size)) {
+                        appendFreeResult(freeRec.result)
+                        emitTranscript(committedText.toString())
+                        lastPartialMs = System.currentTimeMillis()
+                    }
+                }
+
+                if (!eof && !isReleased && stopRequestedAtMs == 0L && freeQueue.isEmpty()) {
+                    val now = System.currentTimeMillis()
+                    if (now - lastPartialMs >= PARTIAL_EMIT_INTERVAL_MS) {
+                        lastPartialMs = now
+                        val partial = parsePartial(freeRec.partialResult)
+                        val combined = combineTranscript(committedText.toString(), partial)
+                        emitTranscript(combined)
+                    }
+                }
+            }
+
+            if (!isReleased) {
+                val silenceChunk = ByteArray(SILENCE_CHUNK_BYTES)
+                repeat(SILENCE_TAIL_CHUNKS) {
+                    if (freeRec.acceptWaveForm(silenceChunk, silenceChunk.size)) {
+                        appendFreeResult(freeRec.result)
+                    }
+                }
+                appendFreeResult(freeRec.finalResult)
+                emitTranscript(committedText.toString())
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in free decoder thread", e)
+        } finally {
+            if (freeRec != null) {
+                synchronized(model) {
+                    try {
+                        freeRec.close()
+                    } catch (_: Exception) {}
+                }
+            }
+        }
+    }
+
+    private fun runGrammarDecoder() {
+        var grammarRec: Recognizer? = null
+        try {
+            val grammarJson = PronunciationScorer.buildGrammarJson(targetText) ?: return
+            grammarRec = synchronized(model) {
+                createGrammarRecognizerOrNull(grammarJson)?.apply {
+                    setWords(true)
+                }
+            } ?: return
+
+            var eof = false
+            val batch = ArrayList<ByteArray>(8)
+            while (!eof && !isReleased) {
+                val first = grammarQueue.take()
+                if (first.isEmpty()) {
+                    eof = true
+                    break
+                }
+                batch.clear()
+                batch.add(first)
+                grammarQueue.drainTo(batch)
+
+                for (chunk in batch) {
+                    if (chunk.isEmpty()) {
+                        eof = true
+                        break
+                    }
+                    if (isReleased) break
+                    if (grammarRec.acceptWaveForm(chunk, chunk.size)) {
+                        appendGrammarResult(grammarRec.result)
+                    }
+                }
+            }
+
+            if (!isReleased) {
+                val silenceChunk = ByteArray(SILENCE_CHUNK_BYTES)
+                repeat(SILENCE_TAIL_CHUNKS) {
+                    if (grammarRec.acceptWaveForm(silenceChunk, silenceChunk.size)) {
+                        appendGrammarResult(grammarRec.result)
+                    }
+                }
+                appendGrammarResult(grammarRec.finalResult)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in grammar decoder thread", e)
+        } finally {
+            if (grammarRec != null) {
+                synchronized(model) {
+                    try {
+                        grammarRec.close()
+                    } catch (_: Exception) {}
                 }
             }
         }
@@ -201,41 +376,20 @@ class LiveSpeechSession(
         if (stopRequestedAtMs == 0L) {
             stopRequestedAtMs = System.currentTimeMillis()
         }
-        recordJob?.join()
+        captureJob?.join()
         recording = false
 
-        val result = withContext(voskDispatcher) {
-            try {
-                // Feed ~700ms of silence into Vosk (without writing to WAV) so trailing words flush out cleanly
-                val silenceChunk = ByteArray(CHUNK_BYTES)
-                val freeRec = freeRecognizer
-                val grammarRec = grammarRecognizer
-                if (freeRec != null || grammarRec != null) {
-                    repeat(SILENCE_TAIL_CHUNKS) {
-                        if (freeRec != null && freeRec.acceptWaveForm(silenceChunk, silenceChunk.size)) {
-                            appendFreeResult(freeRec.result)
-                        }
-                        if (grammarRec != null && grammarRec.acceptWaveForm(silenceChunk, silenceChunk.size)) {
-                            appendGrammarResult(grammarRec.result)
-                        }
-                    }
-                }
+        freeDecodeJob?.join()
+        grammarDecodeJob?.join()
 
-                appendFreeResult(freeRec?.finalResult)
-                appendGrammarResult(grammarRec?.finalResult)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error flushing/calling finalResult", e)
-            }
-
-            SessionCaptureResult(
-                transcript = committedText.toString().trim(),
-                spokenWords = spokenWords.toList(),
-                grammarWords = grammarWords.toList(),
-                energyWindows = energyWindows.toList(),
-                wavFilePath = wavFile.absolutePath,
-                audioBytesWritten = totalAudioBytes
-            )
-        }
+        val result = SessionCaptureResult(
+            transcript = committedText.toString().trim(),
+            spokenWords = spokenWords.toList(),
+            grammarWords = grammarWords.toList(),
+            energyWindows = synchronized(energyWindows) { energyWindows.toList() },
+            wavFilePath = wavFile.absolutePath,
+            audioBytesWritten = totalAudioBytes
+        )
 
         release()
         return result
@@ -245,30 +399,29 @@ class LiveSpeechSession(
         if (isReleased) return
         isReleased = true
         recording = false
-        try {
-            recordJob?.join()
-        } catch (_: Exception) {}
-
-        withContext(voskDispatcher) {
-            try {
-                freeRecognizer?.close()
-            } catch (_: Exception) {}
-            freeRecognizer = null
-
-            try {
-                grammarRecognizer?.close()
-            } catch (_: Exception) {}
-            grammarRecognizer = null
+        if (stopRequestedAtMs == 0L) {
+            stopRequestedAtMs = System.currentTimeMillis()
         }
+        try {
+            captureJob?.join()
+        } catch (_: Exception) {}
+        signalDecoderEof()
+        try {
+            freeDecodeJob?.join()
+        } catch (_: Exception) {}
+        try {
+            grammarDecodeJob?.join()
+        } catch (_: Exception) {}
 
         MicrophoneCaptureService.stop(context)
 
-        try {
-            voskDispatcher.close()
-        } catch (_: Exception) {}
-        try {
-            voskExecutor.shutdownNow()
-        } catch (_: Exception) {}
+        withContext(captureDispatcher) {}
+        try { captureDispatcher.close() } catch (_: Exception) {}
+        try { freeDecodeDispatcher.close() } catch (_: Exception) {}
+        try { grammarDecodeDispatcher.close() } catch (_: Exception) {}
+        try { captureExecutor.shutdownNow() } catch (_: Exception) {}
+        try { freeDecodeExecutor.shutdownNow() } catch (_: Exception) {}
+        try { grammarDecodeExecutor.shutdownNow() } catch (_: Exception) {}
     }
 
     private fun appendFreeResult(json: String?) {

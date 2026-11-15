@@ -736,6 +736,7 @@ class EnglishViewModel(
 
     // --- SPEAKING PRACTICE LOOP ---
     fun startRecording(targetText: String, itemType: String = "") {
+        if (isRecording.value || isProcessingSpeech.value) return
         stopTts()
         stopRecordedVoicePlayback()
         speechStatusNotice.value = null
