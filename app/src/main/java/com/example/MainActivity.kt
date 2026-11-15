@@ -85,10 +85,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        if (::viewModel.isInitialized) {
-            viewModel.releaseResources()
+        if (isFinishing && !isChangingConfigurations) {
+            if (::viewModel.isInitialized) {
+                viewModel.releaseResources()
+            }
+            MicrophoneCaptureService.stop(this)
         }
-        MicrophoneCaptureService.stop(this)
     }
 
     private fun checkMicrophonePermission() {

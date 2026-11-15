@@ -69,7 +69,7 @@ fun DependencyDownloadBanner(
                     VoiceSetupStatusCard(
                         badge = "VOICE STUDIO SETUP",
                         title = "Preparing Voice Studio...",
-                        subtitle = "Checking your selected English voice coach",
+                        subtitle = "Checking your English voice coach",
                         progress = null,
                         isError = false,
                         isSuccess = false,
@@ -80,7 +80,7 @@ fun DependencyDownloadBanner(
                     val percent = (modelState.progress * 100).toInt().coerceIn(0, 100)
                     VoiceSetupStatusCard(
                         badge = "SETTING UP VOICE COACH • $percent%",
-                        title = "Preparing ${modelState.option.displayName} voice",
+                        title = "Preparing English voice coach",
                         subtitle = "${formatMegabytes(modelState.downloadedBytes)} / ${formatMegabytes(modelState.totalBytes)} • One-time setup for instant speaking feedback",
                         progress = modelState.progress,
                         isError = false,
@@ -92,7 +92,7 @@ fun DependencyDownloadBanner(
                     val percent = (modelState.progress * 100).toInt().coerceIn(0, 100)
                     VoiceSetupStatusCard(
                         badge = "OPTIMIZING • $percent%",
-                        title = "Configuring ${modelState.option.displayName} clarity...",
+                        title = "Configuring English speech clarity...",
                         subtitle = "Preparing speech analysis and pronunciation scoring",
                         progress = modelState.progress,
                         isError = false,
@@ -104,7 +104,7 @@ fun DependencyDownloadBanner(
                 is ModelDownloadState.Loading -> {
                     VoiceSetupStatusCard(
                         badge = "INITIALIZING COACH",
-                        title = "Warming up ${modelState.option.displayName} recognition...",
+                        title = "Warming up English speech recognition...",
                         subtitle = "Almost ready for your speaking workout",
                         progress = null,
                         isError = false,
@@ -115,7 +115,7 @@ fun DependencyDownloadBanner(
                 is ModelDownloadState.Error -> {
                     VoiceSetupStatusCard(
                         badge = "SETUP PAUSED",
-                        title = "${modelState.option.displayName} setup needs attention",
+                        title = "Voice setup needs attention",
                         subtitle = modelState.message,
                         progress = null,
                         isError = true,
@@ -126,7 +126,7 @@ fun DependencyDownloadBanner(
                 is ModelDownloadState.Ready -> {
                     VoiceSetupStatusCard(
                         badge = "VOICE STUDIO READY",
-                        title = "${modelState.option.displayName} coach is ready",
+                        title = "English voice coach is ready",
                         subtitle = "Real-time pronunciation & clarity scoring active",
                         progress = 1f,
                         isError = false,

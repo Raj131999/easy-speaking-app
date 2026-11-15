@@ -78,7 +78,7 @@ fun ConversationScreen(
     var showQuiz by remember { mutableStateOf(false) }
     var selectedQuizAnswer by remember { mutableStateOf<String?>(null) }
     var showQuizFeedback by remember { mutableStateOf(false) }
-    var selectedLevel by remember(conv) { mutableStateOf("Basic") }
+    val selectedLevel by viewModel.selectedConversationLevel.collectAsState()
     var showLevelCompleteDialog by remember { mutableStateOf(false) }
     var completedLevelName by remember { mutableStateOf("") }
     var completedLevelXp by remember { mutableStateOf(0) }
@@ -440,7 +440,7 @@ fun ConversationScreen(
                                 selected = selected,
                                 onClick = {
                                     if (selectedLevel != lvl) {
-                                        selectedLevel = lvl
+                                        viewModel.selectedConversationLevel.value = lvl
                                         viewModel.activeConversationIndex.value = 0
                                         showQuiz = false
                                         selectedQuizAnswer = null
@@ -1423,7 +1423,7 @@ fun ConversationScreen(
                                     Button(
                                         onClick = {
                                             showLevelCompleteDialog = false
-                                            selectedLevel = nextLevelToSuggest
+                                            viewModel.selectedConversationLevel.value = nextLevelToSuggest
                                             viewModel.activeConversationIndex.value = 0
                                             showQuiz = false
                                             selectedQuizAnswer = null

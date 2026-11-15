@@ -26,6 +26,10 @@ import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipInputStream
 
+private const val UNIFIED_MODEL_FOLDER = "vosk-model-en-us-0.22-lgraph"
+private const val UNIFIED_MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-en-us-0.22-lgraph.zip"
+private const val UNIFIED_MODEL_APPROX_BYTES = 134_000_000L
+
 enum class SpeechModelOption(
     val id: String,
     val displayName: String,
@@ -37,18 +41,18 @@ enum class SpeechModelOption(
     INDIA(
         id = "en-in",
         displayName = "Indian English",
-        subtitle = "Default • Optimized for Indian English pronunciation",
-        folderName = "vosk-model-small-en-in-0.4",
-        downloadUrl = "https://alphacephei.com/vosk/models/vosk-model-small-en-in-0.4.zip",
-        approxBytes = 36_000_000L
+        subtitle = "Default • Tuned for Indian English pronunciation",
+        folderName = UNIFIED_MODEL_FOLDER,
+        downloadUrl = UNIFIED_MODEL_URL,
+        approxBytes = UNIFIED_MODEL_APPROX_BYTES
     ),
     US(
         id = "en-us",
         displayName = "US English",
-        subtitle = "General American English pronunciation",
-        folderName = "vosk-model-small-en-us-0.15",
-        downloadUrl = "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip",
-        approxBytes = 41_200_000L
+        subtitle = "Tuned for General American English",
+        folderName = UNIFIED_MODEL_FOLDER,
+        downloadUrl = UNIFIED_MODEL_URL,
+        approxBytes = UNIFIED_MODEL_APPROX_BYTES
     );
 
     companion object {
@@ -86,6 +90,10 @@ class VoskModelManager(private val context: Context) {
         private const val KEY_SELECTED_MODEL = "selected_speech_model_id"
         private const val KEY_GRAMMAR_MODE = "use_grammar_guided_mode"
         private const val READY_MARKER = ".model_ready"
+        private val LEGACY_MODEL_FOLDERS = listOf(
+            "vosk-model-small-en-in-0.4",
+            "vosk-model-small-en-us-0.15"
+        )
     }
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -170,10 +178,21 @@ class VoskModelManager(private val context: Context) {
         _selectedOption.value = option
         prefs.edit().putString(KEY_SELECTED_MODEL, option.id).apply()
 
+        if (loadedModel != null && loadedOption?.folderName == option.folderName) {
+            loadedOption = option
+            _state.value = ModelDownloadState.Ready(option)
+            return
+        }
+
         activeJob?.cancel()
         activeJob = scope.launch(Dispatchers.IO) {
             mutex.withLock {
-                if (loadedOption != option) {
+                if (loadedModel != null && loadedOption?.folderName == option.folderName) {
+                    loadedOption = option
+                    _state.value = ModelDownloadState.Ready(option)
+                    return@withLock
+                }
+                if (loadedOption?.folderName != option.folderName) {
                     try {
                         loadedModel?.close()
                     } catch (_: Exception) {}
@@ -202,9 +221,39 @@ class VoskModelManager(private val context: Context) {
         }
     }
 
+    private fun cleanupLegacyModels() {
+        LEGACY_MODEL_FOLDERS.forEach { legacyFolder ->
+            runCatching {
+                File(context.filesDir, legacyFolder).takeIf { it.exists() }?.deleteRecursively()
+                File(context.filesDir, "${legacyFolder}_tmp").takeIf { it.exists() }?.deleteRecursively()
+                File(context.cacheDir, "$legacyFolder.zip.part").takeIf { it.exists() }?.delete()
+            }
+        }
+    }
+
+    private fun sanitizeUserErrorMessage(raw: String?): String {
+        val fallback = "Could not complete English voice setup. Tap Retry."
+        val msg = raw?.trim().orEmpty()
+        if (msg.isBlank()) return fallback
+        val lower = msg.lowercase()
+        return if (
+            lower.contains("vosk") ||
+            lower.contains("lgraph") ||
+            lower.contains("0.22") ||
+            lower.contains("alphacephei") ||
+            lower.contains("http://") ||
+            lower.contains("https://")
+        ) {
+            fallback
+        } else {
+            msg
+        }
+    }
+
     private suspend fun prepareOptionLocked(option: SpeechModelOption) {
         try {
             _state.value = ModelDownloadState.Checking
+            cleanupLegacyModels()
             if (!isModelInstalled(option)) {
                 downloadAndExtractModel(option)
                 refreshInstalledModels()
@@ -213,23 +262,22 @@ class VoskModelManager(private val context: Context) {
         } catch (ce: CancellationException) {
             throw ce
         } catch (e: UnknownHostException) {
-            Log.e(TAG, "No internet connection preparing ${option.displayName}", e)
+            Log.e(TAG, "No internet connection preparing voice pack", e)
             _state.value = ModelDownloadState.Error(
                 option = option,
-                message = "No internet connection. Connect to Wi-Fi or mobile data and tap Retry to finish setting up ${option.displayName}."
+                message = "No internet connection. Connect to Wi-Fi or mobile data and tap Retry to finish voice setup."
             )
         } catch (e: SocketTimeoutException) {
-            Log.e(TAG, "Timeout preparing ${option.displayName}", e)
+            Log.e(TAG, "Timeout preparing voice pack", e)
             _state.value = ModelDownloadState.Error(
                 option = option,
                 message = "Setup timed out. Check your connection and tap Retry."
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Failed preparing ${option.displayName}", e)
+            Log.e(TAG, "Failed preparing voice pack", e)
             _state.value = ModelDownloadState.Error(
                 option = option,
-                message = e.message?.takeIf { it.isNotBlank() }
-                    ?: "Could not complete ${option.displayName} voice setup. Tap Retry."
+                message = sanitizeUserErrorMessage(e.message)
             )
         }
     }
@@ -250,9 +298,9 @@ class VoskModelManager(private val context: Context) {
 
         httpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
-                throw IOException("Server returned HTTP ${response.code} while setting up ${option.displayName}.")
+                throw IOException("Server returned HTTP ${response.code} during voice setup.")
             }
-            val body = response.body ?: throw IOException("Empty response body from speech resource server.")
+            val body = response.body ?: throw IOException("Unable to download voice pack. Please try again.")
             val contentLength = body.contentLength().takeIf { it > 0 } ?: option.approxBytes
 
             var downloaded = 0L

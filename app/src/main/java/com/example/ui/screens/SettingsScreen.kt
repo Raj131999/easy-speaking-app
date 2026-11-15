@@ -23,7 +23,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.EnglishViewModel
 import com.example.ui.ModelDownloadState
-import com.example.ui.SpeechModelOption
 import com.example.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -36,7 +35,6 @@ fun SettingsScreen(
     val selectedSpeed by viewModel.selectedSpeed.collectAsState()
     val userProgress by viewModel.userProgress.collectAsState()
     val modelDownloadState by viewModel.modelDownloadState.collectAsState()
-    val selectedSpeechModel by viewModel.selectedSpeechModel.collectAsState()
     val installedSpeechModels by viewModel.installedSpeechModels.collectAsState()
     val useGrammarMode by viewModel.useGrammarMode.collectAsState()
 
@@ -106,77 +104,72 @@ fun SettingsScreen(
                         )
                     )
 
-                    SpeechModelOption.entries.forEach { option ->
-                        val isSelected = selectedSpeechModel == option
-                        val isInstalled = installedSpeechModels.contains(option.id)
-                        val stateForOption = modelDownloadState
+                    val isPackInstalled = installedSpeechModels.isNotEmpty()
+                    val badgeText = when (val state = modelDownloadState) {
+                        is ModelDownloadState.Ready -> "Active"
+                        is ModelDownloadState.Downloading -> "Setting up ${(state.progress * 100).toInt()}%"
+                        is ModelDownloadState.Extracting -> "Optimizing ${(state.progress * 100).toInt()}%"
+                        is ModelDownloadState.Loading -> "Loading..."
+                        is ModelDownloadState.Error -> "Retry needed"
+                        is ModelDownloadState.Checking -> if (isPackInstalled) "Ready" else "Checking..."
+                    }
 
-                        val badgeText = when {
-                            isSelected && stateForOption is ModelDownloadState.Ready && stateForOption.option == option -> "Active"
-                            isSelected && stateForOption is ModelDownloadState.Downloading && stateForOption.option == option ->
-                                "Setting up ${(stateForOption.progress * 100).toInt()}%"
-                            isSelected && stateForOption is ModelDownloadState.Extracting && stateForOption.option == option ->
-                                "Optimizing ${(stateForOption.progress * 100).toInt()}%"
-                            isSelected && stateForOption is ModelDownloadState.Loading && stateForOption.option == option ->
-                                "Loading..."
-                            isInstalled -> "Ready"
-                            else -> "Tap to set up"
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = if (isSelected) PolishTealLight else Slate50,
-                            border = BorderStroke(
-                                width = if (isSelected) 1.5.dp else 1.dp,
-                                color = if (isSelected) PolishTeal else Slate200
-                            ),
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = PolishTealLight,
+                        border = BorderStroke(width = 1.5.dp, color = PolishTeal),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("speech_model_unified_card")
+                    ) {
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { viewModel.selectSpeechModel(option) }
-                                .testTag("speech_model_option_${option.id}")
+                                .padding(horizontal = 14.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
+                            Box(
+                                contentAlignment = Alignment.Center,
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White)
                             ) {
-                                RadioButton(
-                                    selected = isSelected,
-                                    onClick = { viewModel.selectSpeechModel(option) },
-                                    colors = RadioButtonDefaults.colors(selectedColor = PolishTeal)
+                                Icon(
+                                    imageVector = Icons.Default.GraphicEq,
+                                    contentDescription = "English Voice Pack",
+                                    tint = PolishTeal,
+                                    modifier = Modifier.size(20.dp)
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = option.displayName,
-                                        style = MaterialTheme.typography.bodyLarge.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            color = PolishNavy
-                                        )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "English Voice Pack",
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = PolishNavy
                                     )
-                                    Text(
-                                        text = option.subtitle,
-                                        style = MaterialTheme.typography.bodySmall.copy(color = Slate500)
-                                    )
-                                }
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = if (isSelected || isInstalled) PolishTealBg else Color.White,
-                                    border = BorderStroke(
-                                        1.dp,
-                                        if (isSelected || isInstalled) PolishTealLightBorder else Slate200
-                                    )
-                                ) {
-                                    Text(
-                                        text = badgeText,
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (isSelected || isInstalled) PolishTealText else Slate500
-                                        ),
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                    )
-                                }
+                                )
+                                Text(
+                                    text = "Supports all English accents (Indian, US, UK, Australian)",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = Slate500)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = PolishTealBg,
+                                border = BorderStroke(1.dp, PolishTealLightBorder)
+                            ) {
+                                Text(
+                                    text = badgeText,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = PolishTealText
+                                    ),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
                             }
                         }
                     }
@@ -220,11 +213,11 @@ fun SettingsScreen(
                     val statusText = when (val state = modelDownloadState) {
                         is ModelDownloadState.Checking -> "Checking Voice Studio status..."
                         is ModelDownloadState.Downloading ->
-                            "Setting up ${state.option.displayName} (${(state.progress * 100).toInt()}%)"
+                            "Setting up English Voice Pack (${(state.progress * 100).toInt()}%)"
                         is ModelDownloadState.Extracting ->
-                            "Optimizing ${state.option.displayName} (${(state.progress * 100).toInt()}%)"
-                        is ModelDownloadState.Loading -> "Warming up ${state.option.displayName} recognition..."
-                        is ModelDownloadState.Ready -> "${state.option.displayName} active & ready for practice"
+                            "Optimizing English Voice Pack (${(state.progress * 100).toInt()}%)"
+                        is ModelDownloadState.Loading -> "Warming up English speech recognition..."
+                        is ModelDownloadState.Ready -> "English Voice Pack active & ready for all accents"
                         is ModelDownloadState.Error -> "Setup paused: ${state.message}"
                     }
 
@@ -267,7 +260,7 @@ fun SettingsScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Refresh ${selectedSpeechModel.displayName} Pack",
+                                text = "Refresh Voice Pack",
                                 color = PolishTeal,
                                 fontWeight = FontWeight.SemiBold
                             )

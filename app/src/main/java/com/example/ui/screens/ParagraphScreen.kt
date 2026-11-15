@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -109,8 +110,8 @@ fun ParagraphScreen(
     }
 
     if (paragraph == null) {
-        var searchQuery by remember { mutableStateOf("") }
-        var selectedLevel by remember { mutableStateOf("All") }
+        var searchQuery by rememberSaveable { mutableStateOf("") }
+        val selectedLevel by viewModel.paragraphSelectedLevel.collectAsState()
 
         val filteredList = remember(paragraphsList, searchQuery, selectedLevel) {
             paragraphsList.filter { item ->
@@ -249,7 +250,7 @@ fun ParagraphScreen(
                         val selected = selectedLevel == lvl
                         FilterChip(
                             selected = selected,
-                            onClick = { selectedLevel = lvl },
+                            onClick = { viewModel.paragraphSelectedLevel.value = lvl },
                             label = {
                                 Text(
                                     text = lvl,

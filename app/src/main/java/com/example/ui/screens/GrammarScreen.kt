@@ -68,7 +68,7 @@ fun GrammarScreen(
     var selectedAnswer by remember { mutableStateOf<String?>(null) }
     var showQuizFeedback by remember { mutableStateOf(false) }
 
-    var selectedTab by remember { mutableStateOf(0) }
+    val selectedTab by viewModel.grammarSelectedTab.collectAsState()
     val tabs = listOf("Speech Patterns", "Useful Lessons")
 
     val speechLessons = remember(lessons) { lessons.filter { it.id <= 15 } }
@@ -77,7 +77,7 @@ fun GrammarScreen(
     val groupedUsefulLessons = remember(usefulLessons) {
         usefulLessons.groupBy { it.category }
     }
-    var selectedCategory by remember { mutableStateOf<String?>(null) }
+    val selectedCategory by viewModel.grammarSelectedCategory.collectAsState()
     var scrollToTargetIndex by remember { mutableStateOf<Int?>(null) }
 
     val speechMapListState = rememberLazyListState()
@@ -146,10 +146,10 @@ fun GrammarScreen(
         val activeItem = lesson
         if (activeItem != null) {
             if (activeItem.id <= 15) {
-                selectedTab = 0
+                viewModel.grammarSelectedTab.value = 0
             } else {
-                selectedTab = 1
-                selectedCategory = activeItem.category
+                viewModel.grammarSelectedTab.value = 1
+                viewModel.grammarSelectedCategory.value = activeItem.category
             }
             if (currentLessonIndex >= 0) {
                 scrollToTargetIndex = currentLessonIndex
@@ -167,7 +167,7 @@ fun GrammarScreen(
         if (catIdx != null) {
             scrollToTargetIndex = catIdx
         }
-        selectedCategory = null
+        viewModel.grammarSelectedCategory.value = null
     }
 
     LaunchedEffect(lesson) {
@@ -228,7 +228,7 @@ fun GrammarScreen(
                     tabs.forEachIndexed { index, title ->
                         Tab(
                             selected = selectedTab == index,
-                            onClick = { selectedTab = index },
+                            onClick = { viewModel.grammarSelectedTab.value = index },
                             selectedContentColor = PolishTeal,
                             unselectedContentColor = Slate500,
                             text = {
@@ -441,7 +441,7 @@ fun GrammarScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clickable {
-                                                selectedCategory = categoryName
+                                                viewModel.grammarSelectedCategory.value = categoryName
                                             }
                                             .padding(vertical = 4.dp),
                                         verticalAlignment = Alignment.CenterVertically
@@ -514,7 +514,7 @@ fun GrammarScreen(
                                         if (catIdx != null) {
                                             scrollToTargetIndex = catIdx
                                         }
-                                        selectedCategory = null
+                                        viewModel.grammarSelectedCategory.value = null
                                     },
                                     modifier = Modifier
                                         .size(48.dp)
@@ -658,10 +658,10 @@ fun GrammarScreen(
                             val activeItem = lesson
                             if (activeItem != null) {
                                 if (activeItem.id <= 15) {
-                                    selectedTab = 0
+                                    viewModel.grammarSelectedTab.value = 0
                                 } else {
-                                    selectedTab = 1
-                                    selectedCategory = activeItem.category
+                                    viewModel.grammarSelectedTab.value = 1
+                                    viewModel.grammarSelectedCategory.value = activeItem.category
                                 }
                                 if (currentLessonIndex >= 0) {
                                     scrollToTargetIndex = currentLessonIndex
@@ -1325,10 +1325,10 @@ fun GrammarScreen(
                                                     val activeItem = lesson
                                                     if (activeItem != null) {
                                                         if (activeItem.id <= 15) {
-                                                            selectedTab = 0
+                                                            viewModel.grammarSelectedTab.value = 0
                                                         } else {
-                                                            selectedTab = 1
-                                                            selectedCategory = activeItem.category
+                                                            viewModel.grammarSelectedTab.value = 1
+                                                            viewModel.grammarSelectedCategory.value = activeItem.category
                                                         }
                                                         if (hasNextLesson) {
                                                             scrollToTargetIndex = currentLessonIndex + 1

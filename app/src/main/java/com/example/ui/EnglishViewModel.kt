@@ -2,6 +2,7 @@ package com.example.ui
 
 import android.Manifest
 import android.app.Application
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
@@ -39,12 +40,14 @@ class EnglishViewModel(
     private val repository: EnglishRepository
 ) : AndroidViewModel(application), TextToSpeech.OnInitListener {
 
-    // Navigation state
-    val screenStack = MutableStateFlow<List<Screen>>(listOf(Screen.Home))
+    private val prefs = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    // Navigation state (synchronously restored so app-switching never flashes Home)
+    val screenStack = MutableStateFlow(loadSavedScreenStack())
     val currentScreen = screenStack.map { it.lastOrNull() ?: Screen.Home }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = Screen.Home
+        started = SharingStarted.Eagerly,
+        initialValue = screenStack.value.lastOrNull() ?: Screen.Home
     )
 
     // Curriculum and User metrics from Room
@@ -107,8 +110,8 @@ class EnglishViewModel(
     val ttsReady = MutableStateFlow(false)
     val isTtsSpeaking = MutableStateFlow(false)
     val currentTtsText = MutableStateFlow<String?>(null)
-    val selectedAccent = MutableStateFlow("IN") // Default aligned with Indian English
-    val selectedSpeed = MutableStateFlow(1.0f)   // 0.5f, 0.75f, 1.0f, 1.25f, 1.5f
+    val selectedAccent = MutableStateFlow(prefs.getString(KEY_SELECTED_ACCENT, "IN") ?: "IN")
+    val selectedSpeed = MutableStateFlow(prefs.getFloat(KEY_SELECTED_SPEED, 1.0f))
 
     // Offline Speech Model (Vosk)
     private val voskModelManager = VoskModelManager(application)
@@ -150,17 +153,39 @@ class EnglishViewModel(
     val activeParagraph = MutableStateFlow<ParagraphSet?>(null)
     val activeTongueTwister = MutableStateFlow<TongueTwister?>(null)
 
+    // Sub-screen navigation & filter states
+    val grammarSelectedTab = MutableStateFlow(prefs.getInt(KEY_GRAMMAR_TAB, 0))
+    val grammarSelectedCategory = MutableStateFlow(prefs.getString(KEY_GRAMMAR_CATEGORY, null))
+    val selectedConversationLevel = MutableStateFlow(prefs.getString(KEY_SELECTED_CONVERSATION_LEVEL, "Basic") ?: "Basic")
+    val paragraphSelectedLevel = MutableStateFlow(prefs.getString(KEY_PARAGRAPH_LEVEL, "All") ?: "All")
+
     // Roleplay indices
-    val activeConversationIndex = MutableStateFlow(0)
-    val userConversationRole = MutableStateFlow("B") // User is B, TTS is A
+    val activeConversationIndex = MutableStateFlow(prefs.getInt(KEY_ACTIVE_CONVERSATION_INDEX, 0).coerceAtLeast(0))
+    val userConversationRole = MutableStateFlow(prefs.getString(KEY_USER_CONVERSATION_ROLE, "B") ?: "B") // User is B, TTS is A
 
     // For tracking general events
     val showRewardOverlay = MutableStateFlow<Int?>(null) // Contains XP amount if showing
 
     // Review Session States
-    val isReviewSession = MutableStateFlow(false)
+    val isReviewSession = MutableStateFlow(prefs.getBoolean(KEY_IS_REVIEW_SESSION, false))
     val reviewSentencesList = MutableStateFlow<List<DailySentence>>(emptyList())
-    val currentReviewIndex = MutableStateFlow(0)
+    val currentReviewIndex = MutableStateFlow(prefs.getInt(KEY_CURRENT_REVIEW_INDEX, 0).coerceAtLeast(0))
+
+    @Volatile private var pendingGrammarRestore = false
+    @Volatile private var pendingConversationRestore = false
+    @Volatile private var pendingDailySentenceRestore = false
+    @Volatile private var pendingParagraphRestore = false
+    @Volatile private var pendingTongueTwisterRestore = false
+    @Volatile private var pendingReviewRestore = false
+
+    private fun loadSavedScreenStack(): List<Screen> {
+        val raw = prefs.getString(KEY_SCREEN_STACK, null).orEmpty()
+        if (raw.isBlank()) return listOf(Screen.Home)
+        val parsed = raw.split(",")
+            .mapNotNull { name -> Screen.entries.firstOrNull { it.name == name.trim() } }
+        if (parsed.isEmpty()) return listOf(Screen.Home)
+        return if (parsed.first() == Screen.Home) parsed else listOf(Screen.Home) + parsed
+    }
 
     fun startReviewSession(targetSentence: DailySentence? = null) {
         viewModelScope.launch {
@@ -191,6 +216,8 @@ class EnglishViewModel(
             }
 
             if (sessionList.isNotEmpty()) {
+                pendingReviewRestore = false
+                pendingDailySentenceRestore = false
                 isReviewSession.value = true
                 reviewSentencesList.value = sessionList
                 currentReviewIndex.value = 0
@@ -204,6 +231,8 @@ class EnglishViewModel(
     }
 
     fun endReviewSession() {
+        pendingReviewRestore = false
+        pendingDailySentenceRestore = false
         isReviewSession.value = false
         reviewSentencesList.value = emptyList()
         currentReviewIndex.value = 0
@@ -231,6 +260,9 @@ class EnglishViewModel(
     }
 
     init {
+        restoreNavigationItemsAsync()
+        observeAndPersistNavigationState()
+
         // Initialize Database Content on startup
         viewModelScope.launch {
             repository.checkAndPrepopulate(getApplication())
@@ -241,6 +273,182 @@ class EnglishViewModel(
 
         // Initialize Text To Speech
         tts = TextToSpeech(application, this)
+    }
+
+    private fun restoreNavigationItemsAsync() {
+        val savedGrammarId = prefs.getInt(KEY_ACTIVE_GRAMMAR_ID, -1)
+        val savedConversationId = prefs.getInt(KEY_ACTIVE_CONVERSATION_ID, -1)
+        val savedDailySentenceId = prefs.getInt(KEY_ACTIVE_DAILY_SENTENCE_ID, -1)
+        val savedParagraphId = prefs.getInt(KEY_ACTIVE_PARAGRAPH_ID, -1)
+        val savedTongueTwisterId = prefs.getInt(KEY_ACTIVE_TONGUE_TWISTER_ID, -1)
+        val savedIsReview = prefs.getBoolean(KEY_IS_REVIEW_SESSION, false)
+        val savedReviewIds = prefs.getString(KEY_REVIEW_SENTENCE_IDS, "").orEmpty()
+            .split(",")
+            .mapNotNull { it.trim().toIntOrNull() }
+        val savedReviewIndex = prefs.getInt(KEY_CURRENT_REVIEW_INDEX, 0)
+
+        if (savedGrammarId > 0) {
+            pendingGrammarRestore = true
+            viewModelScope.launch {
+                val list = repository.grammarLessons.first { it.isNotEmpty() }
+                if (pendingGrammarRestore && activeGrammarLesson.value == null) {
+                    activeGrammarLesson.value = list.find { it.id == savedGrammarId }
+                }
+                pendingGrammarRestore = false
+            }
+        }
+        if (savedConversationId > 0) {
+            pendingConversationRestore = true
+            viewModelScope.launch {
+                val list = repository.conversations.first { it.isNotEmpty() }
+                if (pendingConversationRestore && activeConversation.value == null) {
+                    activeConversation.value = list.find { it.id == savedConversationId }
+                }
+                pendingConversationRestore = false
+            }
+        }
+        if (savedIsReview && savedReviewIds.isNotEmpty()) {
+            pendingReviewRestore = true
+            pendingDailySentenceRestore = savedDailySentenceId > 0
+            viewModelScope.launch {
+                val list = repository.dailySentences.first { it.isNotEmpty() }
+                if (pendingReviewRestore) {
+                    val restoredList = savedReviewIds.mapNotNull { id -> list.find { it.id == id } }
+                    if (restoredList.isNotEmpty()) {
+                        reviewSentencesList.value = restoredList
+                        val idx = savedReviewIndex.coerceIn(0, restoredList.lastIndex)
+                        currentReviewIndex.value = idx
+                        if (activeDailySentence.value == null) {
+                            activeDailySentence.value = restoredList[idx]
+                        }
+                    } else {
+                        isReviewSession.value = false
+                    }
+                }
+                pendingReviewRestore = false
+                pendingDailySentenceRestore = false
+            }
+        } else if (savedDailySentenceId > 0) {
+            pendingDailySentenceRestore = true
+            viewModelScope.launch {
+                val list = repository.dailySentences.first { it.isNotEmpty() }
+                if (pendingDailySentenceRestore && activeDailySentence.value == null) {
+                    activeDailySentence.value = list.find { it.id == savedDailySentenceId }
+                }
+                pendingDailySentenceRestore = false
+            }
+        }
+        if (savedParagraphId > 0) {
+            pendingParagraphRestore = true
+            viewModelScope.launch {
+                val list = repository.paragraphs.first { it.isNotEmpty() }
+                if (pendingParagraphRestore && activeParagraph.value == null) {
+                    activeParagraph.value = list.find { it.id == savedParagraphId }
+                }
+                pendingParagraphRestore = false
+            }
+        }
+        if (savedTongueTwisterId > 0) {
+            pendingTongueTwisterRestore = true
+            viewModelScope.launch {
+                val list = repository.tongueTwisters.first { it.isNotEmpty() }
+                if (pendingTongueTwisterRestore && activeTongueTwister.value == null) {
+                    activeTongueTwister.value = list.find { it.id == savedTongueTwisterId }
+                }
+                pendingTongueTwisterRestore = false
+            }
+        }
+    }
+
+    private fun observeAndPersistNavigationState() {
+        screenStack.drop(1).onEach { stack ->
+            prefs.edit().putString(KEY_SCREEN_STACK, stack.joinToString(",") { it.name }).apply()
+        }.launchIn(viewModelScope)
+
+        activeGrammarLesson.drop(1).onEach { lesson ->
+            if (lesson != null) pendingGrammarRestore = false
+            if (!pendingGrammarRestore) {
+                prefs.edit().putInt(KEY_ACTIVE_GRAMMAR_ID, lesson?.id ?: -1).apply()
+            }
+        }.launchIn(viewModelScope)
+
+        activeConversation.drop(1).onEach { conv ->
+            if (conv != null) pendingConversationRestore = false
+            if (!pendingConversationRestore) {
+                prefs.edit().putInt(KEY_ACTIVE_CONVERSATION_ID, conv?.id ?: -1).apply()
+            }
+        }.launchIn(viewModelScope)
+
+        activeDailySentence.drop(1).onEach { sentence ->
+            if (sentence != null) pendingDailySentenceRestore = false
+            if (!pendingDailySentenceRestore) {
+                prefs.edit().putInt(KEY_ACTIVE_DAILY_SENTENCE_ID, sentence?.id ?: -1).apply()
+            }
+        }.launchIn(viewModelScope)
+
+        activeParagraph.drop(1).onEach { paragraph ->
+            if (paragraph != null) pendingParagraphRestore = false
+            if (!pendingParagraphRestore) {
+                prefs.edit().putInt(KEY_ACTIVE_PARAGRAPH_ID, paragraph?.id ?: -1).apply()
+            }
+        }.launchIn(viewModelScope)
+
+        activeTongueTwister.drop(1).onEach { twister ->
+            if (twister != null) pendingTongueTwisterRestore = false
+            if (!pendingTongueTwisterRestore) {
+                prefs.edit().putInt(KEY_ACTIVE_TONGUE_TWISTER_ID, twister?.id ?: -1).apply()
+            }
+        }.launchIn(viewModelScope)
+
+        activeConversationIndex.drop(1).onEach { index ->
+            prefs.edit().putInt(KEY_ACTIVE_CONVERSATION_INDEX, index).apply()
+        }.launchIn(viewModelScope)
+
+        userConversationRole.drop(1).onEach { role ->
+            prefs.edit().putString(KEY_USER_CONVERSATION_ROLE, role).apply()
+        }.launchIn(viewModelScope)
+
+        selectedConversationLevel.drop(1).onEach { level ->
+            prefs.edit().putString(KEY_SELECTED_CONVERSATION_LEVEL, level).apply()
+        }.launchIn(viewModelScope)
+
+        grammarSelectedTab.drop(1).onEach { tab ->
+            prefs.edit().putInt(KEY_GRAMMAR_TAB, tab).apply()
+        }.launchIn(viewModelScope)
+
+        grammarSelectedCategory.drop(1).onEach { category ->
+            prefs.edit().putString(KEY_GRAMMAR_CATEGORY, category).apply()
+        }.launchIn(viewModelScope)
+
+        paragraphSelectedLevel.drop(1).onEach { level ->
+            prefs.edit().putString(KEY_PARAGRAPH_LEVEL, level).apply()
+        }.launchIn(viewModelScope)
+
+        selectedAccent.drop(1).onEach { accent ->
+            prefs.edit().putString(KEY_SELECTED_ACCENT, accent).apply()
+        }.launchIn(viewModelScope)
+
+        selectedSpeed.drop(1).onEach { speed ->
+            prefs.edit().putFloat(KEY_SELECTED_SPEED, speed).apply()
+        }.launchIn(viewModelScope)
+
+        isReviewSession.drop(1).onEach { active ->
+            if (!pendingReviewRestore) {
+                prefs.edit().putBoolean(KEY_IS_REVIEW_SESSION, active).apply()
+            }
+        }.launchIn(viewModelScope)
+
+        reviewSentencesList.drop(1).onEach { list ->
+            if (!pendingReviewRestore) {
+                prefs.edit().putString(KEY_REVIEW_SENTENCE_IDS, list.joinToString(",") { it.id.toString() }).apply()
+            }
+        }.launchIn(viewModelScope)
+
+        currentReviewIndex.drop(1).onEach { idx ->
+            if (!pendingReviewRestore) {
+                prefs.edit().putInt(KEY_CURRENT_REVIEW_INDEX, idx).apply()
+            }
+        }.launchIn(viewModelScope)
     }
 
     fun retryModelDownload() {
@@ -336,6 +544,25 @@ class EnglishViewModel(
     fun extractSpokenExample(text: String): String = Companion.extractSpokenExample(text)
 
     companion object {
+        private const val PREFS_NAME = "easy_speaking_prefs"
+        private const val KEY_SCREEN_STACK = "nav_screen_stack"
+        private const val KEY_ACTIVE_GRAMMAR_ID = "nav_active_grammar_id"
+        private const val KEY_ACTIVE_CONVERSATION_ID = "nav_active_conversation_id"
+        private const val KEY_ACTIVE_CONVERSATION_INDEX = "nav_active_conversation_index"
+        private const val KEY_USER_CONVERSATION_ROLE = "nav_user_conversation_role"
+        private const val KEY_SELECTED_CONVERSATION_LEVEL = "nav_selected_conversation_level"
+        private const val KEY_ACTIVE_DAILY_SENTENCE_ID = "nav_active_daily_sentence_id"
+        private const val KEY_ACTIVE_PARAGRAPH_ID = "nav_active_paragraph_id"
+        private const val KEY_ACTIVE_TONGUE_TWISTER_ID = "nav_active_tongue_twister_id"
+        private const val KEY_GRAMMAR_TAB = "nav_grammar_tab"
+        private const val KEY_GRAMMAR_CATEGORY = "nav_grammar_category"
+        private const val KEY_PARAGRAPH_LEVEL = "nav_paragraph_level"
+        private const val KEY_SELECTED_ACCENT = "tts_selected_accent"
+        private const val KEY_SELECTED_SPEED = "tts_selected_speed"
+        private const val KEY_IS_REVIEW_SESSION = "nav_is_review_session"
+        private const val KEY_REVIEW_SENTENCE_IDS = "nav_review_sentence_ids"
+        private const val KEY_CURRENT_REVIEW_INDEX = "nav_current_review_index"
+
         fun extractSpokenExample(text: String): String {
             return text.lines()
                 .map { line ->
@@ -401,9 +628,25 @@ class EnglishViewModel(
 
     fun navigateTo(screen: Screen) {
         if (screen != Screen.DailySentences) {
+            pendingReviewRestore = false
             isReviewSession.value = false
             reviewSentencesList.value = emptyList()
             currentReviewIndex.value = 0
+        }
+        if (screen != Screen.Grammar || activeGrammarLesson.value == null) {
+            pendingGrammarRestore = false
+        }
+        if (screen != Screen.Conversation || activeConversation.value == null) {
+            pendingConversationRestore = false
+        }
+        if (screen != Screen.DailySentences || activeDailySentence.value == null) {
+            pendingDailySentenceRestore = false
+        }
+        if (screen != Screen.Paragraph || activeParagraph.value == null) {
+            pendingParagraphRestore = false
+        }
+        if (screen != Screen.TongueTwister || activeTongueTwister.value == null) {
+            pendingTongueTwisterRestore = false
         }
         if (screen == Screen.Home) {
             screenStack.value = listOf(Screen.Home)
@@ -452,22 +695,31 @@ class EnglishViewModel(
 
         // 2. Check if an active practice item is open
         if (activeGrammarLesson.value != null) {
+            pendingGrammarRestore = false
             activeGrammarLesson.value = null
             return true
         }
+        if (screenStack.value.lastOrNull() == Screen.Grammar && grammarSelectedCategory.value != null) {
+            grammarSelectedCategory.value = null
+            return true
+        }
         if (activeConversation.value != null) {
+            pendingConversationRestore = false
             activeConversation.value = null
             return true
         }
         if (activeDailySentence.value != null) {
+            pendingDailySentenceRestore = false
             activeDailySentence.value = null
             return true
         }
         if (activeParagraph.value != null) {
+            pendingParagraphRestore = false
             activeParagraph.value = null
             return true
         }
         if (activeTongueTwister.value != null) {
+            pendingTongueTwisterRestore = false
             activeTongueTwister.value = null
             return true
         }
@@ -757,8 +1009,10 @@ class EnglishViewModel(
 
     // --- CONVERSATION ROLE PLAY ENGINE ---
     fun selectConversation(conversation: ConversationSet) {
+        pendingConversationRestore = false
         activeConversation.value = conversation
         activeConversationIndex.value = 0
+        selectedConversationLevel.value = "Basic"
         navigateTo(Screen.Conversation)
 
         // If the starting role is Alex (A) and user is Sarah (B), speak the first line automatically!

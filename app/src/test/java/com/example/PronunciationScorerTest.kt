@@ -1,16 +1,28 @@
 package com.example
 
+import android.app.Application
+import android.content.Context
+import android.os.Looper
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
+import com.example.data.AppDatabase
+import com.example.data.DailySentence
+import com.example.data.EnglishRepository
 import com.example.ui.AudioEnergyWindow
+import com.example.ui.EnglishViewModel
 import com.example.ui.PronunciationScorer
+import com.example.ui.Screen
 import com.example.ui.SpeechModelOption
 import com.example.ui.SpokenWordTiming
 import com.example.ui.WordAlignmentStatus
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
@@ -23,8 +35,66 @@ class PronunciationScorerTest {
         assertEquals(SpeechModelOption.INDIA, SpeechModelOption.fromId("unknown"))
         assertEquals(SpeechModelOption.INDIA, SpeechModelOption.fromId("en-in"))
         assertEquals(SpeechModelOption.US, SpeechModelOption.fromId("en-us"))
-        assertTrue(SpeechModelOption.INDIA.folderName.contains("small-en-in"))
-        assertTrue(SpeechModelOption.US.folderName.contains("small-en-us"))
+
+        SpeechModelOption.entries.forEach { option ->
+            assertEquals("vosk-model-en-us-0.22-lgraph", option.folderName)
+            assertEquals("https://alphacephei.com/vosk/models/vosk-model-en-us-0.22-lgraph.zip", option.downloadUrl)
+            val uiText = "${option.displayName} ${option.subtitle}".lowercase()
+            assertFalse("UI copy must not mention vosk", uiText.contains("vosk"))
+            assertFalse("UI copy must not mention 0.22", uiText.contains("0.22"))
+            assertFalse("UI copy must not mention lgraph", uiText.contains("lgraph"))
+        }
+    }
+
+    @Test
+    fun viewModelNavigationAndSubStateSurviveAppSwitchRecreation() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        app.getSharedPreferences("easy_speaking_prefs", Context.MODE_PRIVATE).edit().clear().commit()
+
+        val db = Room.inMemoryDatabaseBuilder(app, AppDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        val dao = db.englishDao()
+        val sentence = DailySentence(
+            id = 42,
+            text = "How have you been?",
+            translation = "Casual greeting",
+            category = "Greetings",
+            difficulty = "Beginner"
+        )
+        runBlocking {
+            dao.insertDailySentences(listOf(sentence))
+        }
+        val repo = EnglishRepository(dao)
+
+        val vm1 = EnglishViewModel(app, repo)
+        vm1.navigateTo(Screen.DailySentences)
+        vm1.activeDailySentence.value = sentence
+        vm1.grammarSelectedTab.value = 1
+        vm1.grammarSelectedCategory.value = "Modals"
+        vm1.setAccent("US")
+        vm1.setPlaybackSpeed(1.25f)
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
+        vm1.releaseResources()
+
+        val vm2 = EnglishViewModel(app, repo)
+        assertEquals(Screen.DailySentences, vm2.currentScreen.value)
+        assertEquals(listOf(Screen.Home, Screen.DailySentences), vm2.screenStack.value)
+        assertEquals(1, vm2.grammarSelectedTab.value)
+        assertEquals("Modals", vm2.grammarSelectedCategory.value)
+        assertEquals("US", vm2.selectedAccent.value)
+        assertEquals(1.25f, vm2.selectedSpeed.value, 0.001f)
+
+        // Allow Room Flow restoration coroutine to emit activeDailySentence
+        val deadline = System.currentTimeMillis() + 2000L
+        while (vm2.activeDailySentence.value == null && System.currentTimeMillis() < deadline) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            Thread.sleep(20)
+        }
+        assertEquals(42, vm2.activeDailySentence.value?.id)
+
+        vm2.releaseResources()
+        db.close()
     }
 
     @Test
