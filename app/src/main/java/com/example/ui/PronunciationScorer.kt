@@ -209,12 +209,15 @@ object PronunciationScorer {
      * using unique lowercase words from the target text.
      */
     fun buildGrammarJson(targetText: String): String? {
-        val uniqueWords = extractTargetWords(targetText).distinct()
-        if (uniqueWords.isEmpty()) return null
-        val jsonArray = JSONArray()
-        uniqueWords.forEach { jsonArray.put(it) }
-        jsonArray.put("[unk]")
-        return jsonArray.toString()
+        val words = extractTargetWords(targetText)
+        if (words.isEmpty()) return null
+        val arr = JSONArray()
+        if (words.size > 1) {
+            arr.put(words.joinToString(" "))
+        }
+        words.distinct().forEach { arr.put(it) }
+        arr.put("[unk]")
+        return arr.toString()
     }
 
     /**
@@ -570,6 +573,19 @@ object PronunciationScorer {
                             )
                         )
                     }
+                    spoken.word == UNKNOWN_WORD_DISPLAY && isShortUnstressedWord(targetTok.word) -> {
+                        perDisplayParts[targetTok.displayIndex].add(
+                            AlignedWordFeedback(
+                                targetWord = displayWord,
+                                spokenWord = spoken.word,
+                                status = WordAlignmentStatus.Close,
+                                startSec = spoken.startSec,
+                                endSec = spoken.endSec,
+                                confidence = spoken.conf,
+                                isUnclear = true
+                            )
+                        )
+                    }
                     else -> {
                         perDisplayParts[targetTok.displayIndex].add(
                             AlignedWordFeedback(
@@ -682,8 +698,9 @@ object PronunciationScorer {
         val sortedRms = energyWindows.map { it.rms }.sorted()
         val noiseFloor = sortedRms.getOrElse((sortedRms.size * 0.15).toInt()) { 120f }.coerceIn(80f, 260f)
         val energyThreshold = maxOf(250f, noiseFloor * 1.75f)
-        val recordingStartSec = energyWindows.first().startSec
-        val recordingEndSec = energyWindows.last().endSec
+        val speechWins = energyWindows.filter { it.rms >= energyThreshold }
+        val recordingStartSec = speechWins.firstOrNull()?.startSec ?: energyWindows.first().startSec
+        val recordingEndSec = speechWins.lastOrNull()?.endSec ?: energyWindows.last().endSec
 
         for (idx in mergedPerTarget.indices) {
             val current = mergedPerTarget[idx]
@@ -713,6 +730,8 @@ object PronunciationScorer {
                     missedAfterInGap++
                 }
             }
+
+            if (nextAnchorStartSec <= prevAnchorEndSec) continue
 
             val totalMissedInGap = (missedBeforeInGap + 1 + missedAfterInGap).coerceAtLeast(1)
             val gapDuration = (nextAnchorStartSec - prevAnchorEndSec).coerceAtLeast(0.06f)
@@ -755,7 +774,9 @@ object PronunciationScorer {
     }
 
     private fun substitutionCost(target: String, spoken: String, itemType: String): Float {
-        if (spoken == UNKNOWN_WORD_DISPLAY) return 2.0f
+        if (spoken == UNKNOWN_WORD_DISPLAY) {
+            return if (isShortUnstressedWord(target)) 0.85f else 2.0f
+        }
         if (target == spoken || isPhoneticMatch(target, spoken, itemType)) return 0f
         val dist = levenshtein(target, spoken)
         val maxClose = if (target.length >= 5) 2 else 1

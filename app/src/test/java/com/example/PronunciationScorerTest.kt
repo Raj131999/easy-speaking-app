@@ -28,11 +28,14 @@ class PronunciationScorerTest {
     }
 
     @Test
-    fun buildGrammarJsonStripsPunctuationDeduplicatesAndAppendsUnk() {
+    fun buildGrammarJsonStripsPunctuationDeduplicatesAndIncludesFullPhrase() {
         val grammar = PronunciationScorer.buildGrammarJson(
             "Hello, world! Hello again — let's speak clearly."
         )!!
-        assertEquals("[\"hello\",\"world\",\"again\",\"let's\",\"speak\",\"clearly\",\"[unk]\"]", grammar)
+        assertEquals(
+            "[\"hello world hello again let's speak clearly\",\"hello\",\"world\",\"again\",\"let's\",\"speak\",\"clearly\",\"[unk]\"]",
+            grammar
+        )
     }
 
     @Test
@@ -206,6 +209,58 @@ class PronunciationScorerTest {
 
         assertTrue(missedResult.missedWords.containsAll(listOf("you", "have", "been")))
         assertTrue(missedResult.unclearWords.isEmpty())
+    }
+
+    @Test
+    fun energyFallbackTrimsTrailingSilenceBeforeUserTappedStop() {
+        val target = listOf("How", "have", "you", "been")
+        val freeSpoken = listOf(
+            SpokenWordTiming("how", 0.20f, 0.55f, 0.95f)
+            // "have you been" spoken during 0.55..1.45, then 2.5s of silence while tapping stop
+        )
+        val windowsWithLongTrailingSilence = listOf(
+            AudioEnergyWindow(0.00f, 0.20f, 110f),
+            AudioEnergyWindow(0.20f, 0.55f, 1300f),
+            AudioEnergyWindow(0.55f, 0.85f, 1050f),
+            AudioEnergyWindow(0.85f, 1.15f, 1020f),
+            AudioEnergyWindow(1.15f, 1.45f, 1100f),
+            AudioEnergyWindow(1.45f, 2.50f, 115f),
+            AudioEnergyWindow(2.50f, 4.00f, 105f)
+        )
+
+        val result = PronunciationScorer.evaluatePronunciation(
+            targetDisplayWords = target,
+            spokenWords = freeSpoken,
+            energyWindows = windowsWithLongTrailingSilence
+        )
+
+        assertTrue("Long silence after speech ends must not push 'been' out of energy window", result.missedWords.isEmpty())
+        assertTrue(result.unclearWords.containsAll(listOf("have", "you", "been")))
+    }
+
+    @Test
+    fun unknownTokenInShortUnstressedSlotScoresAsUnclearInsteadOfMissed() {
+        val target = listOf("It's", "great", "to", "see", "you", "again")
+        val spokenWithUnk = listOf(
+            SpokenWordTiming("it's", 0.15f, 0.40f, 0.96f),
+            SpokenWordTiming("great", 0.42f, 0.75f, 0.95f),
+            SpokenWordTiming("to", 0.77f, 0.90f, 0.94f),
+            SpokenWordTiming("see", 0.92f, 1.18f, 0.96f),
+            SpokenWordTiming("???", 1.20f, 1.38f, 0.65f),
+            SpokenWordTiming("again", 1.40f, 1.78f, 0.94f)
+        )
+
+        val result = PronunciationScorer.evaluatePronunciation(
+            targetDisplayWords = target,
+            spokenWords = spokenWithUnk
+        )
+
+        assertTrue("Short unstressed target matched by ??? should not be missed", result.missedWords.isEmpty())
+        assertTrue(result.unclearWords.contains("you"))
+        assertFalse("Aligned ??? for short unstressed slot shouldn't leak into extraWords", result.extraWords.contains("???"))
+        val youFeedback = result.alignedDetails.first { it.targetWord == "you" }
+        assertEquals(WordAlignmentStatus.Close, youFeedback.status)
+        assertTrue(youFeedback.isUnclear)
     }
 
     @Test
