@@ -717,7 +717,7 @@ fun ParagraphScreen(
                                         if (isRecording) {
                                             viewModel.stopRecording(item.text, "paragraph", item.id)
                                         } else {
-                                            viewModel.startRecording(item.text)
+                                            viewModel.startRecording(item.text, "paragraph")
                                         }
                                     },
                                     size = 54.dp,

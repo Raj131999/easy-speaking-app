@@ -38,6 +38,7 @@ fun DependencyDownloadBanner(
     speechStatusNotice: String?,
     onRetryDownload: () -> Unit,
     onDismissNotice: () -> Unit,
+    showModelStatus: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     var showReadyConfirmation by remember { mutableStateOf(false) }
@@ -60,7 +61,7 @@ fun DependencyDownloadBanner(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         AnimatedVisibility(
-            visible = modelState !is ModelDownloadState.Ready || showReadyConfirmation,
+            visible = showModelStatus && (modelState !is ModelDownloadState.Ready || showReadyConfirmation),
             enter = fadeIn() + expandVertically(),
             exit = fadeOut() + shrinkVertically()
         ) {

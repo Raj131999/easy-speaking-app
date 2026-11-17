@@ -264,6 +264,70 @@ object PronunciationScorer {
         }
     }
 
+    /**
+     * Converts a plain transcript (e.g. from Android SpeechRecognizer) into SpokenWordTiming
+     * entries distributed monotonically across the active speech window in [energyWindows].
+     * When [expectedWordCount] exceeds the recognized token count, the span is scaled down
+     * proportionally so trailing or dropped short function words remain inside the active
+     * speech energy region for unclear-word fallback detection.
+     */
+    fun buildSpokenWordsFromTranscript(
+        transcript: String,
+        energyWindows: List<AudioEnergyWindow> = emptyList(),
+        confidence: Float = 0.92f,
+        expectedWordCount: Int = 0
+    ): List<SpokenWordTiming> {
+        val tokens = formatTranscriptWithUnk(transcript)
+            .split(Regex("\\s+"))
+            .map { normalizeToken(it) }
+            .filter { it.isNotBlank() }
+        if (tokens.isEmpty()) return emptyList()
+
+        val clampedConf = confidence.coerceIn(0.65f, 1.0f)
+        val (speechStart, speechEnd) = if (energyWindows.isNotEmpty()) {
+            val sortedRms = energyWindows.map { it.rms }.sorted()
+            val noiseFloor = sortedRms.getOrElse((sortedRms.size * 0.15).toInt()) { 120f }.coerceIn(80f, 260f)
+            val energyThreshold = maxOf(250f, noiseFloor * 1.75f)
+            val speechWins = energyWindows.filter { it.rms >= energyThreshold }
+            val start = speechWins.firstOrNull()?.startSec ?: energyWindows.first().startSec
+            val end = (speechWins.lastOrNull()?.endSec ?: energyWindows.last().endSec)
+                .coerceAtLeast(start + tokens.size * 0.12f)
+            start to end
+        } else {
+            0f to (tokens.size * 0.35f)
+        }
+
+        val fullSpan = (speechEnd - speechStart).coerceAtLeast(tokens.size * 0.12f)
+        val effectiveSpan = if (expectedWordCount > tokens.size && expectedWordCount > 0) {
+            val ratio = (tokens.size.toFloat() / expectedWordCount.toFloat()).coerceIn(0.35f, 0.96f)
+            (fullSpan * ratio).coerceAtLeast(tokens.size * 0.10f)
+        } else {
+            fullSpan
+        }
+
+        val weights = tokens.map { it.length.coerceIn(2, 10).toFloat() }
+        val totalWeight = weights.sum().coerceAtLeast(1f)
+        var cursor = speechStart
+
+        return tokens.mapIndexed { idx, token ->
+            val slice = effectiveSpan * (weights[idx] / totalWeight)
+            val gap = if (idx < tokens.lastIndex) (slice * 0.14f).coerceIn(0.015f, 0.05f) else 0f
+            val wordStart = cursor
+            val wordEnd = if (idx == tokens.lastIndex) {
+                (speechStart + effectiveSpan).coerceAtLeast(wordStart + 0.04f)
+            } else {
+                (cursor + slice - gap).coerceAtLeast(wordStart + 0.04f)
+            }
+            cursor = (wordEnd + gap)
+            SpokenWordTiming(
+                word = token,
+                startSec = wordStart,
+                endSec = wordEnd,
+                conf = clampedConf
+            )
+        }
+    }
+
     fun serializeAlignedTimings(aligned: List<AlignedWordFeedback>): String {
         val arr = JSONArray()
         aligned.forEach { item ->

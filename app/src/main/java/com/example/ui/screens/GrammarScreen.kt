@@ -1112,7 +1112,7 @@ fun GrammarScreen(
                                             if (isRecording) {
                                                 viewModel.stopRecording(item.speechPrompt, "grammar", item.id)
                                             } else {
-                                                viewModel.startRecording(item.speechPrompt)
+                                                viewModel.startRecording(item.speechPrompt, "grammar")
                                             }
                                         },
                                         size = 64.dp,

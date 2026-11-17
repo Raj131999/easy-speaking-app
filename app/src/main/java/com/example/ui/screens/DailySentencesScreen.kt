@@ -567,7 +567,7 @@ fun DailySentencesScreen(
                                         if (isRecording) {
                                             viewModel.stopRecording(sentence.text, "daily_sentence", sentence.id)
                                         } else {
-                                            viewModel.startRecording(sentence.text)
+                                            viewModel.startRecording(sentence.text, "daily_sentence")
                                         }
                                     },
                                     size = 64.dp,

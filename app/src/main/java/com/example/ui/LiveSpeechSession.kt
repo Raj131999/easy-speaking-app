@@ -21,13 +21,20 @@ import java.util.concurrent.Executors
 import java.util.concurrent.LinkedBlockingQueue
 import kotlin.math.sqrt
 
+interface SpeechPracticeSession {
+    fun start(scope: CoroutineScope)
+    suspend fun stop(): SessionCaptureResult
+    suspend fun release()
+}
+
 data class SessionCaptureResult(
     val transcript: String,
     val spokenWords: List<SpokenWordTiming>,
     val grammarWords: List<SpokenWordTiming> = emptyList(),
     val energyWindows: List<AudioEnergyWindow> = emptyList(),
     val wavFilePath: String,
-    val audioBytesWritten: Long
+    val audioBytesWritten: Long,
+    val errorNotice: String? = null
 )
 
 /**
@@ -49,7 +56,7 @@ class LiveSpeechSession(
     private val useGrammarMode: Boolean = true,
     private val onAmplitude: ((Float) -> Unit)? = null,
     private val onPartialText: ((String) -> Unit)? = null
-) {
+) : SpeechPracticeSession {
     companion object {
         private const val TAG = "LiveSpeechSession"
         const val RATE = 16000
@@ -102,7 +109,7 @@ class LiveSpeechSession(
     private var totalAudioBytes = 0L
 
     @SuppressLint("MissingPermission")
-    fun start(scope: CoroutineScope) {
+    override fun start(scope: CoroutineScope) {
         if (isReleased || recording) return
         recording = true
         stopRequestedAtMs = 0L
@@ -372,7 +379,7 @@ class LiveSpeechSession(
         }
     }
 
-    suspend fun stop(): SessionCaptureResult {
+    override suspend fun stop(): SessionCaptureResult {
         if (stopRequestedAtMs == 0L) {
             stopRequestedAtMs = System.currentTimeMillis()
         }
@@ -395,7 +402,7 @@ class LiveSpeechSession(
         return result
     }
 
-    suspend fun release() {
+    override suspend fun release() {
         if (isReleased) return
         isReleased = true
         recording = false

@@ -412,4 +412,47 @@ class PronunciationScorerTest {
         // Grammar mode yields lower error rate on learner utterances and stays enabled by default
         assertTrue(grammarErrorSum < openErrorSum)
     }
+
+    @Test
+    fun androidSpeechTranscriptProducesMonotonicTimingsAndRespectsAccentMapping() {
+        assertEquals("en-IN", com.example.ui.AndroidSpeechSession.languageTagForAccent("IN"))
+        assertEquals("en-GB", com.example.ui.AndroidSpeechSession.languageTagForAccent("UK"))
+        assertEquals("en-AU", com.example.ui.AndroidSpeechSession.languageTagForAccent("AU"))
+        assertEquals("en-US", com.example.ui.AndroidSpeechSession.languageTagForAccent("US"))
+
+        val energyWindows = listOf(
+            AudioEnergyWindow(0.0f, 0.2f, 110f),   // noise floor
+            AudioEnergyWindow(0.2f, 1.5f, 1250f),  // spoken words
+            AudioEnergyWindow(1.5f, 2.4f, 1050f),  // trailing spoken short words
+            AudioEnergyWindow(2.4f, 3.0f, 105f)    // trailing silence
+        )
+
+        // When SpeechRecognizer drops trailing short words ("have you been"), span scales so
+        // energy fallback rescues those trailing short words inside [0.2, 2.4]
+        val spokenWords = PronunciationScorer.buildSpokenWordsFromTranscript(
+            transcript = "It's great to see again how",
+            energyWindows = energyWindows,
+            confidence = 0.94f,
+            expectedWordCount = 10
+        )
+
+        assertEquals(6, spokenWords.size)
+        for (i in 1 until spokenWords.size) {
+            assertTrue(spokenWords[i].startSec >= spokenWords[i - 1].endSec)
+        }
+        assertTrue(spokenWords.first().startSec >= 0.2f)
+        assertTrue(spokenWords.last().endSec < 2.4f)
+
+        val target = listOf("It's", "great", "to", "see", "you", "again", "How", "have", "you", "been")
+        val eval = PronunciationScorer.evaluatePronunciation(
+            targetDisplayWords = target,
+            spokenWords = spokenWords,
+            itemType = "daily_sentence",
+            energyWindows = energyWindows
+        )
+
+        assertTrue("Trailing spoken short words should be marked unclear instead of missed", eval.missedWords.isEmpty())
+        assertTrue(eval.unclearWords.containsAll(listOf("have", "you", "been")))
+        assertTrue(eval.score >= 80)
+    }
 }

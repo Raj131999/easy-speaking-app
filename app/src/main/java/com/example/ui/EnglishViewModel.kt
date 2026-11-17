@@ -125,7 +125,7 @@ class EnglishViewModel(
     // Voice recording and play states
     private val voiceRecorder = VoiceRecorder(application)
     private val recordingMutex = Mutex()
-    private var liveSession: LiveSpeechSession? = null
+    private var liveSession: SpeechPracticeSession? = null
     private var playbackTrackerJob: Job? = null
     val isRecording = MutableStateFlow(false)
     val isProcessingSpeech = MutableStateFlow(false)
@@ -751,13 +751,19 @@ class EnglishViewModel(
             return
         }
 
-        val model = voskModelManager.getLoadedModel()
-        if (model == null) {
-            if (modelDownloadState.value is ModelDownloadState.Error) {
-                voskModelManager.ensureModelReady(viewModelScope)
+        val useVoskForTwister = itemType == "tongue_twister"
+        val voskModel = if (useVoskForTwister) {
+            val loaded = voskModelManager.getLoadedModel()
+            if (loaded == null) {
+                if (modelDownloadState.value is ModelDownloadState.Error) {
+                    voskModelManager.ensureModelReady(viewModelScope)
+                }
+                speechStatusNotice.value = "Articulation voice pack is still finishing setup. Please wait a moment."
+                return
             }
-            speechStatusNotice.value = "Voice recognition setup is still finishing. Please wait a moment."
-            return
+            loaded
+        } else {
+            null
         }
 
         viewModelScope.launch {
@@ -767,7 +773,8 @@ class EnglishViewModel(
                     oldSession.release()
                 }
 
-                Log.d("SPEECH_DEBUG", "=== START RECORDING PRACTICE (Vosk) === targetText: '$targetText', itemType: '$itemType'")
+                val engineName = if (useVoskForTwister) "Vosk" else "AndroidSpeechRecognizer"
+                Log.d("SPEECH_DEBUG", "=== START RECORDING PRACTICE ($engineName) === targetText: '$targetText', itemType: '$itemType'")
                 val currentContext = currentTargetText.value
                 if (currentContext != targetText) {
                     currentTargetText.value = targetText
@@ -795,15 +802,27 @@ class EnglishViewModel(
                 }
                 val wavFile = File(recordingsDir, "attempt_${itemType.ifBlank { "drill" }}_${System.currentTimeMillis()}.wav")
 
-                val session = LiveSpeechSession(
-                    context = getApplication(),
-                    model = model,
-                    targetText = targetText,
-                    wavFile = wavFile,
-                    useGrammarMode = voskModelManager.useGrammarMode.value,
-                    onAmplitude = { amp -> liveAudioLevel.value = amp },
-                    onPartialText = { partial -> recognizedText.value = partial }
-                )
+                val session: SpeechPracticeSession = if (voskModel != null) {
+                    LiveSpeechSession(
+                        context = getApplication(),
+                        model = voskModel,
+                        targetText = targetText,
+                        wavFile = wavFile,
+                        useGrammarMode = voskModelManager.useGrammarMode.value,
+                        onAmplitude = { amp -> liveAudioLevel.value = amp },
+                        onPartialText = { partial -> recognizedText.value = partial }
+                    )
+                } else {
+                    AndroidSpeechSession(
+                        context = getApplication(),
+                        targetText = targetText,
+                        itemType = itemType,
+                        accentCode = selectedAccent.value,
+                        wavFile = wavFile,
+                        onAmplitude = { amp -> liveAudioLevel.value = amp },
+                        onPartialText = { partial -> recognizedText.value = partial }
+                    )
+                }
                 liveSession = session
                 session.start(viewModelScope)
             }
@@ -816,19 +835,27 @@ class EnglishViewModel(
 
         viewModelScope.launch {
             recordingMutex.withLock {
-                Log.d("SPEECH_DEBUG", "=== STOP RECORDING PRACTICE (Vosk) === targetText: '$targetText', itemType: $itemType")
+                Log.d("SPEECH_DEBUG", "=== STOP RECORDING PRACTICE === targetText: '$targetText', itemType: $itemType")
                 isRecording.value = false
                 liveAudioLevel.value = 0f
                 isProcessingSpeech.value = true
 
                 val captureResult = s.stop()
                 recognizedText.value = captureResult.transcript
-                voiceRecorder.setActiveRecordedFile(captureResult.wavFilePath)
+                if (captureResult.audioBytesWritten > 44L && captureResult.wavFilePath.isNotBlank()) {
+                    voiceRecorder.setActiveRecordedFile(captureResult.wavFilePath)
+                } else {
+                    voiceRecorder.setActiveRecordedFile(null)
+                    voiceRecorder.clearRecordedFile()
+                }
+                if (captureResult.transcript.isBlank() && !captureResult.errorNotice.isNullOrBlank()) {
+                    speechStatusNotice.value = captureResult.errorNotice
+                }
 
                 val recordDurationMs = System.currentTimeMillis() - recordStartTime
 
                 try {
-                    Log.d("SPEECH_DEBUG", "stopRecording: Vosk transcript='${captureResult.transcript}', words=${captureResult.spokenWords.size}")
+                    Log.d("SPEECH_DEBUG", "stopRecording: transcript='${captureResult.transcript}', words=${captureResult.spokenWords.size}")
 
                     val displayWords = targetText
                         .replace(Regex("[^a-zA-Z0-9'\\s]"), " ")

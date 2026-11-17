@@ -96,13 +96,71 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "SPEECH RECOGNITION VOICE PACK",
+                        text = "SPEECH RECOGNITION ENGINES",
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = FontWeight.Bold,
                             color = Slate500,
                             letterSpacing = 0.8.sp
                         )
                     )
+
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = Slate50,
+                        border = BorderStroke(width = 1.dp, color = Slate200),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Mic,
+                                    contentDescription = "On-Device Offline Speech Recognition",
+                                    tint = PolishTeal,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Lessons & Paragraphs",
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = PolishNavy
+                                    )
+                                )
+                                Text(
+                                    text = "Uses Android default offline speech recognition",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = Slate500)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Emerald50,
+                                border = BorderStroke(1.dp, Emerald500.copy(alpha = 0.4f))
+                            ) {
+                                Text(
+                                    text = "Ready",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = Emerald600
+                                    ),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
 
                     val isPackInstalled = installedSpeechModels.isNotEmpty()
                     val badgeText = when (val state = modelDownloadState) {
@@ -145,14 +203,14 @@ fun SettingsScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "English Voice Pack",
+                                    text = "Tongue Twisters Voice Pack",
                                     style = MaterialTheme.typography.bodyLarge.copy(
                                         fontWeight = FontWeight.Bold,
                                         color = PolishNavy
                                     )
                                 )
                                 Text(
-                                    text = "Supports all English accents (Indian, US, UK, Australian)",
+                                    text = "Powers articulation drills across all English accents",
                                     style = MaterialTheme.typography.bodySmall.copy(color = Slate500)
                                 )
                             }
@@ -185,14 +243,14 @@ fun SettingsScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Grammar-Guided Accuracy",
+                                text = "Grammar-Guided Articulation",
                                 style = MaterialTheme.typography.bodyLarge.copy(
                                     fontWeight = FontWeight.SemiBold,
                                     color = PolishNavy
                                 )
                             )
                             Text(
-                                text = "Focuses recognition on the current lesson vocabulary for tighter word alignment and timestamps",
+                                text = "Focuses tongue twister recognition on target vocabulary for tighter word alignment",
                                 style = MaterialTheme.typography.bodySmall.copy(color = Slate500)
                             )
                         }
@@ -211,14 +269,14 @@ fun SettingsScreen(
                     HorizontalDivider(color = Slate100)
 
                     val statusText = when (val state = modelDownloadState) {
-                        is ModelDownloadState.Checking -> "Checking Voice Studio status..."
+                        is ModelDownloadState.Checking -> "Checking Tongue Twister voice pack..."
                         is ModelDownloadState.Downloading ->
-                            "Setting up English Voice Pack (${(state.progress * 100).toInt()}%)"
+                            "Setting up Tongue Twister pack (${(state.progress * 100).toInt()}%)"
                         is ModelDownloadState.Extracting ->
-                            "Optimizing English Voice Pack (${(state.progress * 100).toInt()}%)"
-                        is ModelDownloadState.Loading -> "Warming up English speech recognition..."
-                        is ModelDownloadState.Ready -> "English Voice Pack active & ready for all accents"
-                        is ModelDownloadState.Error -> "Setup paused: ${state.message}"
+                            "Optimizing Tongue Twister pack (${(state.progress * 100).toInt()}%)"
+                        is ModelDownloadState.Loading -> "Warming up Tongue Twister recognition..."
+                        is ModelDownloadState.Ready -> "All speech recognition engines active & ready"
+                        is ModelDownloadState.Error -> "Tongue Twister pack paused: ${state.message}"
                     }
 
                     Text(

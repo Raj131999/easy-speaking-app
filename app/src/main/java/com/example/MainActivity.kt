@@ -143,8 +143,8 @@ fun MainShell(viewModel: EnglishViewModel) {
             wasNotReady = false
         }
     }
-    val hasBannerContent = (modelDownloadState !is ModelDownloadState.Ready) ||
-        showReadyConfirmation ||
+    val showModelBannerOnScreen = currentScreen == Screen.TongueTwister || currentScreen == Screen.Settings
+    val hasBannerContent = (showModelBannerOnScreen && ((modelDownloadState !is ModelDownloadState.Ready) || showReadyConfirmation)) ||
         !speechStatusNotice.isNullOrBlank()
 
     Scaffold(
@@ -225,6 +225,7 @@ fun MainShell(viewModel: EnglishViewModel) {
                         speechStatusNotice = speechStatusNotice,
                         onRetryDownload = { viewModel.retryModelDownload() },
                         onDismissNotice = { viewModel.clearSpeechStatusNotice() },
+                        showModelStatus = showModelBannerOnScreen,
                         modifier = bannerContainerModifier
                     )
                 }

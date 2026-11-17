@@ -677,7 +677,7 @@ fun ConversationScreen(
                                                     if (isRecording) {
                                                         viewModel.stopRecording(activeLine.text, "conversation", item.id)
                                                     } else {
-                                                        viewModel.startRecording(activeLine.text)
+                                                        viewModel.startRecording(activeLine.text, "conversation")
                                                     }
                                                 },
                                                 size = 56.dp,
