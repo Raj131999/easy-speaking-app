@@ -126,9 +126,12 @@ class EnglishViewModel(
     private val voiceRecorder = VoiceRecorder(application)
     private val recordingMutex = Mutex()
     private var liveSession: SpeechPracticeSession? = null
+    private var processingSession: SpeechPracticeSession? = null
+    private var stopRecordingJob: Job? = null
     private var playbackTrackerJob: Job? = null
     val isRecording = MutableStateFlow(false)
     val isProcessingSpeech = MutableStateFlow(false)
+    val paragraphProcessingStatus = MutableStateFlow<String?>(null)
     val isPlayingBack = MutableStateFlow(false)
     val playbackPositionSec = MutableStateFlow<Float?>(null)
     val lastScore = MutableStateFlow<Int?>(null)
@@ -714,6 +717,7 @@ class EnglishViewModel(
             return true
         }
         if (activeParagraph.value != null) {
+            cancelParagraphProcessing()
             pendingParagraphRestore = false
             activeParagraph.value = null
             return true
@@ -820,7 +824,16 @@ class EnglishViewModel(
                         accentCode = selectedAccent.value,
                         wavFile = wavFile,
                         onAmplitude = { amp -> liveAudioLevel.value = amp },
-                        onPartialText = { partial -> recognizedText.value = partial }
+                        onPartialText = { partial -> recognizedText.value = partial },
+                        onProcessingProgress = if (itemType == "paragraph") {
+                            { current, total ->
+                                paragraphProcessingStatus.value = if (total > 1) {
+                                    "Transcribing part $current of $total..."
+                                } else {
+                                    "Transcribing audio..."
+                                }
+                            }
+                        } else null
                     )
                 }
                 liveSession = session
@@ -829,32 +842,65 @@ class EnglishViewModel(
         }
     }
 
+    fun cancelParagraphProcessing() {
+        val activeRecSession = liveSession
+        liveSession = null
+        val activeProcSession = processingSession
+        processingSession = null
+
+        (activeRecSession as? AndroidSpeechSession)?.cancelProcessing()
+        (activeProcSession as? AndroidSpeechSession)?.cancelProcessing()
+
+        stopRecordingJob?.cancel()
+        stopRecordingJob = null
+
+        isRecording.value = false
+        isProcessingSpeech.value = false
+        liveAudioLevel.value = 0f
+        paragraphProcessingStatus.value = null
+        recognizedText.value = ""
+        speechStatusNotice.value = null
+
+        if (activeRecSession != null) {
+            viewModelScope.launch {
+                runCatching { activeRecSession.release() }
+            }
+        }
+    }
+
     fun stopRecording(targetText: String, itemType: String, itemId: Int) {
         val s = liveSession ?: return
         liveSession = null
 
-        viewModelScope.launch {
+        stopRecordingJob = viewModelScope.launch {
             recordingMutex.withLock {
                 Log.d("SPEECH_DEBUG", "=== STOP RECORDING PRACTICE === targetText: '$targetText', itemType: $itemType")
+                processingSession = s
                 isRecording.value = false
                 liveAudioLevel.value = 0f
                 isProcessingSpeech.value = true
-
-                val captureResult = s.stop()
-                recognizedText.value = captureResult.transcript
-                if (captureResult.audioBytesWritten > 44L && captureResult.wavFilePath.isNotBlank()) {
-                    voiceRecorder.setActiveRecordedFile(captureResult.wavFilePath)
-                } else {
-                    voiceRecorder.setActiveRecordedFile(null)
-                    voiceRecorder.clearRecordedFile()
+                if (itemType == "paragraph") {
+                    paragraphProcessingStatus.value = "Preparing audio..."
                 }
-                if (captureResult.transcript.isBlank() && !captureResult.errorNotice.isNullOrBlank()) {
-                    speechStatusNotice.value = captureResult.errorNotice
-                }
-
-                val recordDurationMs = System.currentTimeMillis() - recordStartTime
 
                 try {
+                    val captureResult = s.stop()
+                    if (!isActive || (s is AndroidSpeechSession && s.wasCancelled())) {
+                        return@withLock
+                    }
+
+                    recognizedText.value = captureResult.transcript
+                    if (captureResult.audioBytesWritten > 44L && captureResult.wavFilePath.isNotBlank()) {
+                        voiceRecorder.setActiveRecordedFile(captureResult.wavFilePath)
+                    } else {
+                        voiceRecorder.setActiveRecordedFile(null)
+                        voiceRecorder.clearRecordedFile()
+                    }
+                    if (captureResult.transcript.isBlank() && !captureResult.errorNotice.isNullOrBlank()) {
+                        speechStatusNotice.value = captureResult.errorNotice
+                    }
+
+                    val recordDurationMs = System.currentTimeMillis() - recordStartTime
                     Log.d("SPEECH_DEBUG", "stopRecording: transcript='${captureResult.transcript}', words=${captureResult.spokenWords.size}")
 
                     val displayWords = targetText
@@ -983,10 +1029,22 @@ class EnglishViewModel(
                             }
                         }
                     }
+                } catch (e: CancellationException) {
+                    Log.d("SPEECH_DEBUG", "stopRecording: Cancelled by user")
+                    throw e
                 } catch (e: Exception) {
                     Log.e("SPEECH_DEBUG", "stopRecording: Error during transcription/evaluation", e)
                 } finally {
+                    if (processingSession === s) {
+                        processingSession = null
+                    }
+                    if (itemType == "paragraph") {
+                        paragraphProcessingStatus.value = null
+                    }
                     isProcessingSpeech.value = false
+                    withContext(NonCancellable) {
+                        runCatching { s.release() }
+                    }
                 }
             }
         }

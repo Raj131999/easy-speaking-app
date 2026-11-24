@@ -19,8 +19,13 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -29,6 +34,8 @@ import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.sqrt
 
 /**
@@ -50,7 +57,8 @@ class AndroidSpeechSession(
     private val accentCode: String,
     private val wavFile: File,
     private val onAmplitude: ((Float) -> Unit)? = null,
-    private val onPartialText: ((String) -> Unit)? = null
+    private val onPartialText: ((String) -> Unit)? = null,
+    private val onProcessingProgress: ((Int, Int) -> Unit)? = null
 ) : SpeechPracticeSession {
 
     companion object {
@@ -67,6 +75,9 @@ class AndroidSpeechSession(
         private const val TARGET_CHUNK_BYTES = 15 * BYTES_PER_SECOND // 15 s
         private const val MIN_CHUNK_SEEK_BYTES = 11 * BYTES_PER_SECOND
         private const val MAX_CHUNK_SEEK_BYTES = 16 * BYTES_PER_SECOND
+        private const val PARAGRAPH_MIN_CHUNK_BYTES = 8 * BYTES_PER_SECOND
+        private const val PARAGRAPH_TARGET_CHUNK_BYTES = 10 * BYTES_PER_SECOND
+        private const val PARAGRAPH_MAX_CHUNK_BYTES = 12 * BYTES_PER_SECOND
         private const val LONG_UTTERANCE_SECONDS = 13.5f
 
         private const val ERROR_LANGUAGE_UNAVAILABLE_CODE = 12
@@ -119,10 +130,46 @@ class AndroidSpeechSession(
     @Volatile
     private var lastEmittedTranscript = ""
 
+    // Paragraph-only non-blocking live preview & cancellation state
+    @Volatile
+    private var isCancelled = false
+    @Volatile
+    private var paragraphLiveStreamEnded = false
+    private var paragraphPipeChannel: Channel<ByteArray>? = null
+    private var paragraphPipeWriterJob: Job? = null
+    @Volatile
+    private var activeChunkDeferred: CompletableDeferred<Triple<String, Float, Int?>>? = null
+    @Volatile
+    private var activeChunkReadFd: ParcelFileDescriptor? = null
+    @Volatile
+    private var activeChunkWriteFd: ParcelFileDescriptor? = null
+    @Volatile
+    private var activeChunkRecognizer: SpeechRecognizer? = null
+
+    fun wasCancelled(): Boolean = isCancelled
+
+    fun cancelProcessing() {
+        isCancelled = true
+        recording = false
+        if (stopRequestedAtMs == 0L) {
+            stopRequestedAtMs = System.currentTimeMillis()
+        }
+        paragraphPipeChannel?.close()
+        paragraphPipeWriterJob?.cancel()
+        liveResultDeferred?.let { if (!it.isCompleted) it.complete("") }
+        activeChunkDeferred?.let { if (!it.isCompleted) it.complete(Triple("", 0.9f, null)) }
+        runCatching { activeChunkReadFd?.close() }
+        runCatching { activeChunkWriteFd?.close() }
+        runCatching { pipeReadFd?.close() }
+        runCatching { pipeWriteFd?.close() }
+    }
+
     @SuppressLint("MissingPermission")
     override fun start(scope: CoroutineScope) {
         if (isReleased || recording) return
         recording = true
+        isCancelled = false
+        paragraphLiveStreamEnded = false
         stopRequestedAtMs = 0L
         liveBestPartial = ""
         liveFinalTranscript = null
@@ -132,9 +179,236 @@ class AndroidSpeechSession(
         lastEmittedTranscript = ""
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            startApi33StreamingSession(scope)
+            if (itemType == "paragraph") {
+                startApi33ParagraphSession(scope)
+            } else {
+                startApi33StreamingSession(scope)
+            }
         } else {
             startLegacyDirectSession(scope)
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    @SuppressLint("MissingPermission")
+    private fun startApi33ParagraphSession(scope: CoroutineScope) {
+        MicrophoneCaptureService.start(context)
+
+        val pipe = try {
+            ParcelFileDescriptor.createPipe()
+        } catch (e: IOException) {
+            Log.e(TAG, "Failed to create paragraph audio pipe", e)
+            null
+        }
+        val readFd = pipe?.get(0)
+        val writeFd = pipe?.get(1)
+        pipeReadFd = readFd
+        pipeWriteFd = writeFd
+
+        val readFdClosed = AtomicBoolean(false)
+        fun closeLocalReadFdOnce() {
+            if (readFd != null && readFdClosed.compareAndSet(false, true)) {
+                runCatching { readFd.close() }
+                if (pipeReadFd === readFd) pipeReadFd = null
+            }
+        }
+
+        val deferred = CompletableDeferred<String>()
+        liveResultDeferred = deferred
+
+        val channel = Channel<ByteArray>(capacity = 32, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+        paragraphPipeChannel = channel
+
+        if (readFd != null && writeFd != null) {
+            recognizerStartJob = scope.launch(Dispatchers.Main.immediate) {
+                if (isReleased || isCancelled) {
+                    closeLocalReadFdOnce()
+                    if (!deferred.isCompleted) deferred.complete("")
+                    return@launch
+                }
+                try {
+                    destroyActiveRecognizerOnMain()
+                    val rec = createBestOfflineRecognizer()
+                    activeRecognizer = rec
+                    rec.setRecognitionListener(object : RecognitionListener {
+                        override fun onReadyForSpeech(params: Bundle?) {
+                            // Remote service now owns its duplicated copy of readFd
+                            closeLocalReadFdOnce()
+                        }
+                        override fun onBeginningOfSpeech() {
+                            closeLocalReadFdOnce()
+                        }
+                        override fun onRmsChanged(rmsdB: Float) {}
+                        override fun onBufferReceived(buffer: ByteArray?) {}
+                        override fun onEndOfSpeech() {}
+                        override fun onEvent(eventType: Int, params: Bundle?) {}
+
+                        override fun onPartialResults(partialResults: Bundle?) {
+                            val text = extractRecognitionText(partialResults)
+                            if (text.isNotBlank() && (text.length >= liveBestPartial.length || liveBestPartial.isBlank())) {
+                                liveBestPartial = text
+                                emitTranscript(text)
+                            }
+                        }
+
+                        override fun onResults(results: Bundle?) {
+                            closeLocalReadFdOnce()
+                            paragraphLiveStreamEnded = true
+                            channel.close()
+                            val text = extractRecognitionText(results)
+                            val conf = extractConfidence(results)
+                            liveFinalTranscript = text
+                            liveFinalConfidence = conf
+                            liveFinishedAtBytes = totalAudioBytes
+                            if (text.isNotBlank()) emitTranscript(text)
+                            if (!deferred.isCompleted) deferred.complete(text)
+                        }
+
+                        override fun onError(error: Int) {
+                            Log.w(TAG, "Paragraph live SpeechRecognizer onError=$error")
+                            closeLocalReadFdOnce()
+                            paragraphLiveStreamEnded = true
+                            channel.close()
+                            liveErrorCode = error
+                            liveFinishedAtBytes = totalAudioBytes
+                            if (!deferred.isCompleted) deferred.complete("")
+                        }
+                    })
+                    val intent = buildOfflineIntent(
+                        languageTag = languageTagForAccent(accentCode),
+                        readFd = readFd
+                    )
+                    rec.startListening(intent)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed starting paragraph streaming SpeechRecognizer", e)
+                    closeLocalReadFdOnce()
+                    paragraphLiveStreamEnded = true
+                    channel.close()
+                    liveErrorCode = SpeechRecognizer.ERROR_CLIENT
+                    if (!deferred.isCompleted) deferred.complete("")
+                }
+            }
+
+            // Dedicated non-blocking IO writer so AudioRecord capture NEVER blocks on the pipe
+            paragraphPipeWriterJob = scope.launch(Dispatchers.IO) {
+                try {
+                    ParcelFileDescriptor.AutoCloseOutputStream(writeFd).use { out ->
+                        for (chunk in channel) {
+                            if (paragraphLiveStreamEnded || isCancelled || isReleased) break
+                            out.write(chunk)
+                        }
+                        if (!paragraphLiveStreamEnded && !isCancelled && !isReleased) {
+                            writeSilenceInChunksCancellable(out, PIPE_TAIL_SILENCE_BYTES) {
+                                paragraphLiveStreamEnded || isCancelled || isReleased
+                            }
+                            out.flush()
+                        }
+                    }
+                } catch (_: IOException) {
+                    // Expected when recognizer stops reading early
+                } catch (_: Exception) {
+                } finally {
+                    if (pipeWriteFd === writeFd) pipeWriteFd = null
+                }
+            }
+        } else {
+            channel.close()
+            deferred.complete("")
+        }
+
+        captureJob = scope.launch(captureDispatcher) {
+            try {
+                Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
+            } catch (_: Throwable) {}
+
+            var audioRecord: AudioRecord? = null
+            var raf: RandomAccessFile? = null
+
+            try {
+                val minBuf = AudioRecord.getMinBufferSize(
+                    RATE,
+                    AudioFormat.CHANNEL_IN_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT
+                ).coerceAtLeast(CAPTURE_CHUNK_BYTES)
+                val bufferSize = maxOf(minBuf * 8, BYTES_PER_SECOND * 3)
+
+                val ar = createAudioRecordWithFallback(bufferSize)
+                if (ar == null) {
+                    Log.e(TAG, "AudioRecord failed to initialize for paragraph")
+                    recording = false
+                    return@launch
+                }
+                audioRecord = ar
+
+                wavFile.parentFile?.mkdirs()
+                if (wavFile.exists()) wavFile.delete()
+                raf = RandomAccessFile(wavFile, "rw")
+                raf.write(ByteArray(44))
+                totalAudioBytes = 0L
+                synchronized(pcmOutput) { pcmOutput.reset() }
+
+                ar.startRecording()
+                val buf = ByteArray(CAPTURE_CHUNK_BYTES)
+                var drainedAfterStop = false
+
+                while (!isReleased && !isCancelled) {
+                    val stopReqMs = stopRequestedAtMs
+                    if (stopReqMs > 0L && drainedAfterStop && System.currentTimeMillis() - stopReqMs >= STOP_DRAIN_MS) {
+                        recording = false
+                        break
+                    }
+                    if (!recording && stopReqMs == 0L) break
+
+                    val n = ar.read(buf, 0, buf.size)
+                    if (stopReqMs > 0L) {
+                        drainedAfterStop = true
+                    }
+                    if (n <= 0) continue
+
+                    val startSec = totalAudioBytes.toFloat() / BYTES_PER_SECOND
+                    raf.write(buf, 0, n)
+                    synchronized(pcmOutput) {
+                        if (pcmOutput.size() + n <= MAX_PCM_BUFFER_BYTES) {
+                            pcmOutput.write(buf, 0, n)
+                        }
+                    }
+                    totalAudioBytes += n
+                    val endSec = totalAudioBytes.toFloat() / BYTES_PER_SECOND
+
+                    val rms = computeRms(buf, n)
+                    synchronized(energyWindows) {
+                        energyWindows.add(AudioEnergyWindow(startSec = startSec, endSec = endSec, rms = rms))
+                    }
+                    emitAmplitude(rms)
+
+                    // Non-blocking enqueue to live preview pipe (never stalls AudioRecord)
+                    if (!paragraphLiveStreamEnded) {
+                        channel.trySend(buf.copyOf(n))
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error during paragraph AudioRecord capture", e)
+            } finally {
+                channel.close()
+                try {
+                    if (audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                        audioRecord.stop()
+                    }
+                } catch (_: Exception) {}
+                try {
+                    audioRecord?.release()
+                } catch (_: Exception) {}
+
+                try {
+                    raf?.let { file ->
+                        patchWavHeader(file, totalAudioBytes)
+                        runCatching { file.fd.sync() }
+                        file.close()
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error patching/closing paragraph WAV file", e)
+                }
+            }
         }
     }
 
@@ -379,6 +653,9 @@ class AndroidSpeechSession(
         val expectedWordCount = PronunciationScorer.extractTargetWords(targetText).size
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (itemType == "paragraph") {
+                return stopApi33ParagraphSession(expectedWordCount)
+            }
             recognizerStartJob?.join()
             captureJob?.join()
             recording = false
@@ -490,6 +767,392 @@ class AndroidSpeechSession(
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private suspend fun stopApi33ParagraphSession(expectedWordCount: Int): SessionCaptureResult {
+        withTimeoutOrNull(2000L) {
+            recognizerStartJob?.join()
+        }
+        withTimeoutOrNull(2500L) {
+            captureJob?.join()
+        }
+        recording = false
+        paragraphPipeChannel?.close()
+
+        if (!paragraphLiveStreamEnded && !isCancelled) {
+            withTimeoutOrNull(1500L) {
+                liveResultDeferred?.await()
+            }
+        }
+
+        paragraphLiveStreamEnded = true
+        withContext(NonCancellable + Dispatchers.Main.immediate) {
+            destroyActiveRecognizerOnMain()
+            closePipeFds()
+        }
+        paragraphPipeWriterJob?.cancel()
+
+        if (isCancelled) {
+            release()
+            return SessionCaptureResult(
+                transcript = "",
+                spokenWords = emptyList(),
+                grammarWords = emptyList(),
+                energyWindows = emptyList(),
+                wavFilePath = "",
+                audioBytesWritten = 0L,
+                errorNotice = null
+            )
+        }
+
+        val pcmBytes = synchronized(pcmOutput) { pcmOutput.toByteArray() }
+        val windowsCopy = synchronized(energyWindows) { energyWindows.toList() }
+        val durationSec = pcmBytes.size.toFloat() / BYTES_PER_SECOND
+        val speechDetected = hasSpeechAudio(windowsCopy)
+
+        val rawLive = (liveFinalTranscript?.takeIf { it.isNotBlank() } ?: liveBestPartial).trim()
+        val liveEndedEarlyWithSpeech = liveFinishedAtBytes in 1 until (totalAudioBytes - BYTES_PER_SECOND) &&
+            hasSpeechAfterByteOffset(windowsCopy, liveFinishedAtBytes)
+        val liveCoveredShortAttempt = rawLive.isNotBlank() &&
+            !liveFinalTranscript.isNullOrBlank() &&
+            durationSec <= LONG_UTTERANCE_SECONDS &&
+            !liveEndedEarlyWithSpeech
+
+        val shouldRunChunked = pcmBytes.size >= 3200 && speechDetected && !liveCoveredShortAttempt
+
+        var finalTranscript = rawLive
+        var finalConfidence = liveFinalConfidence
+        var notice: String? = null
+
+        if (shouldRunChunked && !isCancelled) {
+            // Brief cooldown so Android's SpeechRecognitionService releases the live session cleanly
+            delay(150L)
+            val (chunkedText, chunkConf, chunkError) = transcribeParagraphPcmChunks(pcmBytes)
+            if (isCancelled) {
+                release()
+                return SessionCaptureResult(
+                    transcript = "",
+                    spokenWords = emptyList(),
+                    grammarWords = emptyList(),
+                    energyWindows = emptyList(),
+                    wavFilePath = "",
+                    audioBytesWritten = 0L,
+                    errorNotice = null
+                )
+            }
+            val chunkWords = chunkedText.split(Regex("\\s+")).count { it.isNotBlank() }
+            val liveWords = finalTranscript.split(Regex("\\s+")).count { it.isNotBlank() }
+            if (chunkedText.isNotBlank() && (chunkWords >= liveWords || durationSec > LONG_UTTERANCE_SECONDS || liveEndedEarlyWithSpeech)) {
+                finalTranscript = chunkedText
+                finalConfidence = chunkConf
+                emitTranscript(finalTranscript)
+            } else if (finalTranscript.isBlank()) {
+                notice = mapErrorToUserNotice(chunkError ?: liveErrorCode)
+            }
+        } else if (finalTranscript.isBlank() && liveErrorCode != null) {
+            notice = mapErrorToUserNotice(liveErrorCode)
+        }
+
+        val spokenWords = PronunciationScorer.buildSpokenWordsFromTranscript(
+            transcript = finalTranscript,
+            energyWindows = windowsCopy,
+            confidence = finalConfidence,
+            expectedWordCount = expectedWordCount
+        )
+
+        release()
+
+        return SessionCaptureResult(
+            transcript = finalTranscript,
+            spokenWords = spokenWords,
+            grammarWords = emptyList(),
+            energyWindows = windowsCopy,
+            wavFilePath = wavFile.absolutePath,
+            audioBytesWritten = totalAudioBytes,
+            errorNotice = notice
+        )
+    }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private suspend fun transcribeParagraphPcmChunks(pcmBytes: ByteArray): Triple<String, Float, Int?> {
+        if (pcmBytes.isEmpty() || isCancelled) return Triple("", 0.9f, null)
+
+        val allChunks = splitParagraphPcmIntoChunks(pcmBytes)
+        val speechChunks = allChunks.filter { chunkHasSpeech(it) }
+        if (speechChunks.isEmpty()) return Triple("", 0.9f, null)
+
+        val combinedParts = mutableListOf<String>()
+        val confidences = mutableListOf<Float>()
+        var lastError: Int? = null
+
+        var activeLang = languageTagForAccent(accentCode)
+        var activePreferOnDevice = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+
+        val totalDeadlineMs = System.currentTimeMillis() + maxOf(45_000L, speechChunks.size * 14_000L)
+
+        for ((idx, chunk) in speechChunks.withIndex()) {
+            if (isCancelled || isReleased || !currentCoroutineContext().isActive) break
+            if (System.currentTimeMillis() >= totalDeadlineMs) {
+                Log.w(TAG, "Paragraph transcription reached overall deadline after $idx/${speechChunks.size} chunks")
+                break
+            }
+
+            onProcessingProgress?.invoke(idx + 1, speechChunks.size)
+
+            var result = recognizeSingleParagraphChunk(chunk, languageTag = activeLang, preferOnDevice = activePreferOnDevice)
+
+            if (isCancelled || isReleased || !currentCoroutineContext().isActive) break
+
+            // Transient busy error: brief backoff and retry once
+            if (result.first.isBlank() && result.third == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
+                delay(300L)
+                if (!isCancelled && !isReleased && currentCoroutineContext().isActive) {
+                    result = recognizeSingleParagraphChunk(chunk, languageTag = activeLang, preferOnDevice = activePreferOnDevice)
+                }
+            }
+
+            // If regional offline pack (e.g. en-IN) is unavailable, switch to en-US for this and all remaining chunks
+            if (result.first.isBlank() &&
+                (result.third == ERROR_LANGUAGE_UNAVAILABLE_CODE || result.third == ERROR_LANGUAGE_NOT_SUPPORTED_CODE) &&
+                activeLang != "en-US" &&
+                !isCancelled
+            ) {
+                activeLang = "en-US"
+                result = recognizeSingleParagraphChunk(chunk, languageTag = activeLang, preferOnDevice = activePreferOnDevice)
+            }
+
+            // If on-device recognizer itself failed to initialize (ERROR_CLIENT), fall back once
+            if (result.first.isBlank() &&
+                activePreferOnDevice &&
+                result.third == SpeechRecognizer.ERROR_CLIENT &&
+                !isCancelled
+            ) {
+                activePreferOnDevice = false
+                result = recognizeSingleParagraphChunk(chunk, languageTag = activeLang, preferOnDevice = false)
+            }
+
+            if (result.first.isNotBlank()) {
+                combinedParts.add(result.first.trim())
+                confidences.add(result.second)
+                emitTranscript(combinedParts.joinToString(" "))
+            } else if (result.third != null) {
+                lastError = result.third
+            }
+
+            if (idx < speechChunks.lastIndex && !isCancelled) {
+                delay(80L)
+            }
+        }
+
+        val joined = combinedParts.joinToString(" ").trim()
+        val avgConf = if (confidences.isNotEmpty()) confidences.average().toFloat() else 0.9f
+        return Triple(joined, avgConf, lastError)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private suspend fun recognizeSingleParagraphChunk(
+        chunkBytes: ByteArray,
+        languageTag: String,
+        preferOnDevice: Boolean
+    ): Triple<String, Float, Int?> {
+        if (isCancelled || isReleased) return Triple("", 0.9f, null)
+
+        val pipe = try {
+            ParcelFileDescriptor.createPipe()
+        } catch (e: IOException) {
+            Log.e(TAG, "Paragraph chunk pipe creation failed", e)
+            return Triple("", 0.9f, SpeechRecognizer.ERROR_AUDIO)
+        }
+        val readFd = pipe[0]
+        val writeFd = pipe[1]
+        val readFdClosed = AtomicBoolean(false)
+        fun closeReadFdOnce() {
+            if (readFdClosed.compareAndSet(false, true)) {
+                runCatching { readFd.close() }
+            }
+        }
+
+        val deferred = CompletableDeferred<Triple<String, Float, Int?>>()
+        val partialBackup = AtomicReference("")
+        var chunkRec: SpeechRecognizer? = null
+        activeChunkDeferred = deferred
+        activeChunkReadFd = readFd
+        activeChunkWriteFd = writeFd
+
+        withContext(Dispatchers.Main.immediate) {
+            try {
+                if (isCancelled || isReleased) {
+                    closeReadFdOnce()
+                    if (!deferred.isCompleted) deferred.complete(Triple("", 0.9f, null))
+                    return@withContext
+                }
+                chunkRec = if (preferOnDevice && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                    SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+                ) {
+                    SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+                } else {
+                    SpeechRecognizer.createSpeechRecognizer(context)
+                }
+                activeChunkRecognizer = chunkRec
+
+                chunkRec?.setRecognitionListener(object : RecognitionListener {
+                    override fun onReadyForSpeech(params: Bundle?) {
+                        // Remote RecognitionService has received its duplicated readFd;
+                        // closing our local reference prevents write-end pipe deadlocks.
+                        closeReadFdOnce()
+                    }
+                    override fun onBeginningOfSpeech() {
+                        closeReadFdOnce()
+                    }
+                    override fun onRmsChanged(rmsdB: Float) {}
+                    override fun onBufferReceived(buffer: ByteArray?) {}
+                    override fun onEndOfSpeech() {}
+                    override fun onEvent(eventType: Int, params: Bundle?) {}
+
+                    override fun onPartialResults(partialResults: Bundle?) {
+                        val txt = extractRecognitionText(partialResults)
+                        if (txt.isNotBlank()) {
+                            val prev = partialBackup.get()
+                            if (txt.length >= prev.length) {
+                                partialBackup.set(txt)
+                            }
+                        }
+                    }
+
+                    override fun onResults(results: Bundle?) {
+                        closeReadFdOnce()
+                        val txt = extractRecognitionText(results).ifBlank { partialBackup.get() }
+                        val conf = extractConfidence(results)
+                        if (!deferred.isCompleted) {
+                            deferred.complete(Triple(txt, conf, null))
+                        }
+                    }
+
+                    override fun onError(error: Int) {
+                        closeReadFdOnce()
+                        if (!deferred.isCompleted) {
+                            deferred.complete(Triple(partialBackup.get(), 0.85f, error))
+                        }
+                    }
+                })
+                val intent = buildOfflineIntent(languageTag = languageTag, readFd = readFd)
+                chunkRec?.startListening(intent)
+            } catch (e: Exception) {
+                Log.e(TAG, "Paragraph chunk recognizer failed to start", e)
+                closeReadFdOnce()
+                if (!deferred.isCompleted) {
+                    deferred.complete(Triple("", 0.9f, SpeechRecognizer.ERROR_CLIENT))
+                }
+            }
+        }
+
+        // Write PCM concurrently on Dispatchers.IO while awaiting deferred with a bounded timeout
+        // so a recognizer that stops reading early can NEVER deadlock the coroutine!
+        val writerJob = CoroutineScope(Dispatchers.IO).launch {
+            try {
+                ParcelFileDescriptor.AutoCloseOutputStream(writeFd).use { out ->
+                    writeSilenceInChunksCancellable(out, PIPE_LEAD_SILENCE_BYTES) {
+                        deferred.isCompleted || isCancelled || isReleased
+                    }
+                    var offset = 0
+                    val step = 3200
+                    while (offset < chunkBytes.size && !deferred.isCompleted && !isCancelled && !isReleased) {
+                        val len = minOf(step, chunkBytes.size - offset)
+                        out.write(chunkBytes, offset, len)
+                        offset += len
+                    }
+                    if (!deferred.isCompleted && !isCancelled && !isReleased) {
+                        writeSilenceInChunksCancellable(out, PIPE_TAIL_SILENCE_BYTES) {
+                            deferred.isCompleted || isCancelled || isReleased
+                        }
+                        out.flush()
+                    }
+                }
+            } catch (_: IOException) {
+                // Recognizer closed read end early or analysis was cancelled
+            } catch (_: Exception) {
+            }
+        }
+
+        val chunkDurationMs = (chunkBytes.size.toLong() * 1000L) / BYTES_PER_SECOND
+        val chunkTimeoutMs = (chunkDurationMs + 6_000L).coerceIn(8_000L, 18_000L)
+
+        return try {
+            withTimeoutOrNull(chunkTimeoutMs) {
+                deferred.await()
+            } ?: run {
+                val rescued = partialBackup.get()
+                Log.w(TAG, "Paragraph chunk timed out after ${chunkTimeoutMs}ms; rescued='${rescued.take(40)}'")
+                if (rescued.isNotBlank()) {
+                    Triple(rescued, 0.85f, null)
+                } else {
+                    Triple("", 0.9f, SpeechRecognizer.ERROR_SPEECH_TIMEOUT)
+                }
+            }
+        } finally {
+            activeChunkDeferred = null
+            activeChunkReadFd = null
+            activeChunkWriteFd = null
+            activeChunkRecognizer = null
+            withContext(NonCancellable + Dispatchers.Main.immediate) {
+                try { chunkRec?.cancel() } catch (_: Exception) {}
+                try { chunkRec?.destroy() } catch (_: Exception) {}
+                closeReadFdOnce()
+                runCatching { writeFd.close() }
+            }
+            writerJob.cancel()
+        }
+    }
+
+    private fun splitParagraphPcmIntoChunks(pcmBytes: ByteArray): List<ByteArray> {
+        if (pcmBytes.size <= PARAGRAPH_MAX_CHUNK_BYTES) {
+            return listOf(pcmBytes)
+        }
+        val chunks = mutableListOf<ByteArray>()
+        var start = 0
+        while (start < pcmBytes.size) {
+            val remaining = pcmBytes.size - start
+            if (remaining <= PARAGRAPH_MAX_CHUNK_BYTES) {
+                chunks.add(pcmBytes.copyOfRange(start, pcmBytes.size))
+                break
+            }
+            val searchFrom = (start + PARAGRAPH_MIN_CHUNK_BYTES) and 1.inv()
+            val searchTo = minOf(pcmBytes.size - 2, start + PARAGRAPH_MAX_CHUNK_BYTES) and 1.inv()
+            var bestCut = (start + PARAGRAPH_TARGET_CHUNK_BYTES) and 1.inv()
+            var lowestRms = Float.MAX_VALUE
+
+            val frameSize = 3200 // 100ms
+            var pos = searchFrom
+            while (pos + frameSize <= searchTo) {
+                val rms = computeRangeRms(pcmBytes, pos, frameSize)
+                if (rms < lowestRms) {
+                    lowestRms = rms
+                    bestCut = (pos + frameSize / 2) and 1.inv()
+                }
+                pos += frameSize
+            }
+            bestCut = bestCut.coerceIn(start + 3200, pcmBytes.size) and 1.inv()
+            chunks.add(pcmBytes.copyOfRange(start, bestCut))
+            start = bestCut
+        }
+        return chunks
+    }
+
+    private fun writeSilenceInChunksCancellable(
+        out: java.io.OutputStream,
+        totalBytes: Int,
+        shouldStop: () -> Boolean
+    ) {
+        val step = 3200
+        val zero = ByteArray(step)
+        var written = 0
+        while (written < totalBytes && !shouldStop()) {
+            val len = minOf(step, totalBytes - written)
+            out.write(zero, 0, len)
+            written += len
+        }
+    }
+
     override suspend fun release() {
         if (isReleased) return
         isReleased = true
@@ -497,14 +1160,26 @@ class AndroidSpeechSession(
         if (stopRequestedAtMs == 0L) {
             stopRequestedAtMs = System.currentTimeMillis()
         }
-        try {
-            captureJob?.join()
-        } catch (_: Exception) {}
+        paragraphPipeChannel?.close()
+        paragraphPipeWriterJob?.cancel()
 
-        withContext(Dispatchers.Main.immediate) {
+        withContext(NonCancellable + Dispatchers.Main.immediate) {
+            try { activeChunkRecognizer?.cancel() } catch (_: Exception) {}
+            try { activeChunkRecognizer?.destroy() } catch (_: Exception) {}
+            activeChunkRecognizer = null
+            runCatching { activeChunkReadFd?.close() }
+            runCatching { activeChunkWriteFd?.close() }
+            activeChunkReadFd = null
+            activeChunkWriteFd = null
             destroyActiveRecognizerOnMain()
             closePipeFds()
         }
+
+        try {
+            withTimeoutOrNull(1500L) {
+                captureJob?.join()
+            }
+        } catch (_: Exception) {}
 
         MicrophoneCaptureService.stop(context)
 

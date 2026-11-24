@@ -69,6 +69,7 @@ fun ParagraphScreen(
     val extraWordsSummary by viewModel.extraWordsSummary.collectAsState()
     val recognizedText by viewModel.recognizedText.collectAsState()
     val isProcessingSpeech by viewModel.isProcessingSpeech.collectAsState()
+    val paragraphProcessingStatus by viewModel.paragraphProcessingStatus.collectAsState()
 
     val mapListState = rememberLazyListState()
     var scrollToTargetIndex by remember { mutableStateOf<Int?>(null) }
@@ -100,6 +101,7 @@ fun ParagraphScreen(
 
     // Intercept back button when practicing paragraph to return to that paragraph on the map
     BackHandler(enabled = (paragraph != null)) {
+        viewModel.cancelParagraphProcessing()
         if (currentParaIndex in paragraphsList.indices) {
             scrollToTargetIndex = currentParaIndex
         }
@@ -373,6 +375,7 @@ fun ParagraphScreen(
                         },
                         navigationIcon = {
                             IconButton(onClick = {
+                                viewModel.cancelParagraphProcessing()
                                 if (currentParaIndex in paragraphsList.indices) {
                                     scrollToTargetIndex = currentParaIndex
                                 }
@@ -547,7 +550,7 @@ fun ParagraphScreen(
                                         color = PolishTeal,
                                         strokeWidth = 3.dp
                                     )
-                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Spacer(modifier = Modifier.width(14.dp))
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = "Analyzing your speech...",
@@ -557,10 +560,34 @@ fun ParagraphScreen(
                                             )
                                         )
                                         Text(
-                                            text = "Transcribing audio and computing your fluency score...",
+                                            text = paragraphProcessingStatus ?: "Transcribing audio and computing your fluency score...",
                                             style = MaterialTheme.typography.bodySmall.copy(
                                                 color = Slate500
                                             )
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    FilledTonalButton(
+                                        onClick = { viewModel.cancelParagraphProcessing() },
+                                        colors = ButtonDefaults.filledTonalButtonColors(
+                                            containerColor = Color(0xFFFEE2E2),
+                                            contentColor = Red500
+                                        ),
+                                        shape = RoundedCornerShape(12.dp),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                                        modifier = Modifier
+                                            .heightIn(min = 48.dp)
+                                            .testTag("paragraph_stop_analysis_button")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Stop,
+                                            contentDescription = "Stop analyzing",
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "Stop",
+                                            fontWeight = FontWeight.Bold
                                         )
                                     }
                                 }
@@ -736,32 +763,46 @@ fun ParagraphScreen(
 
                                 Spacer(modifier = Modifier.width(14.dp))
 
-                                // Reset
+                                // Reset (or Stop Analyzing while processing)
                                 IconButton(
                                     onClick = {
-                                        viewModel.lastScore.value = null
-                                        viewModel.scoredWords.value = emptyList()
-                                        viewModel.recognizedText.value = ""
+                                        if (isProcessingSpeech) {
+                                            viewModel.cancelParagraphProcessing()
+                                        } else {
+                                            viewModel.lastScore.value = null
+                                            viewModel.scoredWords.value = emptyList()
+                                            viewModel.recognizedText.value = ""
+                                        }
                                     },
-                                    enabled = lastScore != null && !isProcessingSpeech,
+                                    enabled = isProcessingSpeech || lastScore != null,
                                     modifier = Modifier
                                         .size(48.dp)
                                         .background(
-                                            if (lastScore != null) Slate100 else Slate50,
+                                            when {
+                                                isProcessingSpeech -> Color(0xFFFEE2E2)
+                                                lastScore != null -> Slate100
+                                                else -> Slate50
+                                            },
                                             CircleShape
                                         )
+                                        .testTag(if (isProcessingSpeech) "paragraph_dock_stop_analysis" else "paragraph_reset_button")
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.Refresh,
-                                        contentDescription = "Reset",
-                                        tint = if (lastScore != null) PolishNavy else Slate400
+                                        imageVector = if (isProcessingSpeech) Icons.Default.Stop else Icons.Default.Refresh,
+                                        contentDescription = if (isProcessingSpeech) "Stop analyzing" else "Reset",
+                                        tint = when {
+                                            isProcessingSpeech -> Red500
+                                            lastScore != null -> PolishNavy
+                                            else -> Slate400
+                                        }
                                     )
                                 }
                             }
 
                             Text(
                                 text = when {
-                                    isProcessingSpeech -> "Analyzing your audio... Please wait"
+                                    isProcessingSpeech -> paragraphProcessingStatus?.let { "$it Tap Stop to cancel" }
+                                        ?: "Analyzing your audio... Tap Stop to cancel"
                                     isRecording -> "Recording... Tap the orb to evaluate"
                                     lastScore != null -> "Tap the orb to practice again"
                                     else -> "Tap the orb and read the paragraph aloud"
