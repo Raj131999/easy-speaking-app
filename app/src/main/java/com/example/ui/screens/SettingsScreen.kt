@@ -125,7 +125,7 @@ fun SettingsScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Mic,
-                                    contentDescription = "On-Device Offline Speech Recognition",
+                                    contentDescription = "Built-In Speech Recognition",
                                     tint = PolishTeal,
                                     modifier = Modifier.size(20.dp)
                                 )
@@ -140,7 +140,7 @@ fun SettingsScreen(
                                     )
                                 )
                                 Text(
-                                    text = "Uses Android default offline speech recognition",
+                                    text = "Uses built-in device speech recognition",
                                     style = MaterialTheme.typography.bodySmall.copy(color = Slate500)
                                 )
                             }
@@ -354,8 +354,8 @@ fun SettingsScreen(
                     )
 
                     val accents = listOf(
-                        Pair("IN", "India (Standard Indian)"),
                         Pair("US", "United States (General)"),
+                        Pair("IN", "India (Standard Indian)"),
                         Pair("UK", "United Kingdom (Received)"),
                         Pair("AU", "Australia (General Australian)")
                     )
@@ -380,8 +380,27 @@ fun SettingsScreen(
                                 style = MaterialTheme.typography.bodyLarge.copy(
                                     fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
                                     color = PolishNavy
-                                )
+                                ),
+                                modifier = Modifier.weight(1f, fill = false)
                             )
+                            if (code == "US") {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = PolishTealBg,
+                                    border = BorderStroke(1.dp, PolishTealLightBorder),
+                                    modifier = Modifier.testTag("accent_us_recommended_badge")
+                                ) {
+                                    Text(
+                                        text = "Recommended",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = PolishTealText
+                                        ),
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                    )
+                                }
+                            }
                         }
                     }
 

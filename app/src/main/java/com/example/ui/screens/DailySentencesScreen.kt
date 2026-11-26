@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.EnglishViewModel
+import com.example.ui.SpokenTextNormalizer
 import com.example.ui.Screen
 import com.example.ui.components.MascotCoach
 import com.example.ui.components.MascotState
@@ -443,8 +444,11 @@ fun DailySentencesScreen(
                                 )
                             )
                             Spacer(modifier = Modifier.height(12.dp))
+                            val displaySentenceText = remember(sentence.text) {
+                                SpokenTextNormalizer.normalizeToSpokenWords(sentence.text)
+                            }
                             Text(
-                                text = sentence.text,
+                                text = displaySentenceText,
                                 style = MaterialTheme.typography.headlineMedium.copy(
                                     fontWeight = FontWeight.Bold,
                                     textAlign = TextAlign.Center,

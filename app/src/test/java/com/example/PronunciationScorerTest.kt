@@ -455,4 +455,69 @@ class PronunciationScorerTest {
         assertTrue(eval.unclearWords.containsAll(listOf("have", "you", "been")))
         assertTrue(eval.score >= 80)
     }
+
+    @Test
+    fun defaultSpeakerAccentIsUnitedStates() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        app.getSharedPreferences("easy_speaking_prefs", Context.MODE_PRIVATE).edit().clear().commit()
+
+        val db = Room.inMemoryDatabaseBuilder(app, AppDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        val vm = EnglishViewModel(app, EnglishRepository(db.englishDao()))
+        assertEquals("US", vm.selectedAccent.value)
+        vm.releaseResources()
+        db.close()
+    }
+
+    @Test
+    fun spokenTextNormalizerConvertsNumbersCurrenciesAndSymbolsToWords() {
+        val norm = com.example.ui.SpokenTextNormalizer::normalizeToSpokenWords
+
+        assertEquals("It costs seven dollars.", norm("It costs 7$."))
+        assertEquals("It costs seven dollars.", norm("It costs $7."))
+        assertEquals("It costs one dollar.", norm("It costs $1."))
+        assertEquals("Total is five dollars and fifty cents.", norm("Total is $5.50."))
+        assertEquals("A ten dollars t-shirt.", norm("A $10 t-shirt."))
+        assertEquals("They raised one million dollars.", norm("They raised $1 million."))
+        assertEquals("About sixty five million dollars.", norm("About $65 million."))
+        assertEquals("Salary is ten thousand dollars.", norm("Salary is $10K."))
+        assertEquals("Save fifty percent today!", norm("Save 50% today!"))
+        assertEquals("Meet at eight AM or nine thirty PM.", norm("Meet at 8:00 AM or 9:30 PM."))
+        assertEquals("Call at nine oh five AM.", norm("Call at 9:05 AM."))
+        assertEquals("In the eighteenth and twenty first century.", norm("In the 18th and 21ST century."))
+        assertEquals("Back in the nineteen sixties and two thousands.", norm("Back in the 1960s and 2000s."))
+        assertEquals("Born in nineteen ninety two, moving in two thousand seven to twenty fifty.", norm("Born in 1992, moving in 2007 to 2050."))
+        assertEquals("Over twenty eight thousand users and ninety nine point nine uptime.", norm("Over 28,000 users and 99.9 uptime."))
+        assertEquals("Watch three D movies with vitamin B twelve and CO two.", norm("Watch 3D movies with vitamin B12 and CO2."))
+        assertEquals("Add three quarters cup at seventy two degrees fahrenheit.", norm("Add 3/4 cup at 72°F."))
+        assertEquals("Rock and roll: two plus two equals four, number one!", norm("Rock & roll: 2 + 2 = 4, #1!"))
+        assertEquals("Open twenty four seven.", norm("Open 24/7."))
+    }
+
+    @Test
+    fun pronunciationScorerMatchesSpokenNumbersAndCurrencySymbolsInBothDirections() {
+        val targetFromSymbols = PronunciationScorer.extractTargetWords("Total is $5.50.")
+        assertEquals(listOf("total", "is", "five", "dollars", "and", "fifty", "cents"), targetFromSymbols)
+
+        val spokenFromWords = PronunciationScorer.buildSpokenWordsFromTranscript(
+            transcript = "total is five dollars and fifty cents",
+            energyWindows = emptyList(),
+            confidence = 0.95f
+        )
+        val eval1 = PronunciationScorer.evaluatePronunciation(targetFromSymbols, spokenFromWords)
+        assertEquals(100, eval1.score)
+        assertTrue(eval1.missedWords.isEmpty())
+
+        // Even if SpeechRecognizer emits "7$" directly in the transcript
+        val spokenFromSymbol = PronunciationScorer.buildSpokenWordsFromTranscript(
+            transcript = "It costs 7$",
+            energyWindows = emptyList(),
+            confidence = 0.95f
+        )
+        val targetWords = PronunciationScorer.extractTargetWords("It costs seven dollars.")
+        val eval2 = PronunciationScorer.evaluatePronunciation(targetWords, spokenFromSymbol)
+        assertEquals(100, eval2.score)
+        assertTrue(eval2.missedWords.isEmpty())
+    }
 }

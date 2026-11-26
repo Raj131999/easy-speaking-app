@@ -110,7 +110,7 @@ class EnglishViewModel(
     val ttsReady = MutableStateFlow(false)
     val isTtsSpeaking = MutableStateFlow(false)
     val currentTtsText = MutableStateFlow<String?>(null)
-    val selectedAccent = MutableStateFlow(prefs.getString(KEY_SELECTED_ACCENT, "IN") ?: "IN")
+    val selectedAccent = MutableStateFlow(prefs.getString(KEY_SELECTED_ACCENT, "US") ?: "US")
     val selectedSpeed = MutableStateFlow(prefs.getFloat(KEY_SELECTED_SPEED, 1.0f))
 
     // Offline Speech Model (Vosk)
@@ -601,7 +601,7 @@ class EnglishViewModel(
             return
         }
 
-        val spokenText = extractSpokenExample(text)
+        val spokenText = SpokenTextNormalizer.normalizeToSpokenWords(extractSpokenExample(text))
         if (spokenText.isBlank()) return
 
         val currentlySpeaking = isTtsSpeaking.value || (tts?.isSpeaking == true)
@@ -889,21 +889,25 @@ class EnglishViewModel(
                         return@withLock
                     }
 
-                    recognizedText.value = captureResult.transcript
+                    val normalizedTranscript = SpokenTextNormalizer.normalizeToSpokenWords(captureResult.transcript)
+                    recognizedText.value = normalizedTranscript
                     if (captureResult.audioBytesWritten > 44L && captureResult.wavFilePath.isNotBlank()) {
                         voiceRecorder.setActiveRecordedFile(captureResult.wavFilePath)
                     } else {
                         voiceRecorder.setActiveRecordedFile(null)
                         voiceRecorder.clearRecordedFile()
                     }
-                    if (captureResult.transcript.isBlank() && !captureResult.errorNotice.isNullOrBlank()) {
+                    if (normalizedTranscript.isBlank() && !captureResult.errorNotice.isNullOrBlank()) {
                         speechStatusNotice.value = captureResult.errorNotice
                     }
 
                     val recordDurationMs = System.currentTimeMillis() - recordStartTime
-                    Log.d("SPEECH_DEBUG", "stopRecording: transcript='${captureResult.transcript}', words=${captureResult.spokenWords.size}")
+                    Log.d("SPEECH_DEBUG", "stopRecording: transcript='$normalizedTranscript', words=${captureResult.spokenWords.size}")
 
-                    val displayWords = targetText
+                    val normalizedTargetText = SpokenTextNormalizer.normalizeToSpokenWords(targetText)
+                    val displayWords = normalizedTargetText
+                        .replace('\u2019', '\'')
+                        .replace('\u2018', '\'')
                         .replace(Regex("[^a-zA-Z0-9'\\s]"), " ")
                         .split(Regex("\\s+"))
                         .filter { it.isNotBlank() }
@@ -953,8 +957,8 @@ class EnglishViewModel(
                     repository.savePracticeAttemptAndFeedSpacedRepetition(
                         itemType = itemType,
                         itemId = itemId,
-                        targetText = targetText,
-                        recognizedText = captureResult.transcript,
+                        targetText = normalizedTargetText,
+                        recognizedText = normalizedTranscript,
                         score = finalScore,
                         missedWords = eval.missedWords,
                         unclearWords = eval.unclearWords,
@@ -1180,7 +1184,7 @@ class EnglishViewModel(
         val matches = regex.findAll(json)
         for (match in matches) {
             val speaker = match.groupValues[1]
-            val text = match.groupValues[2]
+            val text = SpokenTextNormalizer.normalizeToSpokenWords(match.groupValues[2])
             val role = match.groupValues[3]
             lines.add(DialogueLine(speaker, text, role))
         }

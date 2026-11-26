@@ -707,6 +707,8 @@ class AndroidSpeechSession(
                 notice = mapErrorToUserNotice(liveErrorCode)
             }
 
+            finalTranscript = SpokenTextNormalizer.normalizeToSpokenWords(finalTranscript)
+
             val spokenWords = PronunciationScorer.buildSpokenWordsFromTranscript(
                 transcript = finalTranscript,
                 energyWindows = windowsCopy,
@@ -742,7 +744,9 @@ class AndroidSpeechSession(
                 destroyActiveRecognizerOnMain()
             }
 
-            val finalTranscript = (liveFinalTranscript?.takeIf { it.isNotBlank() } ?: liveBestPartial).trim()
+            val finalTranscript = SpokenTextNormalizer.normalizeToSpokenWords(
+                (liveFinalTranscript?.takeIf { it.isNotBlank() } ?: liveBestPartial).trim()
+            )
             val windowsCopy = synchronized(energyWindows) { energyWindows.toList() }
             val notice = if (finalTranscript.isBlank()) mapErrorToUserNotice(liveErrorCode) else null
 
@@ -851,6 +855,8 @@ class AndroidSpeechSession(
         } else if (finalTranscript.isBlank() && liveErrorCode != null) {
             notice = mapErrorToUserNotice(liveErrorCode)
         }
+
+        finalTranscript = SpokenTextNormalizer.normalizeToSpokenWords(finalTranscript)
 
         val spokenWords = PronunciationScorer.buildSpokenWordsFromTranscript(
             transcript = finalTranscript,
@@ -1518,11 +1524,11 @@ class AndroidSpeechSession(
             SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
                 "Microphone permission is required to analyze your speech."
             ERROR_LANGUAGE_UNAVAILABLE_CODE, ERROR_LANGUAGE_NOT_SUPPORTED_CODE ->
-                "Offline English speech recognition is not yet enabled on this device. Install Offline Speech Recognition in Android Settings."
+                "English speech recognition for this accent is not yet enabled on this device. Enable English voice recognition in Android Settings or switch to United States."
             SpeechRecognizer.ERROR_RECOGNIZER_BUSY ->
                 "Speech recognition was busy. Please tap the orb and try again."
             SpeechRecognizer.ERROR_CLIENT ->
-                "On-device speech recognition is unavailable on this device."
+                "Built-in speech recognition is unavailable on this device."
             else -> null
         }
     }
@@ -1631,7 +1637,7 @@ class AndroidSpeechSession(
     }
 
     private fun emitTranscript(text: String) {
-        val trimmed = text.trim()
+        val trimmed = SpokenTextNormalizer.normalizeToSpokenWords(text).trim()
         if (trimmed != lastEmittedTranscript) {
             lastEmittedTranscript = trimmed
             onPartialText?.invoke(trimmed)

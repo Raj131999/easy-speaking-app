@@ -32,12 +32,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.EnglishViewModel
+import com.example.ui.SpokenTextNormalizer
 import com.example.ui.components.MascotCoach
 import com.example.ui.components.MascotState
 import com.example.ui.components.PhoneticMouthGuideDialog
 import com.example.ui.components.PronunciationFeedbackChips
 import com.example.ui.components.SonicVoiceOrb
-import com.example.ui.components.SpokenVoiceToTextCard
 import com.example.ui.components.resolvePhoneticGuideSound
 import com.example.ui.theme.*
 
@@ -62,7 +62,6 @@ fun TongueTwistersScreen(
     val missedWordsSummary by viewModel.missedWordsSummary.collectAsState()
     val unclearWordsSummary by viewModel.unclearWordsSummary.collectAsState()
     val extraWordsSummary by viewModel.extraWordsSummary.collectAsState()
-    val recognizedText by viewModel.recognizedText.collectAsState()
     val isProcessingSpeech by viewModel.isProcessingSpeech.collectAsState()
 
     var showMouthGuide by remember { mutableStateOf(false) }
@@ -389,8 +388,11 @@ fun TongueTwistersScreen(
                                     letterSpacing = 1.2.sp
                                 )
                             )
+                            val displayTwisterText = remember(twister.text) {
+                                SpokenTextNormalizer.normalizeToSpokenWords(twister.text)
+                            }
                             Text(
-                                text = twister.text,
+                                text = displayTwisterText,
                                 style = MaterialTheme.typography.titleLarge.copy(
                                     fontWeight = FontWeight.Bold,
                                     textAlign = TextAlign.Center,
@@ -744,12 +746,6 @@ fun TongueTwistersScreen(
                                     }
                                 }
                             }
-
-                            SpokenVoiceToTextCard(
-                                isRecording = isRecording,
-                                recognizedText = recognizedText,
-                                hasEvaluated = lastScore != null
-                            )
 
                             lastScore?.let { score ->
                                 val isPassed = score >= 75

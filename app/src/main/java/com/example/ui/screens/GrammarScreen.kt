@@ -34,6 +34,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.EnglishViewModel
+import com.example.ui.SpokenTextNormalizer
 import com.example.ui.components.MascotCoach
 import com.example.ui.components.MascotState
 import com.example.ui.components.PronunciationFeedbackChips
@@ -1061,8 +1062,11 @@ fun GrammarScreen(
                                         )
                                     )
                                     Spacer(modifier = Modifier.height(8.dp))
+                                    val displayPrompt = remember(item.speechPrompt) {
+                                        SpokenTextNormalizer.normalizeToSpokenWords(item.speechPrompt)
+                                    }
                                     Text(
-                                        text = item.speechPrompt,
+                                        text = displayPrompt,
                                         style = MaterialTheme.typography.titleLarge.copy(
                                             fontWeight = FontWeight.Bold,
                                             textAlign = TextAlign.Center,

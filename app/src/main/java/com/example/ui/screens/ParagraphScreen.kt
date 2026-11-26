@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.EnglishViewModel
+import com.example.ui.SpokenTextNormalizer
 import com.example.ui.components.MascotCoach
 import com.example.ui.components.MascotState
 import com.example.ui.components.PronunciationFeedbackChips
@@ -456,8 +457,11 @@ fun ParagraphScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(modifier = Modifier.padding(20.dp)) {
+                                val displayParagraphText = remember(item.text) {
+                                    SpokenTextNormalizer.normalizeToSpokenWords(item.text)
+                                }
                                 Text(
-                                    text = item.text,
+                                    text = displayParagraphText,
                                     style = MaterialTheme.typography.bodyLarge.copy(
                                         lineHeight = 28.sp,
                                         fontWeight = FontWeight.Normal,

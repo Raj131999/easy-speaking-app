@@ -104,9 +104,71 @@ object PronunciationScorer {
         "haven't" to listOf("have", "not"),
         "hadn't" to listOf("had", "not"),
         "mustn't" to listOf("must", "not"),
+        "needn't" to listOf("need", "not"),
+        "shan't" to listOf("shall", "not"),
+        "daren't" to listOf("dare", "not"),
+        "mightn't" to listOf("might", "not"),
+        "oughtn't" to listOf("ought", "not"),
+        "what're" to listOf("what", "are"),
+        "who're" to listOf("who", "are"),
+        "who'd" to listOf("who", "would"),
+        "who'll" to listOf("who", "will"),
+        "who've" to listOf("who", "have"),
+        "what'll" to listOf("what", "will"),
+        "what've" to listOf("what", "have"),
+        "what'd" to listOf("what", "did"),
+        "where'd" to listOf("where", "did"),
+        "where'll" to listOf("where", "will"),
+        "when'd" to listOf("when", "did"),
+        "when'll" to listOf("when", "will"),
+        "why'd" to listOf("why", "did"),
+        "how'd" to listOf("how", "did"),
+        "how'll" to listOf("how", "will"),
+        "there'd" to listOf("there", "would"),
+        "there'll" to listOf("there", "will"),
+        "there've" to listOf("there", "have"),
+        "that'd" to listOf("that", "would"),
+        "it'd" to listOf("it", "would")
+    )
+
+    // Informal / connected-speech shortened forms — ONLY activated when the target sentence itself
+    // contains that shortened word, so regular sentences without these words remain untouched.
+    private val INFORMAL_SPOKEN_REDUCTIONS = mapOf(
+        "gimme" to listOf("give", "me"),
+        "lemme" to listOf("let", "me"),
         "gonna" to listOf("going", "to"),
         "wanna" to listOf("want", "to"),
-        "gotta" to listOf("got", "to")
+        "gotta" to listOf("got", "to"),
+        "gotcha" to listOf("got", "you"),
+        "betcha" to listOf("bet", "you"),
+        "kinda" to listOf("kind", "of"),
+        "sorta" to listOf("sort", "of"),
+        "didja" to listOf("did", "you"),
+        "wouldja" to listOf("would", "you"),
+        "couldja" to listOf("could", "you"),
+        "shoulda" to listOf("should", "have"),
+        "woulda" to listOf("would", "have"),
+        "coulda" to listOf("could", "have"),
+        "musta" to listOf("must", "have"),
+        "mighta" to listOf("might", "have"),
+        "oughta" to listOf("ought", "to"),
+        "outta" to listOf("out", "of"),
+        "lotta" to listOf("lot", "of"),
+        "hafta" to listOf("have", "to"),
+        "hasta" to listOf("has", "to"),
+        "usta" to listOf("used", "to"),
+        "supposta" to listOf("supposed", "to"),
+        "dunno" to listOf("do", "not", "know"),
+        "doncha" to listOf("do", "not", "you"),
+        "whatcha" to listOf("what", "are", "you"),
+        "c'mon" to listOf("come", "on"),
+        "cmon" to listOf("come", "on"),
+        "y'all" to listOf("you", "all"),
+        "yall" to listOf("you", "all"),
+        "tryna" to listOf("trying", "to"),
+        "cuppa" to listOf("cup", "of"),
+        "imma" to listOf("i", "am", "going", "to"),
+        "ima" to listOf("i", "am", "going", "to")
     )
 
     // Common apostrophe-dropped forms emitted by small acoustic models
@@ -127,6 +189,11 @@ object PronunciationScorer {
         "wouldnt" to "wouldn't",
         "couldnt" to "couldn't",
         "shouldnt" to "shouldn't",
+        "mustnt" to "mustn't",
+        "neednt" to "needn't",
+        "wouldve" to "would've",
+        "couldve" to "could've",
+        "shouldve" to "should've",
         "youre" to "you're",
         "theyre" to "they're",
         "ive" to "i've",
@@ -165,15 +232,23 @@ object PronunciationScorer {
     }
 
     fun formatTranscriptWithUnk(raw: String): String {
-        return raw
-            .replace(Regex("(?i)\\[unk\\]"), UNKNOWN_WORD_DISPLAY)
+        val withUnk = raw.replace(Regex("(?i)\\[unk\\]"), UNKNOWN_WORD_DISPLAY)
+        return SpokenTextNormalizer.normalizeToSpokenWords(withUnk)
             .replace(Regex("\\s+"), " ")
             .trim()
     }
 
-    fun expandNormalizedWord(cleanToken: String, targetContractionSet: Set<String> = emptySet()): List<String> {
+    fun expandNormalizedWord(
+        cleanToken: String,
+        targetContractionSet: Set<String> = emptySet(),
+        targetInformalReductions: Set<String> = emptySet()
+    ): List<String> {
         if (cleanToken.isBlank()) return emptyList()
         if (cleanToken == UNKNOWN_WORD_DISPLAY) return listOf(UNKNOWN_WORD_DISPLAY)
+
+        if (targetInformalReductions.contains(cleanToken)) {
+            INFORMAL_SPOKEN_REDUCTIONS[cleanToken]?.let { return it }
+        }
 
         val contractionKey = when {
             CONTRACTIONS.containsKey(cleanToken) -> cleanToken
@@ -182,6 +257,30 @@ object PronunciationScorer {
             else -> cleanToken
         }
         return CONTRACTIONS[contractionKey] ?: listOf(cleanToken)
+    }
+
+    /**
+     * When a target word explicitly uses the casual dropped-'g' "-in'" spelling (e.g. "packin'",
+     * "travelin'", "workin'"), returns the accepted spoken equivalents (e.g. "packin", "packing",
+     * and "traveling"/"travelling") ONLY for that target word.
+     */
+    private fun droppedGEquivalentsForRawTarget(rawDisplayWord: String): Set<String> {
+        val unified = rawDisplayWord
+            .replace('\u2019', '\'')
+            .replace('\u2018', '\'')
+            .replace('`', '\'')
+            .lowercase(Locale.US)
+            .trim()
+            .replace(Regex("[^a-z']"), "")
+        if (!unified.matches(Regex("[a-z]{2,}in'"))) return emptySet()
+
+        val stem = unified.dropLast(1) // e.g. "packin", "travelin"
+        val equivalents = mutableSetOf(stem, "${stem}g")
+        // Support British/Australian double-L spelling (e.g. travelin' -> traveling / travelling)
+        if (stem.endsWith("lin") && !stem.endsWith("llin") && stem.length >= 5) {
+            equivalents.add("${stem.dropLast(2)}ling")
+        }
+        return equivalents
     }
 
     fun isShortUnstressedWord(cleanWord: String): Boolean {
@@ -194,7 +293,7 @@ object PronunciationScorer {
      * keeping word order for alignment.
      */
     fun extractTargetWords(targetText: String): List<String> {
-        return targetText
+        return SpokenTextNormalizer.normalizeToSpokenWords(targetText)
             .replace('\u2019', '\'')
             .replace('\u2018', '\'')
             .lowercase(Locale.US)
@@ -346,7 +445,8 @@ object PronunciationScorer {
 
     private data class ExpandedTargetToken(
         val word: String,
-        val displayIndex: Int
+        val displayIndex: Int,
+        val equivalents: Set<String> = emptySet()
     )
 
     private data class SingleAlignmentOutcome(
@@ -369,17 +469,32 @@ object PronunciationScorer {
             return PronunciationEvaluationResult(0, emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
         }
 
-        val cleanTargets = targetDisplayWords.map { normalizeToken(it) }
+        val cleanTargets = targetDisplayWords.map { normalizeToken(SpokenTextNormalizer.normalizeToSpokenWords(it)) }
         val targetContractions = cleanTargets.filter { CONTRACTIONS.containsKey(it) }.toSet()
+        val targetInformalReductions = cleanTargets.filter { INFORMAL_SPOKEN_REDUCTIONS.containsKey(it) }.toSet()
+        val allowYaForYou = targetInformalReductions.any { key ->
+            INFORMAL_SPOKEN_REDUCTIONS[key]?.contains("you") == true
+        }
 
         val expandedTargets = mutableListOf<ExpandedTargetToken>()
-        targetDisplayWords.forEachIndexed { idx, _ ->
-            val expanded = expandNormalizedWord(cleanTargets[idx], targetContractions)
-            if (expanded.isEmpty()) {
+        targetDisplayWords.forEachIndexed { idx, rawDisplay ->
+            val droppedGSet = droppedGEquivalentsForRawTarget(rawDisplay)
+            val spokenForm = SpokenTextNormalizer.normalizeToSpokenWords(rawDisplay)
+            val subTokens = spokenForm
+                .split(Regex("\\s+"))
+                .map { normalizeToken(it) }
+                .filter { it.isNotBlank() }
+                .flatMap { expandNormalizedWord(it, targetContractions, targetInformalReductions) }
+            if (subTokens.isEmpty()) {
                 expandedTargets.add(ExpandedTargetToken("", idx))
             } else {
-                expanded.forEach { tok ->
-                    expandedTargets.add(ExpandedTargetToken(tok, idx))
+                subTokens.forEach { tok ->
+                    val tokenEquivs = when {
+                        droppedGSet.isNotEmpty() -> droppedGSet
+                        allowYaForYou && tok == "you" -> setOf("you", "ya")
+                        else -> emptySet()
+                    }
+                    expandedTargets.add(ExpandedTargetToken(tok, idx, tokenEquivs))
                 }
             }
         }
@@ -390,6 +505,7 @@ object PronunciationScorer {
             expandedTargets = expandedTargets,
             spokenWords = spokenWords,
             targetContractions = targetContractions,
+            targetInformalReductions = targetInformalReductions,
             itemType = itemType
         )
 
@@ -400,6 +516,7 @@ object PronunciationScorer {
                 expandedTargets = expandedTargets,
                 spokenWords = grammarWords,
                 targetContractions = targetContractions,
+                targetInformalReductions = targetInformalReductions,
                 itemType = itemType
             )
         } else {
@@ -510,13 +627,18 @@ object PronunciationScorer {
         expandedTargets: List<ExpandedTargetToken>,
         spokenWords: List<SpokenWordTiming>,
         targetContractions: Set<String>,
+        targetInformalReductions: Set<String>,
         itemType: String
     ): SingleAlignmentOutcome {
         val expandedSpoken = mutableListOf<SpokenWordTiming>()
         spokenWords.forEach { sw ->
-            val clean = normalizeToken(sw.word)
-            val expanded = expandNormalizedWord(clean, targetContractions)
-            expanded.forEach { tok ->
+            val spokenNormalized = SpokenTextNormalizer.normalizeToSpokenWords(sw.word)
+            val parts = spokenNormalized
+                .split(Regex("\\s+"))
+                .map { normalizeToken(it) }
+                .filter { it.isNotBlank() }
+                .flatMap { expandNormalizedWord(it, targetContractions, targetInformalReductions) }
+            parts.forEach { tok ->
                 expandedSpoken.add(sw.copy(word = tok))
             }
         }
@@ -549,7 +671,13 @@ object PronunciationScorer {
 
         for (i in 1..n) {
             for (j in 1..m) {
-                val subCost = substitutionCost(expandedTargets[i - 1].word, expandedSpoken[j - 1].word, itemType)
+                val targetTok = expandedTargets[i - 1]
+                val subCost = substitutionCost(
+                    target = targetTok.word,
+                    spoken = expandedSpoken[j - 1].word,
+                    itemType = itemType,
+                    targetEquivalents = targetTok.equivalents
+                )
                 val diag = dp[i - 1][j - 1] + subCost
                 val up = dp[i - 1][j] + 1.0f
                 val left = dp[i][j - 1] + 1.0f
@@ -603,7 +731,9 @@ object PronunciationScorer {
                 val spoken = expandedSpoken[sIdx]
                 val isUnclear = spoken.conf < UNCLEAR_CONFIDENCE_THRESHOLD
 
-                val exact = targetTok.word == spoken.word || isPhoneticMatch(targetTok.word, spoken.word, itemType)
+                val exact = targetTok.word == spoken.word ||
+                    targetTok.equivalents.contains(spoken.word) ||
+                    isPhoneticMatch(targetTok.word, spoken.word, itemType)
                 val editDist = if (spoken.word == UNKNOWN_WORD_DISPLAY) Int.MAX_VALUE else levenshtein(targetTok.word, spoken.word)
                 val maxCloseDist = if (targetTok.word.length >= 5) 2 else 1
                 val isPrefixStem = spoken.word != UNKNOWN_WORD_DISPLAY &&
@@ -837,11 +967,16 @@ object PronunciationScorer {
         }
     }
 
-    private fun substitutionCost(target: String, spoken: String, itemType: String): Float {
+    private fun substitutionCost(
+        target: String,
+        spoken: String,
+        itemType: String,
+        targetEquivalents: Set<String> = emptySet()
+    ): Float {
         if (spoken == UNKNOWN_WORD_DISPLAY) {
             return if (isShortUnstressedWord(target)) 0.85f else 2.0f
         }
-        if (target == spoken || isPhoneticMatch(target, spoken, itemType)) return 0f
+        if (target == spoken || targetEquivalents.contains(spoken) || isPhoneticMatch(target, spoken, itemType)) return 0f
         val dist = levenshtein(target, spoken)
         val maxClose = if (target.length >= 5) 2 else 1
         if (dist <= maxClose) return 0.45f
